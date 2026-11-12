@@ -1,0 +1,11 @@
+{
+  "name": "hang",
+  "description": "Blocks the EDT for 8 s with stepTimeoutMs=3000 — smoker must report HANG with a thread dump.",
+  "startupTimeoutMs": 30000,
+  "quietMs": 300,
+  "stepTimeoutMs": 3000,
+  "ignore": { "paths": [], "attributes": [], "valuePatterns": [] },
+  "steps": [
+    { "id": "s001", "name": "hang the EDT", "action": { "type": "CLICK", "locator": { "name": "demo.hang" } } }
+  ]
+}

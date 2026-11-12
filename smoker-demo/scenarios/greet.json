@@ -1,0 +1,64 @@
+{
+  "name": "greet",
+  "description": "Type a name, pick a language, greet; the table gains a row. Then open Help > About and close it.",
+  "startupTimeoutMs": 30000,
+  "quietMs": 300,
+  "stepTimeoutMs": 10000,
+  "ignore": {
+    "paths": [],
+    "attributes": [],
+    "valuePatterns": []
+  },
+  "steps": [
+    {
+      "id": "s001",
+      "name": "enter name",
+      "action": {
+        "type": "SET_TEXT",
+        "locator": {
+          "name": "demo.name"
+        },
+        "value": "Kerem"
+      }
+    },
+    {
+      "id": "s002",
+      "name": "choose Turkish",
+      "action": {
+        "type": "SELECT",
+        "locator": {
+          "name": "demo.lang"
+        },
+        "value": "tr"
+      }
+    },
+    {
+      "id": "s003",
+      "name": "greet",
+      "action": {
+        "type": "CLICK",
+        "locator": {
+          "name": "demo.greet"
+        }
+      }
+    },
+    {
+      "id": "s004",
+      "name": "open About",
+      "action": {
+        "type": "CLICK",
+        "locator": {
+          "name": "demo.menu.about"
+        }
+      }
+    },
+    {
+      "id": "s005",
+      "name": "close About with ENTER",
+      "action": {
+        "type": "KEY",
+        "value": "ENTER"
+      }
+    }
+  ]
+}

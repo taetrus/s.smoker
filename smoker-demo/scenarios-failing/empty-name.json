@@ -1,0 +1,12 @@
+{
+  "name": "empty-name",
+  "description": "Greet with an empty name: the app logs SEVERE to demo.log — smoker must FAIL the step on the log hit. Then 'Throw on EDT' — uncaught exception must be caught.",
+  "startupTimeoutMs": 30000,
+  "quietMs": 300,
+  "stepTimeoutMs": 10000,
+  "ignore": { "paths": [], "attributes": [], "valuePatterns": [] },
+  "steps": [
+    { "id": "s001", "name": "greet with empty name", "action": { "type": "CLICK", "locator": { "name": "demo.greet" } } },
+    { "id": "s002", "name": "throw on EDT", "action": { "type": "CLICK", "locator": { "name": "demo.boom" } } }
+  ]
+}

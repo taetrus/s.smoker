@@ -1,0 +1,90 @@
+# s.smoker — Swing smoke tester
+
+Record a short scenario on a Swing app, replay it on every build, and fail when the UI state, the
+application log, or the EDT misbehaves. Attaches with `-javaagent`, no app code changes; JRE 8+.
+
+```
+smoker-core   model (Scenario/Step/Action/Locator/Snapshot), diff, JSON, JUnit-XML + HTML reports — no Swing
+smoker-agent  -javaagent: recorder toolbar, semantic player, snapshot taker, log tailer, EDT watchdog   → smoker-agent.jar (shaded)
+smoker-cli    launches the app with the agent, approves goldens, writes reports                           → smoker-cli.jar   (shaded)
+smoker-demo   tiny Swing app + scenarios for the self-test
+```
+
+## Build
+
+```bash
+mvn -B package                 # JDK 8–21; on JDK 9+ compiles with --release 8
+./selftest.sh                  # Linux/macOS with a display; Linux CI: xvfb-run -a ./selftest.sh
+```
+
+Windows (PowerShell): `mvn -B package` then run the commands below; no Xvfb needed on a logged-in desktop.
+
+## Use
+
+```bash
+# 1. record (floating toolbar appears over the app: Record / Pick / Rename / Delete / Save)
+java -jar smoker-cli.jar record --agent smoker-agent.jar --app "java -jar myapp.jar" --scenario scenarios/orders-create.json
+
+# 2. run — first run has no goldens → NO_GOLDEN (exit 0 unless --strict)
+java -jar smoker-cli.jar run --agent smoker-agent.jar --app "java -jar myapp.jar" --scenarios scenarios/ --out out/ --log logs/app.log
+
+# 3. approve the observed state as golden (per scenario, or --steps s003,s004)
+java -jar smoker-cli.jar approve --run out/orders-create --scenario scenarios/orders-create.json
+
+# 4. run again → PASS / FAIL; out/junit.xml + out/report.html
+```
+
+`--app` is the full command line. The agent option is inserted after the first word, or where you put the
+token `{agent}`. Equinox product: `--app "myapp.exe -vmargs {agent}"` — or add
+`-javaagent:C:\tools\smoker-agent.jar=mode=play;scenario=...;out=...;log=...` to `eclipse.ini` under `-vmargs`.
+
+### Agent arguments (`-javaagent:smoker-agent.jar=k=v;k=v`)
+
+| key | values | default |
+|---|---|---|
+| `mode` | `play` / `record` | play |
+| `scenario` | scenario JSON (play: input, record: output) | required |
+| `out` | run directory (run-result.json, screenshots) | smoker-out |
+| `log` | comma-separated log files to tail (Logback/Log4j output) | — |
+| `failRegex` | regex; a matching log line fails the step | `\bERROR\b|\bSEVERE\b|Exception|\bError\b` |
+| `allowRegex` | regex; matching lines are ignored | — |
+| `screenshots` | `evidence` / `off` | evidence |
+| `edtHangMs` | EDT blocked longer than this → HANG + thread dump | 5000 |
+| `exitWhenDone` | play: `System.exit` after writing results | true |
+
+### Scenario file
+
+```json
+{
+  "name": "orders-create",
+  "startupTimeoutMs": 60000, "quietMs": 400, "stepTimeoutMs": 15000,
+  "ignore": { "paths": ["#statusbar\\.clock"], "attributes": [], "valuePatterns": ["\\d{2}:\\d{2}:\\d{2}"] },
+  "steps": [
+    { "id": "s001", "name": "open orders", "action": { "type": "CLICK",    "locator": { "name": "nav.orders" } } },
+    { "id": "s002", "name": "customer",    "action": { "type": "SET_TEXT", "locator": { "name": "orders.customer" }, "value": "ACME" } },
+    { "id": "s003", "name": "priority",    "action": { "type": "SELECT",   "locator": { "name": "orders.priority" }, "value": "High" } },
+    { "id": "s004", "name": "save",        "action": { "type": "KEY",      "value": "ENTER", "modifiers": 128 } },
+    { "id": "s005", "name": "close",       "action": { "type": "CLOSE_WINDOW", "locator": { "windowTitle": "New order" } } }
+  ]
+}
+```
+
+Actions: `CLICK`, `SET_TEXT`, `SELECT` (combo/list/tab by text or index, table by row), `KEY` (VK name, `modifiers` =
+`InputEvent.*_DOWN_MASK`), `WAIT` (ms), `CLOSE_WINDOW`. `expected` is filled by `approve` (or by the recorder).
+
+### Locators
+
+`{"name": "orders.save"}` — from `component.setName("orders.save")`, the only stable key. Fallback
+`{"windowTitle": "Orders", "className": "JButton", "text": "Save", "index": 0}`. Unnamed interactive components are
+listed in the report ("locator lint"). Convention: `<view>.<widget>`.
+
+### Statuses
+
+`PASS` · `FAIL` (snapshot diff or log hit) · `HANG` (EDT blocked / action timed out, thread dump attached) ·
+`ERROR` (component not found, exception thrown by the action) · `NO_GOLDEN` (nothing to compare yet).
+A scenario stops at its first non-PASS step; the next scenario starts a fresh JVM.
+
+## CI
+
+See `.gitlab-ci.yml`. Linux runners: `xvfb-run -a`. Windows runners: the GitLab runner must run as a
+logged-in-user process (not a service in Session 0) for screenshots; semantic replay itself works without focus.

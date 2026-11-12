@@ -1,0 +1,49 @@
+# Example pipeline: build smoker, then smoke-test an application on Linux (Xvfb) and Windows runners.
+# Replace APP_CMD / APP_LOG with the real product launch line (Equinox: "myapp.exe -vmargs {agent}").
+stages: [build, smoke]
+
+variables:
+  MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
+  MAVEN_CLI_OPTS: "-B -s settings.xml"      # settings.xml points at the Nexus mirror
+
+build:
+  stage: build
+  image: maven:3.9-eclipse-temurin-8       # from the Nexus Docker proxy
+  script:
+    - mvn $MAVEN_CLI_OPTS package -DskipTests
+  artifacts:
+    paths:
+      - smoker-agent/target/smoker-agent.jar
+      - smoker-cli/target/smoker-cli.jar
+      - smoker-demo/target/smoker-demo.jar
+  cache:
+    paths: [.m2/repository]
+
+.smoke_template: &smoke
+  stage: smoke
+  artifacts:
+    when: always
+    paths: [smoke-out/]
+    reports:
+      junit: smoke-out/junit.xml          # shows up in the MR "Tests" tab
+
+smoke:linux:
+  <<: *smoke
+  image: eclipse-temurin:17               # also run a JRE 8 job for the R-02 matrix
+  tags: [linux]
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq xvfb > /dev/null   # or bake into the image
+  script:
+    - xvfb-run -a -s "-screen 0 1600x1000x24" java -jar smoker-cli/target/smoker-cli.jar run
+        --agent smoker-agent/target/smoker-agent.jar
+        --app "java -Ddemo.log=$CI_PROJECT_DIR/smoke-out/demo.log -jar smoker-demo/target/smoker-demo.jar"
+        --scenarios smoker-demo/scenarios --out smoke-out --log smoke-out/demo.log
+
+smoke:windows:
+  <<: *smoke
+  tags: [windows]                         # runner must run in an interactive user session for screenshots
+  script:
+    - java -jar smoker-cli\target\smoker-cli.jar run
+        --agent smoker-agent\target\smoker-agent.jar
+        --app "java -Ddemo.log=%CD%\smoke-out\demo.log -jar smoker-demo\target\smoker-demo.jar"
+        --scenarios smoker-demo\scenarios --out smoke-out --log smoke-out\demo.log
