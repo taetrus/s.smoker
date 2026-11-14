@@ -7,7 +7,7 @@ Date: 2026-11-14. Branch: `wp-01-test-base`. Read `CLAUDE.md` and `docs/developm
 | WP-01 task | State |
 |---|---|
 | 1–6 Pilot application on Windows and Linux | Open. Do these on the Windows PC. |
-| 7 Unit tests | Done. 22 tests in `smoker-core`, 20 tests in `smoker-agent`. |
+| 7 Unit tests | Done. 22 tests in `smoker-core`, 24 tests in `smoker-agent` (4 added for F-19). |
 | 8 Maven integration test | Done. `smoker-it/.../SelfTestIT.java` replaces `selftest.sh`. |
 | 9 `Locale.ROOT` | Done. `AgentConfig`, `JUnitXmlWriter`, `Recorder`. |
 | 10 Turkish-locale run | Done. Profile `locale-tr`. |
@@ -24,14 +24,18 @@ Verified on Windows 11 on 2026-11-14, with `mvn -B verify` (Maven 3.9.6, JDK 25 
 
 | Locale | Test JVM | Unit tests | IT |
 |---|---|---|---|
-| default (`en_US`) | JDK 25 | 42/42 | 2/2 |
-| `tr_TR` | JDK 25 | 42/42 | 2/2 |
-| `tr_TR` | JRE 8u341 (`-Djvm`) | 42/42 | 2/2 |
+| default (`en_US`) | JDK 25 | 46/46 | 2/2 |
+| `tr_TR` | JDK 25 | 46/46 | 2/2 |
+| `tr_TR` | JRE 8u341 (`-Djvm`) | 46/46 | 2/2 |
 
 The first Windows run failed. `SelfTestIT` gave the `--app` value with inner quotes to `ProcessBuilder`.
 On Windows, `ProcessBuilder` does not escape inner quotes, and the CLI received only `E:\Program`.
 `SelfTestIT.windowsArg` now escapes the quotes. The CLI did not change. `README.md` tells users how to quote `--app` on Windows.
 The `java` path without `.exe` and the `;` separator of `--scenarios` caused no problem.
+
+F-19 (new, done): the snapshot and the recorder read the text of a `JPasswordField`. The settings dialog of p.osgi.ds
+shows the saved API key in one. The snapshot now gives `***`, and the recorder does not record typing in a password field.
+The Windows results above are from the build with this fix.
 
 The WP-01 completion criterion is not met. Do not start WP-02.
 
@@ -61,7 +65,7 @@ mvn -B verify -Plocale-tr
 mvn -B verify -Plocale-tr "-Djvm=<JDK 8 folder>\bin\java.exe"
 ```
 
-Expected result of each run: unit tests 22 and 20, IT 2, `BUILD SUCCESS`.
+Expected result of each run: unit tests 22 and 24, IT 2, `BUILD SUCCESS`.
 
 If a run fails, keep these folders:
 

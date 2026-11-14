@@ -10,6 +10,7 @@ import smoker.core.model.Step;
 import javax.swing.AbstractButton;
 import javax.swing.JComboBox;
 import javax.swing.JList;
+import javax.swing.JPasswordField;
 import javax.swing.JPopupMenu;
 import javax.swing.JTabbedPane;
 import javax.swing.JTable;
@@ -119,7 +120,12 @@ final class Recorder implements AWTEventListener {
     }
 
     private void onFocus(FocusEvent e, Component src) {
-        if (e.getID() == FocusEvent.FOCUS_GAINED && src instanceof JTextComponent) {
+        if (e.getID() == FocusEvent.FOCUS_GAINED && src instanceof JPasswordField) {
+            // Do not record a password: the scenario file would contain it in plain text (F-19).
+            if (editing != null) flushText();
+            editing = null;
+            say("password field: typing is not recorded. Add a SET_TEXT step by hand, or set the value outside the scenario.");
+        } else if (e.getID() == FocusEvent.FOCUS_GAINED && src instanceof JTextComponent) {
             editing = (JTextComponent) src;
             textAtFocusGain = editing.getText();
         } else if (e.getID() == FocusEvent.FOCUS_LOST && src == editing) {

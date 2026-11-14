@@ -45,6 +45,7 @@ The audit found 18 defects or gaps. Severity A stops the use on a real applicati
 | F-16 | C | `AgentConfig` calls `toUpperCase()` without a locale. In the Turkish locale the letter `i` changes to `İ`. A value such as `evidence` can then fail to parse. | Use `Locale.ROOT` for all case changes. Run the tests with `-Duser.language=tr`. | WP-01 |
 | F-17 | C | The scenario format has no version field. Two components can have the same name. The lint does not report this. | Add `schemaVersion`. Make the lint report each name that occurs more than one time in a window. | WP-02 |
 | F-18 | C | Requirements R-05, R-15, R-34, R-41 and R-42 have no implementation. No requirement has an acceptance criterion or a priority. | Section 3 adds priorities and criteria. WP-07 and WP-08 implement the open requirements. | WP-07, WP-08 |
+| F-19 | A | The snapshot and the recorder read the text of a `JPasswordField`. A password or API key then goes into the scenario file, the golden snapshots and the reports in plain text. Found on 2026-11-14 in the settings dialog of p.osgi.ds. | Give a password field as `***` (or empty) in the snapshot. Do not record typing in a password field. Done in WP-01. | WP-01 |
 
 One more risk has no technical correction: a locator without a name uses the visible text. The locator fails when the language of the user interface changes. The rule must be: each interactive component gets a name.
 
@@ -98,7 +99,7 @@ WP-02, WP-03 and WP-04 are independent. Three developers can do them at the same
 
 | WP | Title | Findings | Effort (pd) | Result |
 |---|---|---|---|---|
-| WP-01 | Verification and test base | F-01, F-15, F-16 | 6 | Test report for one real application. Unit tests. Integration test in Maven. |
+| WP-01 | Verification and test base | F-01, F-15, F-16, F-19 | 6 | Test report for one real application. Unit tests. Integration test in Maven. |
 | WP-02 | Snapshot model | F-05, F-06, F-07, F-17 | 8 | Golden file apart from the scenario. Named-component comparison. Cell content. |
 | WP-03 | Wait conditions | F-02 | 3 | `WAIT_FOR` action in player and recorder. |
 | WP-04 | Log analysis | F-08, F-09 | 4 | Level-based fail rules. One hit for each stack trace. Correct step assignment. |

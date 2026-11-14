@@ -96,6 +96,10 @@ A path without spaces needs no quotes. This is the easier procedure.
 Actions: `CLICK`, `SET_TEXT`, `SELECT` (combo/list/tab by text or index, table by row), `KEY` (VK name, `modifiers` =
 `InputEvent.*_DOWN_MASK`), `WAIT` (ms), `CLOSE_WINDOW`. `expected` is filled by `approve` (or by the recorder).
 
+Password fields (`JPasswordField`): the snapshot gives the text `***` when the field has a value, and `""` when it is empty.
+The recorder does not record typing in a password field. If a scenario must fill one, add the `SET_TEXT` step by hand.
+Do not put a real password in a scenario file.
+
 ### Locators
 
 `{"name": "orders.save"}` — from `component.setName("orders.save")`, the only stable key. Fallback
