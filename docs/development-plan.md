@@ -47,6 +47,8 @@ The audit found 18 defects or gaps. Severity A stops the use on a real applicati
 | F-18 | C | Requirements R-05, R-15, R-34, R-41 and R-42 have no implementation. No requirement has an acceptance criterion or a priority. | Section 3 adds priorities and criteria. WP-07 and WP-08 implement the open requirements. | WP-07, WP-08 |
 | F-19 | A | The snapshot and the recorder read the text of a `JPasswordField`. A password or API key then goes into the scenario file, the golden snapshots and the reports in plain text. Found on 2026-11-14 in the settings dialog of p.osgi.ds. | Give a password field as `***` (or empty) in the snapshot. Do not record typing in a password field. Done in WP-01. | WP-01 |
 | F-20 | A | The recorder recorded a button click on `MOUSE_CLICKED`. Swing fires the action on `MOUSE_RELEASED`. If the action opens or closes a modal dialog, no `MOUSE_CLICKED` arrives, and the recorder loses the step. Found on 2026-11-14 in p.osgi.ds: the clicks on Settings and Cancel were lost (3 of 5 steps). | Record buttons and menu items on `MOUSE_RELEASED` when the model fires the action. Done in WP-01. | WP-01 |
+| F-21 | B | The recorder takes the golden snapshot of a step after the UI is quiet for `quietMs`. If the next action comes before that time, the snapshot shows the state after the next step. Found on 2026-11-14 in p.osgi.ds: `SET_TEXT` is recorded when the field loses focus, which is the press on the next button. The goldens of s002 and s004 showed the state after s003 and s005. `approve` corrects the goldens, but the player stops at the first failing step, so each `approve` corrects one step. | Take the snapshot of a step before the recorder adds the next step. Let `approve` continue after a failing step, or replay all steps in approve mode. | WP-02, WP-06 |
+| F-22 | B | The agent reads `System.err` and the log file. Equinox writes framework errors to the console (`-consoleLog`) and to `configuration/*.log`. Found on 2026-11-14 in p.osgi.ds: on JRE 8, 14 bundles of spike.master did not resolve, and startup was PASS. When the application calls `System.exit`, the report gives only the exit code. The step and the last ERROR line are only in `app-output.log`. | Read the Equinox log, or fail on `FrameworkEvent ERROR` in the application output. Write the step and the last log hits to `run-result.json` before each action. | WP-04 |
 
 One more risk has no technical correction: a locator without a name uses the visible text. The locator fails when the language of the user interface changes. The rule must be: each interactive component gets a name.
 
@@ -101,11 +103,11 @@ WP-02, WP-03 and WP-04 are independent. Three developers can do them at the same
 | WP | Title | Findings | Effort (pd) | Result |
 |---|---|---|---|---|
 | WP-01 | Verification and test base | F-01, F-15, F-16, F-19, F-20 | 6 | Test report for one real application. Unit tests. Integration test in Maven. |
-| WP-02 | Snapshot model | F-05, F-06, F-07, F-17 | 8 | Golden file apart from the scenario. Named-component comparison. Cell content. |
+| WP-02 | Snapshot model | F-05, F-06, F-07, F-17, F-21 | 8 | Golden file apart from the scenario. Named-component comparison. Cell content. |
 | WP-03 | Wait conditions | F-02 | 3 | `WAIT_FOR` action in player and recorder. |
-| WP-04 | Log analysis | F-08, F-09 | 4 | Level-based fail rules. One hit for each stack trace. Correct step assignment. |
+| WP-04 | Log analysis | F-08, F-09, F-22 | 4 | Level-based fail rules. One hit for each stack trace. Correct step assignment. |
 | WP-05 | Suite mode and lifecycle | F-03, F-04, F-10, F-11 | 8 | Suite file. One JVM for many scenarios. Clean OSGi stop. Properties configuration. |
-| WP-06 | Recorder | F-13, F-14 | 10 | More event types. Usability corrections. Golden preview. |
+| WP-06 | Recorder | F-13, F-14, F-21 | 10 | More event types. Usability corrections. Golden preview. |
 | WP-07 | CI matrix and report | F-18 | 5 | Eight matrix jobs. Joined report. Run history. Release guard. |
 | WP-08 | Extensions | F-12, F-18 | 10 | Hints API. Logback fragment. Robot fallback. Region screenshot comparison. |
 | WP-09 | Naming assistant | Risk: components without a name | 6 | Lint with proposed names. Patch lines. Automatic names at run time. |

@@ -6,7 +6,8 @@ Date: 2026-11-14. Branch: `wp-01-test-base`. Read `CLAUDE.md` and `docs/developm
 
 | WP-01 task | State |
 |---|---|
-| 1–6 Pilot application on Windows and Linux | Open. Do these on the Windows PC. |
+| 1–4, 6 Pilot application on Windows | Done on 2026-11-14. See `docs/wp-01-pilot-report.md`. |
+| 5 Replay on Linux with JRE 17 | Open. Scenarios in `docs/wp-01-pilot/`. |
 | 7 Unit tests | Done. 22 tests in `smoker-core`, 26 tests in `smoker-agent` (4 added for F-19, 2 for F-20). |
 | 8 Maven integration test | Done. `smoker-it/.../SelfTestIT.java` replaces `selftest.sh`. |
 | 9 `Locale.ROOT` | Done. `AgentConfig`, `JUnitXmlWriter`, `Recorder`. |
