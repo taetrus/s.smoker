@@ -81,8 +81,7 @@ final class SnapshotTaker {
     private NodeSnapshot node(Component c, String path) {
         NodeSnapshot n = new NodeSnapshot();
         n.path = path;
-        n.type = c.getClass().getSimpleName();
-        if (n.type.isEmpty()) n.type = c.getClass().getSuperclass().getSimpleName();
+        n.type = Locators.classNameOf(c);
         if (c.getName() != null && !Locators.isAutoName(c.getName())) n.name = c.getName();
         n.visible = c.isVisible() ? null : Boolean.FALSE;   // visible is the default; only record the exception
         n.enabled = c.isEnabled() ? null : Boolean.FALSE;
@@ -128,8 +127,7 @@ final class SnapshotTaker {
                 if (k.getName() != null && !Locators.isAutoName(k.getName())) {
                     seg = "#" + k.getName();
                 } else {
-                    String t = k.getClass().getSimpleName();
-                    if (t.isEmpty()) t = k.getClass().getSuperclass().getSimpleName();
+                    String t = Locators.classNameOf(k);
                     Integer i = counters.get(t);
                     int idx = i == null ? 0 : i;
                     counters.put(t, idx + 1);

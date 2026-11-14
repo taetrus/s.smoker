@@ -10,7 +10,9 @@ import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
+import javax.swing.JPasswordField;
 import javax.swing.JPopupMenu;
+import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 import java.awt.Component;
 import java.awt.GraphicsEnvironment;
@@ -33,6 +35,8 @@ public class LocatorsWindowTest {
     private JButton ok0;
     private JButton ok1;
     private JMenuItem popupItem;
+    private JPasswordField apiKey;
+    private JTextField model;
 
     @Before
     public void showFrame() throws Exception {
@@ -48,6 +52,11 @@ public class LocatorsWindowTest {
                 p.add(named);
                 p.add(ok0);
                 p.add(ok1);
+                // F-23: the password field comes first. JPasswordField extends JTextField.
+                apiKey = new JPasswordField(10);
+                model = new JTextField(10);
+                p.add(apiKey);
+                p.add(model);
                 JPopupMenu popup = new JPopupMenu();
                 popupItem = new JMenuItem("Copy");
                 popup.add(popupItem);
@@ -121,6 +130,29 @@ public class LocatorsWindowTest {
         l.text = "OK";
         l.index = 2;
         assertNull(find(l));
+    }
+
+    @Test
+    public void textFieldLocatorDoesNotFindThePasswordFieldInFrontOfIt() throws Exception {
+        Locator l = onEdt(new Callable<Locator>() {
+            public Locator call() {
+                return Locators.resolve(model);
+            }
+        });
+        assertEquals("JTextField", l.className);
+        assertNull(l.index);
+        assertSame(model, find(l));
+    }
+
+    @Test
+    public void passwordFieldLocatorFindsThePasswordField() throws Exception {
+        Locator l = onEdt(new Callable<Locator>() {
+            public Locator call() {
+                return Locators.resolve(apiKey);
+            }
+        });
+        assertEquals("JPasswordField", l.className);
+        assertSame(apiKey, find(l));
     }
 
     @Test

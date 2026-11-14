@@ -484,7 +484,7 @@
                               {
                                 "path": "[Settings]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JPasswordField[0]",
                                 "type": "JPasswordField",
-                                "text": "***"
+                                "text": ""
                               },
                               {
                                 "path": "[Settings]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JLabel[1]",
@@ -499,7 +499,7 @@
                               {
                                 "path": "[Settings]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JTextField[0]",
                                 "type": "JTextField",
-                                "text": ""
+                                "text": "MODEL"
                               },
                               {
                                 "path": "[Settings]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JLabel[3]",

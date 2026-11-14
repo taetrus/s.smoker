@@ -11,12 +11,12 @@ This report is the input for the Confluence page (WP-01 completion criterion).
 | 2 Add the agent option | No `eclipse.ini` and no launcher (`includeLaunchers="false"`). The agent option is in the `java` command. The agent attaches. |
 | 3 Record on Windows with JRE 8 | Done. JRE 1.8.0_341, Windows 11. |
 | 4 Record five steps | Done after the correction of F-20. The first recording had 3 of 5 steps. |
-| 5 Replay on Windows and Linux | Windows: PASS 5 times in sequence (run 7 to run 11, also after a restart of the PC). **This PASS is not valid**: step s002 typed into the wrong field (F-23). **Linux: open.** |
+| 5 Replay on Windows and Linux | Windows: PASS 3 times in sequence after the correction of F-23 (run 13 to run 15). The earlier PASS (run 7 to run 11) was not valid: step s002 typed into the wrong field. **Linux: open.** |
 | 6 Write down failures, lint, startup | Sections 3 to 6 of this report. |
-| 7–10 Tests, IT, `Locale.ROOT`, tr_TR | Done. On Windows: 22 + 26 unit tests and 2 IT pass in 3 configurations (section 2). |
+| 7–10 Tests, IT, `Locale.ROOT`, tr_TR | Done. On Windows: 22 + 28 unit tests and 2 IT pass in 3 configurations (section 2). |
 
-Completion criterion: **not met.** On Windows, correct F-23, approve s002 again and replay. Then do the replay on Linux with
-JRE 17 (task 5), and put the report in Confluence. Do not start WP-02.
+Completion criterion: the five-step scenario passes on Windows with JRE 8. **Not met yet**: the replay on Linux with JRE 17 (task 5),
+and the report in Confluence. Do not start WP-02.
 
 ## 2. Environment and s.smoker tests
 
@@ -26,9 +26,9 @@ JRE 17 (task 5), and put the report in Confluence. Do not start WP-02.
 
 | Command | Unit tests | IT | Result |
 |---|---|---|---|
-| `mvn -B verify` | 22 + 26 | 2 | BUILD SUCCESS |
-| `mvn -B verify -Plocale-tr` | 22 + 26 | 2 | BUILD SUCCESS |
-| `mvn -B verify -Plocale-tr "-Djvm=...\jdk1.8.0_341\bin\java.exe"` | 22 + 26 | 2 | BUILD SUCCESS |
+| `mvn -B verify` | 22 + 28 | 2 | BUILD SUCCESS |
+| `mvn -B verify -Plocale-tr` | 22 + 28 | 2 | BUILD SUCCESS |
+| `mvn -B verify -Plocale-tr "-Djvm=...\jdk1.8.0_341\bin\java.exe"` | 22 + 28 | 2 | BUILD SUCCESS |
 
 ## 3. Pilot scenario
 
@@ -38,12 +38,12 @@ File: `C:\smoke\pilot.json`. Five steps, no LLM request:
 |---|---|---|
 | startup | — | 1175 ms |
 | s001 | CLICK `[OSGi Chatbot] JButton('Settings')` (opens a modal dialog) | 643 ms |
-| s002 | SET_TEXT `[Settings] JTextField` (Model). The replay typed into the API key field (F-23). | 513 ms |
+| s002 | SET_TEXT `[Settings] JTextField` (Model). Before the correction of F-23, the replay typed into the API key field. | 513 ms |
 | s003 | CLICK `[Settings] JButton('Cancel')` (closes the dialog) | 571 ms |
 | s004 | SET_TEXT `[OSGi Chatbot] JTextArea` (chat input) | 494 ms |
-| s005 | CLICK `[OSGi Chatbot] JButton('Clear')` | 561 ms |
+| s005 | CLICK `[OSGi Chatbot] JButton('Clear')`. Clear removes the conversation history, not the input text. The chat text has an ignore rule, so the snapshot does not examine the result of this step. | 561 ms |
 
-A full run takes 4 s to 5 s (JVM start, five steps, exit).
+A full run takes 4 s to 5 s (JVM start, five steps, exit). Runs 13 to 15: 5.1 s, 5.0 s, 5.4 s.
 
 Ignore rules in the scenario. The application connects to `openrouter.ai` at startup in a background thread (F-02):
 
@@ -68,7 +68,7 @@ with the state of the next step), F-02 (network answer after the snapshot), and 
 | — | — | Handoff | The `record` command of the handoff did not operate in PowerShell 5.1 (inner quotes without `\`). | Corrected in the handoff. |
 | F-19 | A | Agent | The snapshot and the recorder read the text of a `JPasswordField`. The settings dialog shows the saved API key in one. | Corrected. The snapshot gives `***`. Typing in a password field is not recorded. In the replay the API key field contained a value (F-23), and the golden shows `***`. No API key is saved on the test PC. |
 | F-20 | A | Recorder | A click that opens or closes a modal dialog was lost (no `MOUSE_CLICKED`). | Corrected. Buttons are recorded on `MOUSE_RELEASED`. |
-| F-23 | A | Player | The locator `[Settings] JTextField` index 0 found the `JPasswordField` (subclass of `JTextField`) in front of the Model field. s002 typed "MODEL" into the API key field. `approve` accepted this state, so the run gave PASS. | Open (WP-01). Correct before the Linux run. |
+| F-23 | A | Player | The locator `[Settings] JTextField` index 0 found the `JPasswordField` (subclass of `JTextField`) in front of the Model field. s002 typed "MODEL" into the API key field. `approve` accepted this state, so the run gave PASS. | Corrected. `find` and `resolve` use the same class rule (`Locators.classNameOf`). 2 window tests. After the correction: FAIL at s002 with the old golden, `approve`, then PASS 3 times. |
 | F-21 | B | Recorder | The golden snapshot of a step can show the state after the next step. Each `approve` corrects only one step. | Open (WP-02, WP-06). |
 | F-02 | A | Player | Confirmed without a simulator: the answer from `openrouter.ai` arrives after the snapshot. The result changes from run to run. | Open (WP-03). Workaround: ignore rules. |
 | F-22 | B | Agent | Equinox framework errors are not read. 14 unresolved bundles gave startup PASS. After `System.exit` the report shows only the exit code. | Open (WP-04). |
@@ -101,7 +101,6 @@ On the test PC, not in the repository:
 
 ## 8. Open for WP-01
 
-1. On Windows: correct F-23, approve s002 again, replay three times. Update `docs/wp-01-pilot/pilot.json`.
-2. Task 5 on Linux: replay `pilot.json` with JRE 17 and `xvfb-run -a` on the `linux.gtk.x86_64` product.
+1. Task 5 on Linux: replay `pilot.json` with JRE 17 and `xvfb-run -a` on the `linux.gtk.x86_64` product.
    The procedure is in `docs/wp-01-handoff.md`, section 3.
-3. Put this report in Confluence.
+2. Put this report in Confluence.

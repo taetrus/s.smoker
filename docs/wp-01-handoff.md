@@ -1,4 +1,4 @@
-# WP-01 handoff: correct F-23, then replay on Linux
+# WP-01 handoff: replay on Linux
 
 Date: 2026-11-14. Branch: `wp-01-test-base`. Read `CLAUDE.md`, `docs/development-plan.md` and `docs/wp-01-pilot-report.md` first.
 
@@ -7,9 +7,9 @@ Date: 2026-11-14. Branch: `wp-01-test-base`. Read `CLAUDE.md`, `docs/development
 | WP-01 task | State |
 |---|---|
 | 1–4, 6 Pilot application on Windows | Done on 2026-11-14. See `docs/wp-01-pilot-report.md`. |
-| 5 Replay on Windows | **Not valid.** PASS 5 times, but step s002 typed into the wrong field (F-23). Do section 2. |
-| 5 Replay on Linux with JRE 17 | Open. Do section 3 after section 2. |
-| 7 Unit tests | Done. 22 tests in `smoker-core`, 26 tests in `smoker-agent`. |
+| 5 Replay on Windows | Done. F-23 corrected. PASS 3 times in sequence (run 13 to run 15). See section 2. |
+| 5 Replay on Linux with JRE 17 | **Open. Do section 3.** |
+| 7 Unit tests | Done. 22 tests in `smoker-core`, 28 tests in `smoker-agent`. |
 | 8 Maven integration test | Done. `SelfTestIT` passes on macOS and Windows. |
 | 9 `Locale.ROOT` | Done. |
 | 10 Turkish-locale run | Done. Profile `locale-tr`. |
@@ -18,33 +18,26 @@ Verified on Windows 11 on 2026-11-14 (Maven 3.9.6, JDK 25 in a path with spaces,
 
 | Command | Unit tests | IT |
 |---|---|---|
-| `mvn -B verify` | 48/48 | 2/2 |
-| `mvn -B verify -Plocale-tr` | 48/48 | 2/2 |
-| `mvn -B verify -Plocale-tr "-Djvm=<JDK 8>\bin\java.exe"` | 48/48 | 2/2 |
+| `mvn -B verify` | 50/50 | 2/2 |
+| `mvn -B verify -Plocale-tr` | 50/50 | 2/2 |
+| `mvn -B verify -Plocale-tr "-Djvm=<JDK 8>\bin\java.exe"` | 50/50 | 2/2 |
 
 Completion criterion of WP-01: the five-step scenario passes on Windows with JRE 8 and on Linux with JRE 17. The test report is in Confluence.
 **Not met.** Do not start WP-02.
 
-## 2. Before the Linux run: correct F-23 on the Windows PC
+## 2. Done on Windows: correction of F-23
 
-F-23: `Locators.find` accepts a component whose superclass has the locator class. `JPasswordField` extends `JTextField`.
-The locator `[Settings] JTextField` (no index) found the API key field, not the Model field.
-`Locators.resolve` counts the index only among components of the same class, so the two methods do not agree.
+F-23: `Locators.find` accepted a component whose superclass has the locator class. `JPasswordField` extends `JTextField`,
+so the locator `[Settings] JTextField` found the API key field, not the Model field.
+Now `find` and `resolve` use the same rule, `Locators.classNameOf`: the simple class name, or the superclass name only for an anonymous class.
+Two window tests in `LocatorsWindowTest`. The F-23 test fails with the old `find`.
 
-1. In `Locators.find`, use the class rule of `Locators.resolve`: the simple class name. Use the superclass name only for an anonymous class.
-2. Add a window test: a `JPasswordField` in front of a `JTextField`. `find(resolve(textField))` must give the text field.
-   Make sure that the test fails with the old `find`.
-3. Run the three commands of section 1. Expected: unit tests 22 and 27 or more, IT 2, `BUILD SUCCESS`.
-4. Copy the new `smoker-agent.jar` to `C:\tools\`.
-5. Replay `C:\smoke\pilot.json` (section 4.2). The expected result is FAIL at s002: the golden shows the old, wrong state
-   (`***` in the API key field, `''` in the Model field). Make sure that the actual state has `MODEL` in the Model field and `''` in the API key field.
-6. `approve` that run, then replay three times. Each run must give PASS. If a later step fails, approve and replay again (F-21).
-7. Copy `C:\smoke\pilot.json` to `docs/wp-01-pilot/pilot.json`. Make sure that the file contains no API key.
-8. Correct sections 1, 3 and 5 of `docs/wp-01-pilot-report.md`. Commit with `WP-01 (F-23)`.
+Replay after the correction: run 12 FAIL at s002 with the old golden (expected). The actual state had `MODEL` in the Model field and `''` in the API key field.
+After `approve`: run 13, 14 and 15 PASS (5.1 s, 5.0 s, 5.4 s). `docs/wp-01-pilot/pilot.json` is this scenario. It contains no `***` and no API key.
 
 ## 3. Replay on Linux (task 5)
 
-Do this after section 2. Use the `pilot.json` from section 2, not an older copy.
+Use `docs/wp-01-pilot/pilot.json` from the branch. Do not use an older copy. An older copy contains `"***"`: it has the wrong s002 golden.
 
 ### 3.1 Prepare the runner
 
