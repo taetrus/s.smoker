@@ -26,6 +26,7 @@ import java.awt.event.MouseEvent;
 import java.nio.file.Files;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.Callable;
 
 /**
@@ -231,7 +232,7 @@ final class Recorder implements AWTEventListener {
     // ---- steps -------------------------------------------------------------------------------
 
     private void add(Action a) {
-        Step s = new Step(String.format("s%03d", ++counter), a.toString(), a);
+        Step s = new Step(String.format(Locale.ROOT, "s%03d", ++counter), a.toString(), a);
         scenario.steps.add(s);
         if (listener != null) listener.stepAdded(s);
         synchronized (pendingSnapshots) {

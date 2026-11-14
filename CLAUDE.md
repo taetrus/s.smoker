@@ -24,19 +24,21 @@ compares semantic component snapshots with golden snapshots, and reads the appli
 ## Commands
 
 ```bash
-mvn -B package                         # build all modules
-xvfb-run -a ./selftest.sh              # Linux, no display: full record-free cycle on the demo application
-./selftest.sh                          # macOS / Linux with a display
+mvn -B package                         # build all modules, run the unit tests
+mvn -B verify                          # also the integration test smoker-it (macOS / Windows / Linux with a display)
+xvfb-run -a mvn -B verify              # Linux, no display
+mvn -B verify -Plocale-tr              # all tests in tr_TR (F-16)
 ```
 
-`selftest.sh` must show: run1 NO_GOLDEN, run2 PASS, run3 FAIL with `CHANGED #demo.lang`, run4 FAIL (log hit) and HANG.
-Run it after every change to `smoker-agent` or `smoker-core`.
+`SelfTestIT` replaces `selftest.sh`. It expects run1 NO_GOLDEN, run2 PASS, run3 FAIL with `CHANGED #demo.lang`,
+run4 FAIL (log hit) and HANG. Run `mvn -B verify` and `mvn -B verify -Plocale-tr` after every change to `smoker-agent` or `smoker-core`.
 
 ## State on 2026-11-12
 
 - Skeleton 0.1.0-SNAPSHOT builds and passes the self-test on JDK 21 + Xvfb only.
 - Not verified: JRE 8/11/17 at run time, Windows, a real Equinox application, the recorder toolbar with a person.
-- No unit tests exist.
+- WP-01 tasks 7–10 done: unit tests in smoker-core and smoker-agent, `SelfTestIT` in smoker-it, `Locale.ROOT`, profile `locale-tr`.
+  Verified on macOS, JDK 21, default locale and tr_TR. WP-01 tasks 1–6 and the completion criterion are open.
 
 ## Decisions already made
 

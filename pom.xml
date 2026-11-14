@@ -15,6 +15,7 @@
     <module>smoker-agent</module>
     <module>smoker-cli</module>
     <module>smoker-demo</module>
+    <module>smoker-it</module>
   </modules>
 
   <properties>
@@ -24,6 +25,9 @@
     <maven.compiler.target>1.8</maven.compiler.target>
     <gson.version>2.10.1</gson.version>
     <junit.version>4.13.2</junit.version>
+    <!-- JVM options and expected default locale of the test JVMs. Profile locale-tr sets them (F-16). -->
+    <smoker.test.jvmArgs></smoker.test.jvmArgs>
+    <smoker.expectLocale></smoker.expectLocale>
   </properties>
 
   <dependencyManagement>
@@ -69,12 +73,38 @@
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-surefire-plugin</artifactId>
           <version>3.2.5</version>
+          <configuration>
+            <!-- The default locale is fixed at JVM start: set it with argLine, not with a system property. -->
+            <argLine>${smoker.test.jvmArgs}</argLine>
+            <systemPropertyVariables>
+              <smoker.expectLocale>${smoker.expectLocale}</smoker.expectLocale>
+            </systemPropertyVariables>
+          </configuration>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-failsafe-plugin</artifactId>
+          <version>3.2.5</version>
+          <configuration>
+            <argLine>${smoker.test.jvmArgs}</argLine>
+            <systemPropertyVariables>
+              <smoker.expectLocale>${smoker.expectLocale}</smoker.expectLocale>
+            </systemPropertyVariables>
+          </configuration>
         </plugin>
       </plugins>
     </pluginManagement>
   </build>
 
   <profiles>
+    <!-- mvn -B verify -Plocale-tr : run all tests in the Turkish locale (F-16, WP-01 task 10). -->
+    <profile>
+      <id>locale-tr</id>
+      <properties>
+        <smoker.test.jvmArgs>-Duser.language=tr -Duser.country=TR</smoker.test.jvmArgs>
+        <smoker.expectLocale>tr-TR</smoker.expectLocale>
+      </properties>
+    </profile>
     <!-- On JDK 9+ compile with "release 8" so Java 9+ APIs cannot leak in by accident. -->
     <profile>
       <id>jdk9plus</id>

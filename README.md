@@ -8,16 +8,25 @@ smoker-core   model (Scenario/Step/Action/Locator/Snapshot), diff, JSON, JUnit-X
 smoker-agent  -javaagent: recorder toolbar, semantic player, snapshot taker, log tailer, EDT watchdog   → smoker-agent.jar (shaded)
 smoker-cli    launches the app with the agent, approves goldens, writes reports                           → smoker-cli.jar   (shaded)
 smoker-demo   tiny Swing app + scenarios for the self-test
+smoker-it     integration test: CLI + agent + demo app, full record-free cycle
 ```
 
 ## Build
 
 ```bash
-mvn -B package                 # JDK 8–21; on JDK 9+ compiles with --release 8
-./selftest.sh                  # Linux/macOS with a display; Linux CI: xvfb-run -a ./selftest.sh
+mvn -B package                 # JDK 8–21; on JDK 9+ compiles with --release 8; runs the unit tests
+mvn -B verify                  # also runs the integration test in smoker-it (needs a display)
+mvn -B verify -Plocale-tr      # all tests in the Turkish locale (tr_TR)
+xvfb-run -a mvn -B verify      # Linux without a display
 ```
 
-Windows (PowerShell): `mvn -B package` then run the commands below; no Xvfb needed on a logged-in desktop.
+The integration test runs `run`, `approve`, `run`, `run` on `smoker-demo/scenarios` and `run` on
+`smoker-demo/scenarios-failing`. It expects NO_GOLDEN, PASS, FAIL with `CHANGED …#demo.lang`, FAIL on a log hit and HANG.
+It copies the scenarios to `smoker-it/target/it-work` and does not change the files in the repository.
+The CLI and the demo application use the JVM and the locale of the test.
+Without a display the integration test fails, and `LocatorsWindowTest` is skipped.
+
+Windows (PowerShell): `mvn -B verify` then run the commands below; no Xvfb needed on a logged-in desktop.
 
 ## Use
 

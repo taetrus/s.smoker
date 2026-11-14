@@ -9,6 +9,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Locale;
 
 /** JUnit XML for GitLab's test-report widget (R-40). One testsuite per scenario, one testcase per step. */
 public final class JUnitXmlWriter {
@@ -27,7 +28,7 @@ public final class JUnitXmlWriter {
                     else if (s.status == RunResult.Status.ERROR) errors++;
                 }
                 if (r.status == RunResult.Status.ERROR && r.steps.isEmpty()) errors++;
-                w.write(String.format("  <testsuite name=\"%s\" tests=\"%d\" failures=\"%d\" errors=\"%d\" time=\"%.3f\">\n",
+                w.write(String.format(Locale.ROOT, "  <testsuite name=\"%s\" tests=\"%d\" failures=\"%d\" errors=\"%d\" time=\"%.3f\">\n",
                         esc(r.scenarioName), Math.max(r.steps.size(), 1), failures, errors,
                         (r.finishedAt - r.startedAt) / 1000.0));
                 if (r.steps.isEmpty()) {
@@ -35,7 +36,7 @@ public final class JUnitXmlWriter {
                     w.write("      <error message=\"" + esc(r.error) + "\"/>\n    </testcase>\n");
                 }
                 for (RunResult.StepResult s : r.steps) {
-                    w.write(String.format("    <testcase name=\"%s\" classname=\"%s\" time=\"%.3f\">\n",
+                    w.write(String.format(Locale.ROOT, "    <testcase name=\"%s\" classname=\"%s\" time=\"%.3f\">\n",
                             esc(s.stepId + " " + s.stepName), esc(r.scenarioName), s.durationMs / 1000.0));
                     StringBuilder body = new StringBuilder();
                     for (String d : s.differences) body.append(d).append('\n');
