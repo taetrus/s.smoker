@@ -11,12 +11,12 @@ This report is the input for the Confluence page (WP-01 completion criterion).
 | 2 Add the agent option | No `eclipse.ini` and no launcher (`includeLaunchers="false"`). The agent option is in the `java` command. The agent attaches. |
 | 3 Record on Windows with JRE 8 | Done. JRE 1.8.0_341, Windows 11. |
 | 4 Record five steps | Done after the correction of F-20. The first recording had 3 of 5 steps. |
-| 5 Replay on Windows and Linux | Windows: PASS 5 times in sequence (run 7 to run 11, also after a restart of the PC). **Linux: open.** |
+| 5 Replay on Windows and Linux | Windows: PASS 5 times in sequence (run 7 to run 11, also after a restart of the PC). **This PASS is not valid**: step s002 typed into the wrong field (F-23). **Linux: open.** |
 | 6 Write down failures, lint, startup | Sections 3 to 6 of this report. |
 | 7–10 Tests, IT, `Locale.ROOT`, tr_TR | Done. On Windows: 22 + 26 unit tests and 2 IT pass in 3 configurations (section 2). |
 
-Completion criterion: the five-step scenario passes on Windows with JRE 8. **Not met yet**: the replay on Linux with JRE 17 (task 5),
-and the report in Confluence. Do not start WP-02.
+Completion criterion: **not met.** On Windows, correct F-23, approve s002 again and replay. Then do the replay on Linux with
+JRE 17 (task 5), and put the report in Confluence. Do not start WP-02.
 
 ## 2. Environment and s.smoker tests
 
@@ -38,7 +38,7 @@ File: `C:\smoke\pilot.json`. Five steps, no LLM request:
 |---|---|---|
 | startup | — | 1175 ms |
 | s001 | CLICK `[OSGi Chatbot] JButton('Settings')` (opens a modal dialog) | 643 ms |
-| s002 | SET_TEXT `[Settings] JTextField` (Model) | 513 ms |
+| s002 | SET_TEXT `[Settings] JTextField` (Model). The replay typed into the API key field (F-23). | 513 ms |
 | s003 | CLICK `[Settings] JButton('Cancel')` (closes the dialog) | 571 ms |
 | s004 | SET_TEXT `[OSGi Chatbot] JTextArea` (chat input) | 494 ms |
 | s005 | CLICK `[OSGi Chatbot] JButton('Clear')` | 561 ms |
@@ -66,8 +66,9 @@ with the state of the next step), F-02 (network answer after the snapshot), and 
 |---|---|---|---|---|
 | — | — | `SelfTestIT` | On Windows, `ProcessBuilder` does not escape inner quotes. The CLI received only `E:\Program` as `--app`. | Corrected (`SelfTestIT.windowsArg`). README tells users how to quote `--app`. |
 | — | — | Handoff | The `record` command of the handoff did not operate in PowerShell 5.1 (inner quotes without `\`). | Corrected in the handoff. |
-| F-19 | A | Agent | The snapshot and the recorder read the text of a `JPasswordField`. The settings dialog shows the saved API key in one. | Corrected. The snapshot gives `***`. Typing in a password field is not recorded. Confirmed in a replay: the golden of the API key field is `***`. |
+| F-19 | A | Agent | The snapshot and the recorder read the text of a `JPasswordField`. The settings dialog shows the saved API key in one. | Corrected. The snapshot gives `***`. Typing in a password field is not recorded. In the replay the API key field contained a value (F-23), and the golden shows `***`. No API key is saved on the test PC. |
 | F-20 | A | Recorder | A click that opens or closes a modal dialog was lost (no `MOUSE_CLICKED`). | Corrected. Buttons are recorded on `MOUSE_RELEASED`. |
+| F-23 | A | Player | The locator `[Settings] JTextField` index 0 found the `JPasswordField` (subclass of `JTextField`) in front of the Model field. s002 typed "MODEL" into the API key field. `approve` accepted this state, so the run gave PASS. | Open (WP-01). Correct before the Linux run. |
 | F-21 | B | Recorder | The golden snapshot of a step can show the state after the next step. Each `approve` corrects only one step. | Open (WP-02, WP-06). |
 | F-02 | A | Player | Confirmed without a simulator: the answer from `openrouter.ai` arrives after the snapshot. The result changes from run to run. | Open (WP-03). Workaround: ignore rules. |
 | F-22 | B | Agent | Equinox framework errors are not read. 14 unresolved bundles gave startup PASS. After `System.exit` the report shows only the exit code. | Open (WP-04). |
@@ -100,6 +101,7 @@ On the test PC, not in the repository:
 
 ## 8. Open for WP-01
 
-1. Task 5 on Linux: replay `pilot.json` with JRE 17 and `xvfb-run -a` on the `linux.gtk.x86_64` product. Add the Logback appender there too
-   (it is already in the local build output). The window titles and the paths must be the same on Linux.
-2. Put this report in Confluence.
+1. On Windows: correct F-23, approve s002 again, replay three times. Update `docs/wp-01-pilot/pilot.json`.
+2. Task 5 on Linux: replay `pilot.json` with JRE 17 and `xvfb-run -a` on the `linux.gtk.x86_64` product.
+   The procedure is in `docs/wp-01-handoff.md`, section 3.
+3. Put this report in Confluence.

@@ -1,104 +1,152 @@
-# WP-01 handoff: continue on Windows
+# WP-01 handoff: correct F-23, then replay on Linux
 
-Date: 2026-11-14. Branch: `wp-01-test-base`. Read `CLAUDE.md` and `docs/development-plan.md` first.
+Date: 2026-11-14. Branch: `wp-01-test-base`. Read `CLAUDE.md`, `docs/development-plan.md` and `docs/wp-01-pilot-report.md` first.
 
 ## 1. State
 
 | WP-01 task | State |
 |---|---|
 | 1–4, 6 Pilot application on Windows | Done on 2026-11-14. See `docs/wp-01-pilot-report.md`. |
-| 5 Replay on Linux with JRE 17 | Open. Scenarios in `docs/wp-01-pilot/`. |
-| 7 Unit tests | Done. 22 tests in `smoker-core`, 26 tests in `smoker-agent` (4 added for F-19, 2 for F-20). |
-| 8 Maven integration test | Done. `smoker-it/.../SelfTestIT.java` replaces `selftest.sh`. |
-| 9 `Locale.ROOT` | Done. `AgentConfig`, `JUnitXmlWriter`, `Recorder`. |
+| 5 Replay on Windows | **Not valid.** PASS 5 times, but step s002 typed into the wrong field (F-23). Do section 2. |
+| 5 Replay on Linux with JRE 17 | Open. Do section 3 after section 2. |
+| 7 Unit tests | Done. 22 tests in `smoker-core`, 26 tests in `smoker-agent`. |
+| 8 Maven integration test | Done. `SelfTestIT` passes on macOS and Windows. |
+| 9 `Locale.ROOT` | Done. |
 | 10 Turkish-locale run | Done. Profile `locale-tr`. |
 
-Verified on macOS only, with `mvn -B clean verify`:
+Verified on Windows 11 on 2026-11-14 (Maven 3.9.6, JDK 25 in a path with spaces, JRE 8u341):
 
-| Locale | Test JVM | Unit tests | IT |
-|---|---|---|---|
-| default (`en_TR`) | JDK 27 | 42/42 | 2/2 |
-| `tr_TR` | JDK 27 | 42/42 | 2/2 |
-| `tr_TR` | JRE 8 (`-Djvm`) | 42/42 | 2/2 |
+| Command | Unit tests | IT |
+|---|---|---|
+| `mvn -B verify` | 48/48 | 2/2 |
+| `mvn -B verify -Plocale-tr` | 48/48 | 2/2 |
+| `mvn -B verify -Plocale-tr "-Djvm=<JDK 8>\bin\java.exe"` | 48/48 | 2/2 |
 
-Verified on Windows 11 on 2026-11-14, with `mvn -B verify` (Maven 3.9.6, JDK 25 in `E:\Program Files\...`):
+Completion criterion of WP-01: the five-step scenario passes on Windows with JRE 8 and on Linux with JRE 17. The test report is in Confluence.
+**Not met.** Do not start WP-02.
 
-| Locale | Test JVM | Unit tests | IT |
-|---|---|---|---|
-| default (`en_US`) | JDK 25 | 48/48 | 2/2 |
-| `tr_TR` | JDK 25 | 48/48 | 2/2 |
-| `tr_TR` | JRE 8u341 (`-Djvm`) | 48/48 | 2/2 |
+## 2. Before the Linux run: correct F-23 on the Windows PC
 
-The first Windows run failed. `SelfTestIT` gave the `--app` value with inner quotes to `ProcessBuilder`.
-On Windows, `ProcessBuilder` does not escape inner quotes, and the CLI received only `E:\Program`.
-`SelfTestIT.windowsArg` now escapes the quotes. The CLI did not change. `README.md` tells users how to quote `--app` on Windows.
-The `java` path without `.exe` and the `;` separator of `--scenarios` caused no problem.
+F-23: `Locators.find` accepts a component whose superclass has the locator class. `JPasswordField` extends `JTextField`.
+The locator `[Settings] JTextField` (no index) found the API key field, not the Model field.
+`Locators.resolve` counts the index only among components of the same class, so the two methods do not agree.
 
-F-19 (new, done): the snapshot and the recorder read the text of a `JPasswordField`. The settings dialog of p.osgi.ds
-shows the saved API key in one. The snapshot now gives `***`, and the recorder does not record typing in a password field.
+1. In `Locators.find`, use the class rule of `Locators.resolve`: the simple class name. Use the superclass name only for an anonymous class.
+2. Add a window test: a `JPasswordField` in front of a `JTextField`. `find(resolve(textField))` must give the text field.
+   Make sure that the test fails with the old `find`.
+3. Run the three commands of section 1. Expected: unit tests 22 and 27 or more, IT 2, `BUILD SUCCESS`.
+4. Copy the new `smoker-agent.jar` to `C:\tools\`.
+5. Replay `C:\smoke\pilot.json` (section 4.2). The expected result is FAIL at s002: the golden shows the old, wrong state
+   (`***` in the API key field, `''` in the Model field). Make sure that the actual state has `MODEL` in the Model field and `''` in the API key field.
+6. `approve` that run, then replay three times. Each run must give PASS. If a later step fails, approve and replay again (F-21).
+7. Copy `C:\smoke\pilot.json` to `docs/wp-01-pilot/pilot.json`. Make sure that the file contains no API key.
+8. Correct sections 1, 3 and 5 of `docs/wp-01-pilot-report.md`. Commit with `WP-01 (F-23)`.
 
-F-20 (new, done): the recorder lost each button click that opens or closes a modal dialog. The first recording on p.osgi.ds
-had 3 of 5 steps (Settings and Cancel lost). The recorder now records buttons on `MOUSE_RELEASED`.
-The Windows results above are from the build with both fixes.
+## 3. Replay on Linux (task 5)
 
-The WP-01 completion criterion is not met. Do not start WP-02.
+Do this after section 2. Use the `pilot.json` from section 2, not an older copy.
 
-## 2. Prepare the Windows PC
+### 3.1 Prepare the runner
 
-1. Install Git for Windows. Keep `core.autocrlf=true`.
-2. Install the GitHub CLI. Run `gh auth login`. The repository is private.
-3. Install Temurin JDK 8 and JDK 17. Set `JAVA_HOME` to JDK 17.
-4. Install Maven 3.9.x.
-5. On the corporate network, copy the Nexus `settings.xml` to `%USERPROFILE%\.m2\`. Nexus must supply `maven-failsafe-plugin` 3.2.5.
-6. Clone into a path without spaces, `;` or `=` (finding F-11):
+- Linux x86_64 with `xvfb-run` (package `xvfb`). No person is necessary: the replay does not use the recorder toolbar.
+- Temurin JDK 17 (it builds both repositories and runs the application). Maven 3.9.x. Git.
+- On the corporate network: the Nexus `settings.xml` in `~/.m2/`.
+- Use paths without spaces, `;`, `:` or `=` (F-11).
 
-```powershell
-cd C:\dev
-gh repo clone taetrus/s.smoker
-cd s.smoker
+Set two variables for the commands below:
+
+```bash
+export JAVA17=/path/to/jdk-17          # the JDK 17 folder
+export WORK=$HOME/wp01                  # a new, empty folder
+mkdir -p "$WORK/tools" "$WORK/smoke"
+```
+
+### 3.2 Build and test s.smoker
+
+```bash
+cd "$WORK" && git clone https://github.com/taetrus/s.smoker.git && cd s.smoker
 git switch wp-01-test-base
+JAVA_HOME=$JAVA17 xvfb-run -a mvn -B verify
+cp smoker-agent/target/smoker-agent.jar smoker-cli/target/smoker-cli.jar "$WORK/tools/"
+cp docs/wp-01-pilot/pilot.json "$WORK/smoke/"
 ```
 
-## 3. Run the tests on Windows
+Expected: the same test counts as on Windows, IT 2, `BUILD SUCCESS`. Write the result in the report.
+Put only `pilot.json` in `$WORK/smoke/`. `--scenarios` runs each `.json` file in that folder.
 
-Use a logged-in desktop session. Do not use a service or a minimized RDP window. In PowerShell, put each `-D` argument in quotes.
+### 3.3 Build the pilot application
+
+```bash
+cd "$WORK" && git clone https://github.com/taetrus/p.osgi.ds.git && cd p.osgi.ds
+JAVA_HOME=$JAVA17 ./mvnw -B clean verify
+cd distribution/target/products/com.kk.pde.ds.product/linux/gtk/x86_64
+```
+
+The wrapper uses Maven 3.9.16. Tycho 4.0.13 does not start on Maven 3.10.
+Add the Logback file appender of section 4.3 to `configuration/logback.xml` in this folder. The products log only to the console.
+
+### 3.4 Replay
+
+Start the CLI in the product folder. The CLI starts the application in its own working directory.
+
+```bash
+OSGI=$(ls plugins/org.eclipse.osgi_*.jar)
+xvfb-run -a "$JAVA17/bin/java" -jar "$WORK/tools/smoker-cli.jar" run \
+  --agent "$WORK/tools/smoker-agent.jar" --scenarios "$WORK/smoke" --out "$WORK/smoke/out/linux1" \
+  --log logs/smoker.log --allowRegex 'Failed to fetch models from' \
+  --app "$JAVA17/bin/java {agent} -jar $OSGI -configuration configuration -consoleLog"
+```
+
+- Do not give `-console`. The OSGi console reads standard input.
+- `--allowRegex`: without network, the chatbot writes one ERROR line `Failed to fetch models from ...`, and the run fails on a log hit.
+  This rule is necessary only without network. Write in the report if the runner has network.
+- The ignore rules in `pilot.json` cover the model combo box and the chat text. They change with the network answer (F-02).
+- Do the replay three times (`linux1`, `linux2`, `linux3`). Write the time of each run.
+
+### 3.5 Expected result and rules
+
+Expected: PASS in each of the three runs, without `approve` on Linux.
+
+- **Do not approve on Linux.** The criterion is that the scenario approved on Windows passes on Linux.
+- If a run fails, keep `$WORK/smoke/out/linux<n>/` (`report.html`, `run-result.json`, `app-output.log`, screenshots).
+  Write each difference in the report. A difference between Windows and Linux (look and feel, component tree, texts) is a finding for WP-02.
+- Possible differences to examine first: `startup` (the `OSGi Clock` window title contains an emoji),
+  the order of the windows, and the components of the look and feel.
+- If the agent does not attach, stop and write down the output. Alternative: environment variable `JAVA_TOOL_OPTIONS`.
+
+### 3.6 Report back
+
+- Add a section "Linux" to `docs/wp-01-pilot-report.md`: distribution, JDK version, network yes/no, the result and the time of each run, each failure.
+- Copy the three `report.html` files to the evidence on the runner. Do not commit run outputs.
+- Commit with `WP-01 (F-01)`. Then put the report in Confluence.
+
+## 4. Reference: the Windows procedure that operated
+
+### 4.1 Tests
+
+Use a logged-in desktop session. In PowerShell, put each `-D` argument in quotes. Commands: section 1.
+If a run fails, keep `smoker-it\target\failsafe-reports\` and `smoker-it\target\it-work\`.
+
+### 4.2 Record and replay on the main product
+
+- Product folder: `p.osgi.ds\distribution\target\products\com.kk.pde.ds.product\win32\win32\x86_64`. Start the CLI there.
+- There is no `.exe` and no `eclipse.ini`. Give the agent in the `java` command.
+- Windows PowerShell 5.1: write each inner quote of `--app` as `\"`, and enclose the value in single quotes.
+  Without the backslashes, the CLI receives only `C:\Program`. Run the command in PowerShell, not in Git Bash (`!` in Claude Code is Git Bash).
 
 ```powershell
-mvn -B verify
-mvn -B verify -Plocale-tr
-mvn -B verify -Plocale-tr "-Djvm=<JDK 8 folder>\bin\java.exe"
+java -jar C:\tools\smoker-cli.jar run --agent C:\tools\smoker-agent.jar --scenarios C:\smoke --out C:\smoke\out\<run> --log logs\smoker.log `
+  --app '\"C:\Program Files\Java\jdk1.8.0_341\bin\java.exe\" {agent} -jar plugins\org.eclipse.osgi_3.23.0.v20250228-0640.jar -configuration configuration -consoleLog'
+java -jar C:\tools\smoker-cli.jar approve --run C:\smoke\out\<run>\pilot --scenario C:\smoke\pilot.json
 ```
 
-Expected result of each run: unit tests 22 and 26, IT 2, `BUILD SUCCESS`.
+- For `record`, use `record` and `--scenario C:\smoke\pilot.json` in place of `run`, `--scenarios` and `--out`.
+  Save in the toolbar does not stop the application. The main product does not stop when its window closes. Stop the `java` process after Save.
+- Do not click Send, Save (settings), Test Connection, Refresh Models or Set Default: they use the network or change the settings file.
 
-If a run fails, keep these folders:
+### 4.3 Logback file appender
 
-- `smoker-it\target\failsafe-reports\`
-- `smoker-it\target\it-work\` (`cli-*.log`, `run-result.json`, `report.html`)
-
-`SelfTestIT` did not run on Windows before. Examine these first:
-
-- the quotes around the `java` path in `--app` (spaces in `C:\Program Files`),
-- the `java` path without `.exe` (`SelfTestIT` uses `java.home\bin\java`),
-- the `;` separator of `--scenarios` (`File.pathSeparator`).
-
-## 4. Do WP-01 tasks 1–6 on the pilot application
-
-Pilot application: p.osgi.ds (decision 1 in `docs/development-plan.md`, 2026-11-14).
-Repository: `taetrus/p.osgi.ds`. Products: `com.kk.pde.ds.product` (five-step scenario) and `com.kk.pde.ds.spike.master.product` (HANG).
-
-### 4.1 Build the pilot application
-
-1. Clone into a path without spaces: `cd C:\dev` then `gh repo clone taetrus/p.osgi.ds`.
-2. Build with the Maven Wrapper and JDK 17 or later: `cd p.osgi.ds` then `.\mvnw.cmd clean verify`. Tycho 4.0.13 does not start on Maven 3.10.
-3. The product folders are below `distribution\target\products\`.
-   Main product: `com.kk.pde.ds.product\win32\win32\x86_64`. Find the spike folder in the same way.
-4. Write the startup time of each product (task 6).
-
-### 4.2 Add a log file
-
-The products log only to the console (stdout). The agent reads log files and `System.err`, not `System.out`.
-Add a file appender to `configuration\logback.xml` in each product folder:
+Add this appender to `configuration/logback.xml` of each product folder, and add `<appender-ref ref="FILE" />` to `<root>`:
 
 ```xml
 <appender name="FILE" class="ch.qos.logback.core.FileAppender">
@@ -110,57 +158,18 @@ Add a file appender to `configuration\logback.xml` in each product folder:
 </appender>
 ```
 
-Add `<appender-ref ref="FILE" />` to `<root>`. Write this change in the test report: the real products need it too (WP-04, R-15).
+`mvnw clean` removes this change. The real products need the same change (WP-04, R-15).
 
-### 4.3 Record and replay
+### 4.4 HANG and crash on spike.master
 
-There is no `.exe` and no `eclipse.ini` (`includeLaunchers="false"`). `run.bat` starts `java -jar plugins\org.eclipse.osgi_*.jar`. Give the agent in the `java` command.
-The CLI starts the application in its own working directory. Start the CLI in the product folder.
+Scenarios in `docs/wp-01-pilot/` (`hang.json` with `stepTimeoutMs` 3000, `crash.json`). Results: report section 4.
+On JRE 8, 14 bundles of spike.master do not resolve (4 platform bundles need JavaSE-17). The Freeze and Crash buttons operate.
 
-1. Copy `smoker-agent.jar` and `smoker-cli.jar` to `C:\tools\`.
-2. `cd` to the main product folder.
-3. Find the exact name of `plugins\org.eclipse.osgi_*.jar`. Use it in place of `<osgi>.jar` below.
-4. Record:
-   ```powershell
-   java -jar C:\tools\smoker-cli.jar record --agent C:\tools\smoker-agent.jar --scenario C:\smoke\pilot.json --log logs\smoker.log `
-     --app '\"<JDK 8>\bin\java.exe\" {agent} -jar plugins\<osgi>.jar -configuration configuration -consoleLog'
-   ```
-   The CLI needs the inner double quotes when the JDK path contains spaces. In Windows PowerShell 5.1, write each inner quote as `\"`
-   and enclose the value in single quotes. Without the backslashes, the CLI receives only `C:\Program` (tested on 2026-11-14).
-   The main product does not stop when you close its window (`DISPOSE_ON_CLOSE`, the OSGi framework continues).
-   The toolbar button Save writes the scenario but does not stop the application. After Save, close the window and push Ctrl+C.
-   Do not give `-console`: the OSGi console reads standard input.
-5. Record five steps that need no LLM answer, for example: open the settings dialog, type a value, close it.
-   The chatbot answers change in each run. Do not send a message to the LLM.
-6. Replay with `run` in place of `record`, and `--scenarios C:\smoke --out C:\smoke\out` in place of `--scenario`.
-   Then `approve`, and `run` again. The second run must give PASS.
-7. Replay on a Linux runner with JRE 17 and `xvfb-run -a` (task 5). Use the `linux.gtk.x86_64` product.
-
-### 4.4 HANG test on spike.master
-
-1. `cd` to the `spike.master` product folder. Do the steps in 4.2 there too.
-2. Record one step: click the button that freezes the EDT for 5 s. Set `stepTimeoutMs` to 3000 in the scenario file.
-3. Replay. The expected result is HANG with a thread dump.
-4. Optional: the crash button calls `System.exit(7)`. Write down what s.smoker reports.
-
-### 4.5 What to write down (task 6)
-
-- Each failure, with the CLI output and `report.html`.
-- The lint result: the number of components without a name. `setName()` occurs 0 times in the Swing bundles of p.osgi.ds. This is the input for WP-09.
-- The startup time of each product.
-- Lock files or a damaged `configuration` folder after the agent calls `System.exit` (F-10).
-
-Decision point: if the agent cannot attach, stop. Analyze the launcher before WP-02. Alternative: environment variable `JAVA_TOOL_OPTIONS`.
-
-## 5. Open points from tasks 7–10
+## 5. Open points
 
 | Point | Effect | Work package |
 |---|---|---|
-| The player stops at the first step that does not pass. Step `s002` of `empty-name.json` ("throw on EDT") never runs. | No test examines the capture of an uncaught EDT exception. | WP-04 or a new scenario |
+| The player stops at the first step that does not pass. | Each `approve` corrects one step (F-21). Step `s002` of `empty-name.json` never runs. | WP-02, WP-04 |
 | The `build` job in `.gitlab-ci.yml` uses `-DskipTests`. | CI does not run the unit tests. | WP-07 |
-| Without a display, `SelfTestIT` fails and `LocatorsWindowTest` is skipped. | Linux CI must use `xvfb-run -a mvn -B verify`. | WP-07 |
-| `toUpperCase()` in `AgentConfig` could not fail with the values `play` and `record`. | F-16 was latent there. The real defect was `String.format("%.3f")` in `JUnitXmlWriter`. | Done |
-
-## 6. Report back
-
-Push the results to a new branch, or give the logs to Claude Code. Put the test report in Confluence (completion criterion).
+| Without a display, `SelfTestIT` fails and the window tests are skipped. | Linux CI must use `xvfb-run -a mvn -B verify`. | WP-07 |
+| Equinox framework errors are not read (F-22). | A product with unresolved bundles gives startup PASS. | WP-04 |
