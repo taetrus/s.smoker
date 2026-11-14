@@ -20,6 +20,19 @@ Verified on macOS only, with `mvn -B clean verify`:
 | `tr_TR` | JDK 27 | 42/42 | 2/2 |
 | `tr_TR` | JRE 8 (`-Djvm`) | 42/42 | 2/2 |
 
+Verified on Windows 11 on 2026-11-14, with `mvn -B verify` (Maven 3.9.6, JDK 25 in `E:\Program Files\...`):
+
+| Locale | Test JVM | Unit tests | IT |
+|---|---|---|---|
+| default (`en_US`) | JDK 25 | 42/42 | 2/2 |
+| `tr_TR` | JDK 25 | 42/42 | 2/2 |
+| `tr_TR` | JRE 8u341 (`-Djvm`) | 42/42 | 2/2 |
+
+The first Windows run failed. `SelfTestIT` gave the `--app` value with inner quotes to `ProcessBuilder`.
+On Windows, `ProcessBuilder` does not escape inner quotes, and the CLI received only `E:\Program`.
+`SelfTestIT.windowsArg` now escapes the quotes. The CLI did not change. `README.md` tells users how to quote `--app` on Windows.
+The `java` path without `.exe` and the `;` separator of `--scenarios` caused no problem.
+
 The WP-01 completion criterion is not met. Do not start WP-02.
 
 ## 2. Prepare the Windows PC

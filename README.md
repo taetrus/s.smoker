@@ -47,6 +47,21 @@ java -jar smoker-cli.jar approve --run out/orders-create --scenario scenarios/or
 token `{agent}`. Equinox product: `--app "myapp.exe -vmargs {agent}"` — or add
 `-javaagent:C:\tools\smoker-agent.jar=mode=play;scenario=...;out=...;log=...` to `eclipse.ini` under `-vmargs`.
 
+Windows: if a path in `--app` contains spaces, put the path in double quotes and write each inner quote as `\"`.
+If you do not, Windows splits the `--app` value into many arguments.
+
+```powershell
+# Windows PowerShell 5.1: enclose the --app value in single quotes
+java -jar smoker-cli.jar run --agent smoker-agent.jar --app '\"C:\Program Files\Java\bin\java.exe\" -jar myapp.jar' --scenarios scenarios --out out
+```
+
+```bat
+rem cmd.exe: enclose the --app value in double quotes
+java -jar smoker-cli.jar run --agent smoker-agent.jar --app "\"C:\Program Files\Java\bin\java.exe\" -jar myapp.jar" --scenarios scenarios --out out
+```
+
+A path without spaces needs no quotes. This is the easier procedure.
+
 ### Agent arguments (`-javaagent:smoker-agent.jar=k=v;k=v`)
 
 | key | values | default |

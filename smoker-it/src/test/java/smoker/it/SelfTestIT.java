@@ -156,7 +156,7 @@ public class SelfTestIT {
         cmd.addAll(Arrays.asList(localeArgs().split(" ")));
         cmd.add("-jar");
         cmd.add(cliJar.toString());
-        cmd.addAll(Arrays.asList(args));
+        for (String a : args) cmd.add(windowsArg(a));
         File outFile = Files.createTempFile(work, "cli-", ".log").toFile();
         ProcessBuilder pb = new ProcessBuilder(cmd).redirectErrorStream(true).redirectOutput(outFile);
         pb.environment().remove("JAVA_TOOL_OPTIONS");
@@ -178,6 +178,37 @@ public class SelfTestIT {
 
     private static String quote(String s) {
         return "\"" + s + "\"";
+    }
+
+    private static final boolean WINDOWS =
+            System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith("windows");
+
+    /**
+     * On Windows, ProcessBuilder joins the arguments into one command line and does not escape inner quotes.
+     * An argument that starts and ends with a quote goes through unchanged, and the C runtime of the child
+     * splits it into many arguments. This method escapes each quote as the C runtime expects:
+     * 2n backslashes before a quote become 2n + 1 backslashes and the quote.
+     * On other systems, and without a quote, the argument does not change.
+     */
+    static String windowsArg(String s) {
+        if (!WINDOWS || s.indexOf('"') < 0) return s;
+        StringBuilder sb = new StringBuilder();
+        int backslashes = 0;
+        for (char c : s.toCharArray()) {
+            if (c == '\\') {
+                backslashes++;
+            } else if (c == '"') {
+                for (int i = 0; i < 2 * backslashes + 1; i++) sb.append('\\');
+                backslashes = 0;
+            } else {
+                for (int i = 0; i < backslashes; i++) sb.append('\\');
+                backslashes = 0;
+            }
+            if (c != '\\') sb.append(c);
+        }
+        // Trailing backslashes stay as they are. The arguments of this test do not end with a backslash.
+        for (int i = 0; i < backslashes; i++) sb.append('\\');
+        return sb.toString();
     }
 
     private static RunResult result(Path runDir) throws IOException {
