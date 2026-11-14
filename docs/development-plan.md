@@ -241,7 +241,10 @@ Sequence: do WP-09 immediately after WP-01. The lint result from WP-01 is its in
 
 ## 6. Decisions that the owner must make
 
-1. DECIDED 2026-11-12: the pilot application for WP-01 is a typical product that uses the simulator.
+1. DECIDED 2026-11-14 (replaces the decision of 2026-11-12): the pilot application for WP-01 is p.osgi.ds.
+   The five-step scenario uses `com.kk.pde.ds.product` (`p2.product`). The HANG test uses `com.kk.pde.ds.spike.master.product`.
+   Effects: p.osgi.ds has no simulator, no component names, no `eclipse.ini` and no log file.
+   WP-01 does not test the simulator risks (F-02, F-04). WP-03 and WP-05 must test them on a product with a simulator.
 2. Select the number of developers who build s.smoker (not the developers of the application). With three developers, version 1.0 needs approximately three to four calendar weeks. With one developer, it needs approximately seven weeks.
 3. DECIDED 2026-11-12: the naming rule `<view>.<widget>` applies to all teams. The lint uses a baseline file. Only new lint results fail the pipeline.
 4. DECIDED 2026-11-12: lint results fail the pipeline from version 1.1.

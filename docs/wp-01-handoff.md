@@ -63,14 +63,68 @@ If a run fails, keep these folders:
 
 ## 4. Do WP-01 tasks 1–6 on the pilot application
 
-1. Copy `smoker-agent\target\smoker-agent.jar` to a path without spaces, for example `C:\tools\`.
-2. Add this line below `-vmargs` in the `eclipse.ini` of the product:
-   `-javaagent:C:\tools\smoker-agent.jar=mode=record;scenario=C:\smoke\pilot.json`
-3. Start the product with JRE 8. Record one scenario with five steps. Save it.
-4. Remove the record line from `eclipse.ini`.
-5. Replay with `smoker-cli.jar run --app "pilot.exe -vmargs {agent}"`.
-6. Replay on a Linux runner with JRE 17 and `xvfb-run -a`.
-7. Write down each failure, the lint result (unnamed components in `report.html`) and the startup time.
+Pilot application: p.osgi.ds (decision 1 in `docs/development-plan.md`, 2026-11-14).
+Repository: `taetrus/p.osgi.ds`. Products: `com.kk.pde.ds.product` (five-step scenario) and `com.kk.pde.ds.spike.master.product` (HANG).
+
+### 4.1 Build the pilot application
+
+1. Clone into a path without spaces: `cd C:\dev` then `gh repo clone taetrus/p.osgi.ds`.
+2. Build with the Maven Wrapper and JDK 17 or later: `cd p.osgi.ds` then `.\mvnw.cmd clean verify`. Tycho 4.0.13 does not start on Maven 3.10.
+3. The product folders are below `distribution\target\products\`.
+   Main product: `com.kk.pde.ds.product\win32\win32\x86_64`. Find the spike folder in the same way.
+4. Write the startup time of each product (task 6).
+
+### 4.2 Add a log file
+
+The products log only to the console (stdout). The agent reads log files and `System.err`, not `System.out`.
+Add a file appender to `configuration\logback.xml` in each product folder:
+
+```xml
+<appender name="FILE" class="ch.qos.logback.core.FileAppender">
+    <file>logs/smoker.log</file>
+    <append>false</append>
+    <encoder>
+        <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+    </encoder>
+</appender>
+```
+
+Add `<appender-ref ref="FILE" />` to `<root>`. Write this change in the test report: the real products need it too (WP-04, R-15).
+
+### 4.3 Record and replay
+
+There is no `.exe` and no `eclipse.ini` (`includeLaunchers="false"`). `run.bat` starts `java -jar plugins\org.eclipse.osgi_*.jar`. Give the agent in the `java` command.
+The CLI starts the application in its own working directory. Start the CLI in the product folder.
+
+1. Copy `smoker-agent.jar` and `smoker-cli.jar` to `C:\tools\`.
+2. `cd` to the main product folder.
+3. Find the exact name of `plugins\org.eclipse.osgi_*.jar`. Use it in place of `<osgi>.jar` below.
+4. Record:
+   ```powershell
+   java -jar C:\tools\smoker-cli.jar record --agent C:\tools\smoker-agent.jar --scenario C:\smoke\pilot.json --log logs\smoker.log `
+     --app '"<JDK 8>\bin\java.exe" {agent} -jar plugins\<osgi>.jar -configuration configuration -consoleLog'
+   ```
+   The single quotes keep the inner double quotes. The CLI needs them when the JDK path contains spaces.
+   Do not give `-console`: the OSGi console reads standard input.
+5. Record five steps that need no LLM answer, for example: open the settings dialog, type a value, close it.
+   The chatbot answers change in each run. Do not send a message to the LLM.
+6. Replay with `run` in place of `record`, and `--scenarios C:\smoke --out C:\smoke\out` in place of `--scenario`.
+   Then `approve`, and `run` again. The second run must give PASS.
+7. Replay on a Linux runner with JRE 17 and `xvfb-run -a` (task 5). Use the `linux.gtk.x86_64` product.
+
+### 4.4 HANG test on spike.master
+
+1. `cd` to the `spike.master` product folder. Do the steps in 4.2 there too.
+2. Record one step: click the button that freezes the EDT for 5 s. Set `stepTimeoutMs` to 3000 in the scenario file.
+3. Replay. The expected result is HANG with a thread dump.
+4. Optional: the crash button calls `System.exit(7)`. Write down what s.smoker reports.
+
+### 4.5 What to write down (task 6)
+
+- Each failure, with the CLI output and `report.html`.
+- The lint result: the number of components without a name. `setName()` occurs 0 times in the Swing bundles of p.osgi.ds. This is the input for WP-09.
+- The startup time of each product.
+- Lock files or a damaged `configuration` folder after the agent calls `System.exit` (F-10).
 
 Decision point: if the agent cannot attach, stop. Analyze the launcher before WP-02. Alternative: environment variable `JAVA_TOOL_OPTIONS`.
 

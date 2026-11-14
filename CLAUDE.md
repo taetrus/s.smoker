@@ -42,7 +42,7 @@ run4 FAIL (log hit) and HANG. Run `mvn -B verify` and `mvn -B verify -Plocale-tr
 
 ## Decisions already made
 
-- Pilot application for WP-01: a typical product that uses the simulator.
+- Pilot application for WP-01 (2026-11-14): p.osgi.ds. `p2.product` for the five-step scenario, `spike.master` for HANG. No simulator: F-02 and F-04 stay untested until WP-03 and WP-05.
 - Naming rule `<view>.<widget>` applies to all teams.
 - Lint results fail the pipeline from version 1.1, against a baseline file (only new results fail).
 - WP-09 (naming assistant) follows WP-01.
