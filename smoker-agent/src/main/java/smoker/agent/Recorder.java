@@ -8,8 +8,11 @@ import smoker.core.model.Snapshot;
 import smoker.core.model.Step;
 
 import javax.swing.AbstractButton;
+import javax.swing.ButtonModel;
 import javax.swing.JComboBox;
 import javax.swing.JList;
+import javax.swing.JMenu;
+import javax.swing.JMenuItem;
 import javax.swing.JPasswordField;
 import javax.swing.JPopupMenu;
 import javax.swing.JTabbedPane;
@@ -180,8 +183,13 @@ final class Recorder implements AWTEventListener {
     }
 
     private void onMouse(MouseEvent e, Component src) {
-        if (e.getID() != MouseEvent.MOUSE_CLICKED || e.getButton() != MouseEvent.BUTTON1) return;
+        if (e.getButton() != MouseEvent.BUTTON1) return;
         final Component target = interactiveAncestor(src);
+        if (actsOnRelease(target)) {
+            if (firesActionOnRelease(e, target)) add(Action.click(Locators.resolve(target)));
+            return;
+        }
+        if (e.getID() != MouseEvent.MOUSE_CLICKED) return;
         if (target == null) {
             add(Action.click(Locators.resolve(src)));
             return;
@@ -221,6 +229,27 @@ final class Recorder implements AWTEventListener {
                 if (a.value == null || !"-1".equals(a.value)) add(a);
             }
         });
+    }
+
+    /**
+     * Buttons and menu items fire their action on MOUSE_RELEASED. If the action opens or closes a modal dialog,
+     * no MOUSE_CLICKED arrives for the button (F-20), so the recorder records these on the release.
+     * A JMenu only opens its menu and stays on MOUSE_CLICKED.
+     */
+    static boolean actsOnRelease(Component target) {
+        return target instanceof AbstractButton && !(target instanceof JMenu);
+    }
+
+    /**
+     * True if Swing fires the action of the button for this event. The AWT event listener sees the event before
+     * the button, so the model still has the state of before the release. Must run on the EDT.
+     */
+    static boolean firesActionOnRelease(MouseEvent e, Component target) {
+        if (e.getID() != MouseEvent.MOUSE_RELEASED || e.getButton() != MouseEvent.BUTTON1) return false;
+        if (!actsOnRelease(target) || !target.isEnabled()) return false;
+        ButtonModel m = ((AbstractButton) target).getModel();
+        if (target instanceof JMenuItem) return m.isArmed();
+        return m.isArmed() && m.isPressed();
     }
 
     private static Component interactiveAncestor(Component c) {
