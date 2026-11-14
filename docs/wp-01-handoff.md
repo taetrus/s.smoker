@@ -119,9 +119,12 @@ The CLI starts the application in its own working directory. Start the CLI in th
 4. Record:
    ```powershell
    java -jar C:\tools\smoker-cli.jar record --agent C:\tools\smoker-agent.jar --scenario C:\smoke\pilot.json --log logs\smoker.log `
-     --app '"<JDK 8>\bin\java.exe" {agent} -jar plugins\<osgi>.jar -configuration configuration -consoleLog'
+     --app '\"<JDK 8>\bin\java.exe\" {agent} -jar plugins\<osgi>.jar -configuration configuration -consoleLog'
    ```
-   The single quotes keep the inner double quotes. The CLI needs them when the JDK path contains spaces.
+   The CLI needs the inner double quotes when the JDK path contains spaces. In Windows PowerShell 5.1, write each inner quote as `\"`
+   and enclose the value in single quotes. Without the backslashes, the CLI receives only `C:\Program` (tested on 2026-11-14).
+   The main product does not stop when you close its window (`DISPOSE_ON_CLOSE`, the OSGi framework continues).
+   The toolbar button Save writes the scenario but does not stop the application. After Save, close the window and push Ctrl+C.
    Do not give `-console`: the OSGi console reads standard input.
 5. Record five steps that need no LLM answer, for example: open the settings dialog, type a value, close it.
    The chatbot answers change in each run. Do not send a message to the LLM.
