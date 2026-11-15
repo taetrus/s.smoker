@@ -2,11 +2,13 @@ package smoker.agent;
 
 import nametest.AnonFactory;
 import nametest.FormHolder;
+import nametest.MenuFrame;
 import nametest.OrdersFrame;
 import nametest.OrdersPanel;
 import nametest.OrdersPanel2;
 import nametest.OrdersView;
 import nametest.OwnerFrame;
+import nametest.PopupPanel;
 import nametest.ShadowPanel;
 import nametest.SpinnerPanel;
 import nametest.StaticHolder;
@@ -327,6 +329,45 @@ public class AutoNamesTest {
                 return AutoNames.nameIgnoringRealName(p.saveButton());
             }
         }));
+    }
+
+    /** The item of a closed menu has no parent window: the walk goes on from the invoker of its popup. */
+    @Test
+    public void itemOfAClosedMenuGetsTheNameOfTheFrameField() throws Exception {
+        final MenuFrame f = onEdt(new Callable<MenuFrame>() {
+            public MenuFrame call() {
+                MenuFrame o = new MenuFrame();
+                otherFrame = o;
+                o.pack();
+                o.setVisible(true);
+                return o;
+            }
+        });
+        AutoNames.Hit h = of(new Callable<Component>() {
+            public Component call() {
+                return f.exitItem();
+            }
+        });
+        assertNotNull(h);
+        assertEquals("@MenuFrame.exitItem", h.name);
+        assertEquals("nametest.MenuFrame", h.runtimeClass);
+    }
+
+    /** A popup that is not shown: the walk goes on from its invoker, a button of the application panel. */
+    @Test
+    public void itemOfAPopupGetsTheNameOfTheFieldOfTheInvokerPanel() throws Exception {
+        final PopupPanel p = show(new Callable<PopupPanel>() {
+            public PopupPanel call() {
+                return new PopupPanel();
+            }
+        });
+        AutoNames.Hit h = of(new Callable<Component>() {
+            public Component call() {
+                return p.copyItem();
+            }
+        });
+        assertNotNull(h);
+        assertEquals("@PopupPanel.copyItem", h.name);
     }
 
     /** Surefire runs with assertions on. The argument is null so that this test touches no Swing object off the EDT. */

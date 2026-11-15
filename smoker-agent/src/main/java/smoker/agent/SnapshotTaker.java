@@ -119,16 +119,26 @@ final class SnapshotTaker {
         return new TreeSet<String>(autoNames);
     }
 
-    /** In one view, the second equal proposal gets suffix 2, the third 3, in walk order (spec 5.3). */
+    /**
+     * In one window, the second equal proposal gets suffix 2, the third 3, in walk order (spec 5.3).
+     * One field is one line of code: all entries of one field (also in other windows or other instances)
+     * get the proposal of its first entry.
+     */
     private static void suffixDuplicateProposals(List<LintEntry> entries) {
-        Map<String, Integer> seen = new HashMap<String, Integer>();
+        Set<String> taken = new HashSet<String>();
+        Map<String, String> byField = new HashMap<String, String>();
         for (LintEntry e : entries) {
             if (e.proposedName == null) continue;
-            String key = e.runtimeClass + "|" + e.proposedName;
-            Integer n = seen.get(key);
-            int count = n == null ? 1 : n + 1;
-            seen.put(key, count);
-            if (count > 1) e.proposedName = e.proposedName + count;
+            String field = e.field == null ? null : e.runtimeClass + "|" + e.declaringClass + "|" + e.field;
+            String known = field == null ? null : byField.get(field);
+            if (known != null) {
+                e.proposedName = known;
+                taken.add(e.window + "|" + known);
+                continue;
+            }
+            String base = e.proposedName;
+            for (int i = 2; !taken.add(e.window + "|" + e.proposedName); i++) e.proposedName = base + i;
+            if (field != null) byField.put(field, e.proposedName);
         }
     }
 
@@ -400,9 +410,12 @@ final class SnapshotTaker {
         return e;
     }
 
-    /** The class of the nearest application-class ancestor, up to and including the window, or null. */
+    /**
+     * The class of the nearest application-class ancestor, up to and including the window, or null.
+     * The walk goes from a popup menu to its invoker ({@link AutoNames#logicalParent}).
+     */
     private static Class<?> applicationAncestor(Component c) {
-        for (Container a = c.getParent(); a != null; a = a.getParent()) {
+        for (Component a = c.getParent(); a != null; a = AutoNames.logicalParent(a)) {
             if (AutoNames.isApplicationClass(a.getClass())) return a.getClass();
             if (a instanceof Window) break;
         }

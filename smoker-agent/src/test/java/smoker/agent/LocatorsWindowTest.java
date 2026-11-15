@@ -4,6 +4,7 @@ import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
+import nametest.MenuFrame;
 import nametest.OrdersPanel;
 import smoker.core.model.Locator;
 import smoker.core.model.WindowKey;
@@ -244,6 +245,37 @@ public class LocatorsWindowTest {
         assertNull(l.toString(), l.name);
         assertEquals("Save", l.text);
         assertSame(second.saveButton(), find(l));
+    }
+
+    /** {@code Locators.allComponents} includes the items of a closed menu, and the walk reaches the frame. */
+    @Test
+    public void automaticLocatorFindsTheItemOfAClosedMenu() throws Exception {
+        final MenuFrame mf = onEdt(new Callable<MenuFrame>() {
+            public MenuFrame call() {
+                MenuFrame o = new MenuFrame();
+                o.pack();
+                o.setVisible(true);
+                return o;
+            }
+        });
+        try {
+            Locator l = onEdt(new Callable<Locator>() {
+                public Locator call() {
+                    return Locators.resolve(mf.exitItem());
+                }
+            });
+            assertEquals("@MenuFrame.exitItem", l.name);
+            Locator byName = new Locator();
+            byName.name = "@MenuFrame.exitItem";
+            assertSame(mf.exitItem(), find(byName));
+        } finally {
+            onEdt(new Callable<Void>() {
+                public Void call() {
+                    mf.dispose();
+                    return null;
+                }
+            });
+        }
     }
 
     /** Adds an application panel with an unnamed button in a field to the frame. */

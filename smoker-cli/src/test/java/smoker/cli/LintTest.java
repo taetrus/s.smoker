@@ -44,6 +44,10 @@ public class LintTest {
         return entry("orders", "nametest.OrdersPanel", "nametest.OrdersPanel", field, "JButton", "Save", null, proposed, "field");
     }
 
+    private static LintEntry textEntry(String window, String proposed) {
+        return entry(window, "nametest.SettingsDialogPanel", null, null, "JButton", "OK", null, proposed, "text");
+    }
+
     private void result(String dir, LintEntry... entries) throws Exception {
         Path d = tmp.getRoot().toPath().resolve(dir);
         Files.createDirectories(d);
@@ -91,6 +95,46 @@ public class LintTest {
         String p = Lint.patch(Arrays.asList(entry("settings", "nametest.SettingsPanel", null, null, "JButton", "Cancel",
                 null, "settings.btn.cancel", "text")));
         assertTrue(p, p.contains("// JButton \"Cancel\" has no field: setName(\"settings.btn.cancel\") where it is created\n"));
+    }
+
+    /** One field is one line of code: the same field in two windows is one row; the first one wins. */
+    @Test
+    public void readJoinsAFieldOfTwoWindowsToOneRow() throws Exception {
+        result("a", entry("[Main]", "p.BarPanel", "p.BarPanel", "okButton", "JButton", "OK", null, "bar.btn.ok", "field"),
+                entry("[Bar]", "p.BarPanel", "p.BarPanel", "okButton", "JButton", "OK", null, "bar.btn.ok2", "field"));
+        List<LintEntry> all = Lint.read(tmp.getRoot().toPath());
+        assertEquals(1, all.size());
+        assertEquals("bar.btn.ok", all.get(0).proposedName);
+    }
+
+    /** Three equal buttons without a field that the agent suffixed stay three rows. */
+    @Test
+    public void readKeepsTextEntriesWithDistinctProposals() throws Exception {
+        result("a", textEntry("[S]", "settingsDialog.btn.ok"), textEntry("[S]", "settingsDialog.btn.ok2"),
+                textEntry("[S]", "settingsDialog.btn.ok3"));
+        result("b", textEntry("[S]", "settingsDialog.btn.ok"));
+        List<LintEntry> all = Lint.read(tmp.getRoot().toPath());
+        assertEquals(3, all.size());
+        assertTrue(Lint.summary(all), Lint.summary(all).startsWith("3 unnamed interactive component(s), 3 with"));
+    }
+
+    @Test
+    public void patchWritesOneLinePerFieldAndOneCommentPerTextEntry() {
+        String p = Lint.patch(Arrays.asList(
+                entry("[Main]", "p.BarPanel", "p.BarPanel", "okButton", "JButton", "OK", null, "bar.btn.ok", "field"),
+                entry("[Bar]", "p.BarPanel", "p.BarPanel", "okButton", "JButton", "OK", null, "bar.btn.ok2", "field"),
+                entry("[Main]", "p.BarPanel", null, null, "JButton", "Go", null, "bar.btn.go", "text"),
+                entry("[Bar]", "p.BarPanel", null, null, "JButton", "Go", null, "bar.btn.go", "text"),
+                entry("[Bar]", "p.BarPanel", null, null, "JButton", "Go", null, "bar.btn.go2", "text")));
+        assertEquals("// p.BarPanel\n"
+                + "okButton.setName(\"bar.btn.ok\");\n"
+                + "// JButton \"Go\" has no field: setName(\"bar.btn.go\") where it is created\n"
+                + "// JButton \"Go\" has no field: setName(\"bar.btn.go2\") where it is created\n", p);
+    }
+
+    @Test
+    public void litOfNullIsEmpty() {
+        assertEquals("", Lint.lit(null));
     }
 
     @Test

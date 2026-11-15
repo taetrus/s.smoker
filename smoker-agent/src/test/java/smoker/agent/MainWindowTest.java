@@ -79,6 +79,16 @@ public class MainWindowTest {
         assertTrue(Player.mainWindowShown(5000));
     }
 
+    /** An interrupt gives "no main window" and stays set for the caller. */
+    @Test
+    public void interruptGivesFalseAndKeepsTheFlag() {
+        Thread.currentThread().interrupt();
+        boolean shown = Player.mainWindowShown(5000);
+        boolean flag = Thread.interrupted();   // also clears the flag for the next test
+        assertFalse(shown);
+        assertTrue(flag);
+    }
+
     @Test
     public void smokerWindowIsNotAMainWindow() throws Exception {
         frame = onEdtFrame("smoker.toolbar");

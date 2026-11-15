@@ -23,7 +23,7 @@ final class Lint {
     private Lint() {
     }
 
-    /** All entries of all run-result.json files below the directory. One entry per key; the first one wins. */
+    /** All entries of all run-result.json files below the directory. One entry per {@link #joinKey}; the first one wins. */
     static List<LintEntry> read(Path outDir) throws IOException {
         return load(outDir).entries;
     }
@@ -60,12 +60,21 @@ final class Lint {
             }
             if (r == null || r.lint == null) continue;
             for (LintEntry e : r.lint) {
-                String key = e.window + "|" + e.runtimeClass + "|"
-                        + (e.field != null ? "field:" + e.field : "text:" + e.text) + "|" + e.type;
-                if (seen.add(key)) out.add(e);
+                if (seen.add(joinKey(e))) out.add(e);
             }
         }
         return loaded;
+    }
+
+    /**
+     * The join key of an entry. A field is one line of code: one key per class and field, in all windows.
+     * An entry without a field keeps its proposal in the key, so equal buttons that the agent suffixed
+     * stay separate. An entry without a proposal keeps its window.
+     */
+    static String joinKey(LintEntry e) {
+        if (e.field != null) return "field|" + e.runtimeClass + "|" + e.field;
+        if (e.proposedName != null) return "text|" + e.runtimeClass + "|" + e.type + "|" + e.text + "|" + e.proposedName;
+        return "none|" + e.window + "|" + e.runtimeClass + "|" + e.type + "|" + e.text;
     }
 
     static String table(List<LintEntry> entries) {
@@ -119,8 +128,10 @@ final class Lint {
 
     static String patch(List<LintEntry> entries) {
         Map<String, List<LintEntry>> groups = new java.util.TreeMap<String, List<LintEntry>>();
+        Set<String> seen = new HashSet<String>();
         for (LintEntry e : entries) {
             if (e.proposedName == null || e.runtimeClass == null) continue;
+            if (!seen.add(joinKey(e))) continue;   // one line per field, one comment per text entry
             List<LintEntry> g = groups.get(e.runtimeClass);
             if (g == null) groups.put(e.runtimeClass, g = new ArrayList<LintEntry>());
             g.add(e);
@@ -131,7 +142,8 @@ final class Lint {
             Collections.sort(list, new Comparator<LintEntry>() {
                 public int compare(LintEntry a, LintEntry b) {
                     int c = nullsLast(a.field, b.field);
-                    return c != 0 ? c : nullsLast(a.text, b.text);
+                    if (c == 0) c = nullsLast(a.text, b.text);
+                    return c != 0 ? c : nullsLast(a.proposedName, b.proposedName);
                 }
             });
             if (sb.length() > 0) sb.append('\n');
@@ -155,8 +167,12 @@ final class Lint {
         return sb.toString();
     }
 
-    /** Escapes a value for a Java string literal. Every backslash is doubled, so no unicode escape can form. */
+    /**
+     * Escapes a value for a Java string literal. Every backslash is doubled, so no unicode escape can form.
+     * Null gives "".
+     */
     static String lit(String s) {
+        if (s == null) return "";
         StringBuilder sb = new StringBuilder();
         for (char c : s.toCharArray()) {
             switch (c) {

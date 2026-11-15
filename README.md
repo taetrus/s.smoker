@@ -154,6 +154,8 @@ The source code does not change.
 - The report marks the automatic names that the run used.
 - An automatic name changes when a developer renames the field or the class.
 - A component in a local variable has no field. It keeps the path rule and the locator fallback.
+- Layout containers (`JPanel`, `JScrollPane`, `JSplitPane`, `JToolBar`, ...) never get an automatic name, also when a field refers to them.
+- A menu item gets its automatic name from the class of its menu bar or of the invoker of its popup. The name is the same when the menu is closed.
 
 ### Lint
 
@@ -168,6 +170,8 @@ The last line is a summary: the number of unnamed interactive components, the nu
 and the number with an automatic name. `lint` exits with 0. It exits with 2 if it finds no `run-result.json` or cannot write the file.
 `--emit-patch` writes one Java line for each proposed name, for example `saveButton.setName("orders.btn.save");`,
 with the class where the developer must add it.
+One field gives one line, also when the component shows in more than one window.
+In one window, the second equal proposal gets the suffix `2`, the third `3` (`orders.btn.ok2`).
 
 ### Statuses
 

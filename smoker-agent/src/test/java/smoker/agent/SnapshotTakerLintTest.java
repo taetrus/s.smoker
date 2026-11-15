@@ -1,7 +1,10 @@
 package smoker.agent;
 
+import nametest.BarPanel;
 import nametest.LoginPanel;
+import nametest.OrdersFrame;
 import nametest.OrdersPanel;
+import nametest.OrdersView;
 import nametest.SettingsDialogPanel;
 import org.junit.After;
 import org.junit.Assume;
@@ -14,6 +17,7 @@ import smoker.core.model.LintEntry;
 import smoker.core.model.RunResult;
 
 import javax.swing.JButton;
+import javax.swing.JDialog;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
 import javax.swing.JPasswordField;
@@ -39,7 +43,7 @@ public class SnapshotTakerLintTest {
     @Rule
     public TemporaryFolder tmp = new TemporaryFolder();
 
-    private final List<JFrame> frames = new ArrayList<JFrame>();
+    private final List<java.awt.Window> frames = new ArrayList<java.awt.Window>();
 
     @Before
     public void needsADisplay() {
@@ -50,7 +54,7 @@ public class SnapshotTakerLintTest {
     public void disposeWindows() throws Exception {
         SwingUtilities.invokeAndWait(new Runnable() {
             public void run() {
-                for (JFrame f : frames) f.dispose();
+                for (java.awt.Window f : frames) f.dispose();
             }
         });
     }
@@ -196,6 +200,55 @@ public class SnapshotTakerLintTest {
         assertEquals("settingsDialog.btn.ok", lint.get(0).proposedName);
         assertEquals("settingsDialog.btn.ok2", lint.get(1).proposedName);
         assertEquals("settingsDialog.btn.ok3", lint.get(2).proposedName);
+    }
+
+    /** One field is one line of code: the same field in two windows and two instances keeps one proposal (spec 5.3). */
+    @Test
+    public void reusablePanelInTwoWindowsGivesOneProposal() throws Exception {
+        final SnapshotTaker taker = new SnapshotTaker(20);
+        SwingUtilities.invokeAndWait(new Runnable() {
+            public void run() {
+                JFrame f = new JFrame("Main");
+                frames.add(f);
+                JPanel both = new JPanel();
+                both.add(new BarPanel());
+                both.add(new BarPanel());
+                f.getContentPane().add(both);
+                f.pack();
+                f.setVisible(true);
+                JDialog d = new JDialog(f, "Bar");
+                frames.add(d);
+                d.getContentPane().add(new BarPanel());
+                d.pack();
+                d.setVisible(true);
+                taker.take();
+            }
+        });
+        List<LintEntry> lint = taker.lintEntries();
+        assertEquals(3, lint.size());
+        for (LintEntry e : lint) assertEquals(e.window, "bar.btn.ok", e.proposedName);
+    }
+
+    /** Two classes with one view stem in one window: the second equal proposal gets the suffix 2 (spec 5.3). */
+    @Test
+    public void twoClassesWithOneViewStemInOneWindowGetASuffix() throws Exception {
+        final SnapshotTaker taker = new SnapshotTaker(20);
+        SwingUtilities.invokeAndWait(new Runnable() {
+            public void run() {
+                OrdersFrame f = new OrdersFrame();
+                frames.add(f);
+                f.getContentPane().add(new OrdersView(), java.awt.BorderLayout.SOUTH);
+                f.pack();
+                f.setVisible(true);
+                taker.take();
+            }
+        });
+        List<LintEntry> lint = taker.lintEntries();
+        assertEquals(2, lint.size());
+        assertEquals("nametest.OrdersFrame", lint.get(0).runtimeClass);
+        assertEquals("orders.btn.ok", lint.get(0).proposedName);
+        assertEquals("nametest.OrdersView", lint.get(1).runtimeClass);
+        assertEquals("orders.btn.ok2", lint.get(1).proposedName);
     }
 
     @Test

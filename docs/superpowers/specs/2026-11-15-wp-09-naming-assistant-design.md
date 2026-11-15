@@ -64,6 +64,8 @@ The owner wants two paths that work together (2026-11-15):
   automatic name (designer's call): they show no state, and as named nodes they would only add golden lines. They
   stay transparent as in WP-02.
 - The window itself counts as a container (a `JFrame` or `JDialog` subclass of the application often holds the fields).
+- From a `JPopupMenu` with an invoker, the walk goes on from the invoker (as `Locators.logicalWindowOf`). So a menu
+  item gets the same name in a closed menu, a lightweight popup and a heavyweight popup.
 - For an anonymous or local class, use the simple name of the nearest enclosing named class.
 - Use reflection with `setAccessible(true)`. If access fails (security manager, module rules), skip that field
   without an error.
@@ -130,8 +132,10 @@ The owner wants two paths that work together (2026-11-15):
   declaring class when it is the runtime class. When the field is declared in a superclass, the patch writes a comment
   line in the runtime class group instead: `// <field> is declared in <DeclaringClass>: set "<proposed name>" in
   <RuntimeClass>` (a line in the superclass would give the same name to every subclass).
-- **Duplicate proposals (designer's call):** when two components of one view get the same proposed name, the second
-  gets the suffix `2`, the third `3` (`orders.btn.ok2`), in tree order.
+- **Duplicate proposals (designer's call):** when two components of one window get the same proposed name, the second
+  gets the suffix `2`, the third `3` (`orders.btn.ok2`), in tree order. One field is one line of code: all components
+  of one field (same runtime class, declaring class and field, also in other windows or other instances) get the
+  proposal of the first one.
 - **Components without a field** (local variables) get a proposal from the visible text instead of the field:
   `<view>.<type>.<text>`, where the text is lower camel case of its letters and digits (`"Base URL:"` gives
   `baseUrl`). The view comes from the nearest application-class ancestor. Source of the proposal = `text`.
@@ -149,14 +153,15 @@ The owner wants two paths that work together (2026-11-15):
 ### 5.5 Lint command and patch
 
 - `smoker-cli lint --run <out dir> [--emit-patch <file>]`. It reads every `run-result.json` below the out directory
-  and joins the lint results (one line per window, class, field or text, and type).
+  and joins the lint results: one row per class and field; for a component without a field, one row per class,
+  type, text and proposed name. The first row wins.
 - The agent writes the lint data into `run-result.json`: for each unnamed interactive component, the window part, the
   application class (fully qualified), the field (or none), the component type, the visible text, the automatic name
   (or none), the proposed name (or none), and the source of the proposal (`field` or `text`).
 - `lint` prints an aligned text table to standard output and a summary line:
   `<n> unnamed interactive component(s), <p> with a proposed name (<percent> %), <a> with an automatic name`.
 - `--emit-patch` writes, grouped by application class (fully qualified name as a comment line), one line per
-  component that has a field: `<field>.setName("<proposed name>");`. A component with a text proposal gets a comment
+  field: `<field>.setName("<proposed name>");`. A component with a text proposal gets a comment
   line instead: `// <type> "<text>" has no field: setName("<proposed name>") where it is created`.
 - The report (`report.html`) shows the same lint table, and a list of the automatic names used in the run.
 

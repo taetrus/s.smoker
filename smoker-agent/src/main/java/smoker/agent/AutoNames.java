@@ -1,8 +1,8 @@
 package smoker.agent;
 
+import javax.swing.JPopupMenu;
 import javax.swing.SwingUtilities;
 import java.awt.Component;
-import java.awt.Container;
 import java.awt.Window;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
@@ -87,13 +87,27 @@ final class AutoNames {
     private static Hit fieldWalk(Component c) {
         if (SnapshotTaker.isLayoutContainer(c)) return null;
         if (c instanceof Window) return null;
-        for (Container a = c.getParent(); a != null; a = a.getParent()) {
+        for (Component a = c.getParent(); a != null; a = logicalParent(a)) {
             Hit h = fieldOf(a, c);
             if (h != null) return h;
             // The owner of a window is not an ancestor in the component tree.
             if (a instanceof Window) break;
         }
         return null;
+    }
+
+    /**
+     * The parent of {@code a} for the ancestor walks: for a popup menu with an invoker, the invoker
+     * (as {@link Locators#logicalWindowOf}). So a menu item of a closed menu or of a heavyweight popup
+     * reaches the application class of its menu bar or invoker. Must run on the EDT.
+     */
+    static Component logicalParent(Component a) {
+        if (a instanceof JPopupMenu) {
+            Component invoker = ((JPopupMenu) a).getInvoker();
+            // An invoker inside its own popup would give an endless walk.
+            if (invoker != null && !SwingUtilities.isDescendingFrom(invoker, a)) return invoker;
+        }
+        return a.getParent();
     }
 
     /** The first instance field of {@code holder} that refers to {@code c}: runtime class first, declaration order. */

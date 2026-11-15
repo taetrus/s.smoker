@@ -154,7 +154,11 @@ final class Player implements Runnable {
         SwingUtilities.invokeLater(task);
         try {
             return task.get(maxWaitMs, TimeUnit.MILLISECONDS);
-        } catch (Exception e) { // timeout, interrupt or failure
+        } catch (InterruptedException e) {
+            task.cancel(false);
+            Thread.currentThread().interrupt();
+            return false;
+        } catch (Exception e) { // timeout or failure
             task.cancel(false);
             return false;
         }

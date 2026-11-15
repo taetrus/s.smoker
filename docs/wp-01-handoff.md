@@ -108,8 +108,11 @@ A golden taken during a JTable cell edit can change once. Swing's `Table.editor`
 
 ## 6. Open points
 
-- Watch for an intermittent failure of `SelfTestIT` (2026-11-15, macOS, JDK 27, `-Plocale-tr`, under load: 2 of 3 methods failed).
-  It did not recur in 3 clean runs. If it recurs on Windows, keep `smoker-it/target/failsafe-reports` and `smoker-it/target/it-work`.
+- The intermittent failure of `SelfTestIT` (2026-11-15, macOS, JDK 27, `-Plocale-tr`, under load: 2 of 3 methods failed) has a known root cause.
+  The startup check read `Window.isShowing()` off the EDT. It could see a frame inside its constructor, where `visible` is still the default `true`.
+  Commit 7c7458c fixes it: the check scans the windows on the EDT with a bounded wait and requires `isDisplayable()`.
+  Evidence: 2 of 100 demo starts failed before the fix, 0 of 100 after it.
+  If a failure recurs on Windows, keep `smoker-it/target/failsafe-reports` and `smoker-it/target/it-work`.
 
 | Point | Effect | Work package |
 |---|---|---|
