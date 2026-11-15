@@ -73,6 +73,11 @@ The builder selects the exact JSON layout. Requirements for it:
 - A change entry names the path and gives the new attribute values, a removed component, or an added component.
 - A reviewer who reads only the changed lines in GitLab can see which component changed and how.
 
+**Amendment 2026-11-15.** Golden and scenario files use the compact layout: an object or array is on one line when
+its one-line form has at most 100 characters (indent and key not counted). Else it has one member per line.
+Change entries hold only the changed attributes (`add`, `set` with `unset`, `remove`). Reason: one attribute per line
+cannot meet the criterion of fewer than 150 lines. The purpose "one changed value gives one changed line" still holds.
+
 ### 4.2 Paths and the components that are compared
 
 - **Window part.** Each path starts with the window part:

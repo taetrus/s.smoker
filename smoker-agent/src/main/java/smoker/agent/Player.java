@@ -11,6 +11,7 @@ import javax.swing.SwingUtilities;
 import java.awt.Frame;
 import java.awt.Window;
 import java.nio.file.Path;
+import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -23,15 +24,19 @@ final class Player implements Runnable {
 
     private final AgentConfig cfg;
     private final Scenario scenario;
+    private final Map<String, Snapshot> golden;
     private final Observations obs;
     private final EdtWatchdog watchdog;
-    private final SnapshotTaker taker = new SnapshotTaker();
+    private final SnapshotTaker taker;
     private final Screenshots shots = new Screenshots();
     private final RunResult result = new RunResult();
 
-    Player(AgentConfig cfg, Scenario scenario, Observations obs, EdtWatchdog watchdog) {
+    /** @param golden golden snapshot per step id, from the golden file; a step without an entry gives NO_GOLDEN */
+    Player(AgentConfig cfg, Scenario scenario, Map<String, Snapshot> golden, Observations obs, EdtWatchdog watchdog) {
         this.cfg = cfg;
         this.scenario = scenario;
+        this.golden = golden;
+        this.taker = new SnapshotTaker(scenario.maxRows, "named".equals(scenario.compare));
         this.obs = obs;
         this.watchdog = watchdog;
     }
@@ -39,6 +44,7 @@ final class Player implements Runnable {
     @Override
     public void run() {
         result.scenarioName = scenario.name;
+        result.compare = scenario.compare;
         result.scenarioFile = cfg.scenario.toString();
         result.startedAt = System.currentTimeMillis();
         result.javaVersion = System.getProperty("java.version");
@@ -48,13 +54,10 @@ final class Player implements Runnable {
             for (Step step : scenario.steps) {
                 RunResult.StepResult sr = runStep(step);
                 result.steps.add(sr);
-                if (sr.status != RunResult.Status.PASS && sr.status != RunResult.Status.NO_GOLDEN) {
-                    result.status = sr.status;
-                    break; // fail fast within a scenario (R-35)
-                }
-                if (sr.status == RunResult.Status.NO_GOLDEN && result.status == RunResult.Status.PASS) {
-                    result.status = RunResult.Status.NO_GOLDEN;
-                }
+                result.status = worse(result.status, sr.status);
+                // Continue after FAIL, so that one approve covers all steps (F-21).
+                // After HANG or ERROR the state of the UI is not known: stop (R-35).
+                if (sr.status == RunResult.Status.HANG || sr.status == RunResult.Status.ERROR) break;
             }
         } catch (Throwable t) {
             result.status = RunResult.Status.ERROR;
@@ -62,6 +65,7 @@ final class Player implements Runnable {
         } finally {
             result.finishedAt = System.currentTimeMillis();
             result.unnamedComponents.addAll(taker.unnamedInteractive());
+            result.duplicateNames.addAll(taker.duplicateNames());
             try {
                 Json.write(cfg.out.resolve("run-result.json"), result);
             } catch (Exception e) {
@@ -74,6 +78,21 @@ final class Player implements Runnable {
                 int code = result.status == RunResult.Status.PASS || result.status == RunResult.Status.NO_GOLDEN ? 0 : 1;
                 System.exit(code);
             }
+        }
+    }
+
+    /** Order ERROR > HANG > FAIL > NO_GOLDEN > PASS. */
+    static RunResult.Status worse(RunResult.Status a, RunResult.Status b) {
+        return rank(b) > rank(a) ? b : a;
+    }
+
+    private static int rank(RunResult.Status s) {
+        switch (s) {
+            case ERROR: return 4;
+            case HANG: return 3;
+            case FAIL: return 2;
+            case NO_GOLDEN: return 1;
+            default: return 0;
         }
     }
 
@@ -163,10 +182,11 @@ final class Player implements Runnable {
             if (cfg.screenshots) sr.screenshot = shots.capture(cfg.out, step.id);
 
             // 4. compare
-            if (step.expected == null) {
+            Snapshot expected = golden.get(step.id);
+            if (expected == null) {
                 sr.status = RunResult.Status.NO_GOLDEN;
             } else {
-                sr.differences.addAll(SnapshotDiff.diff(step.expected, sr.actual, scenario.ignore));
+                sr.differences.addAll(SnapshotDiff.diff(expected, sr.actual, scenario.ignore));
                 if (!sr.differences.isEmpty()) sr.status = RunResult.Status.FAIL;
             }
             finish(sr, t0);

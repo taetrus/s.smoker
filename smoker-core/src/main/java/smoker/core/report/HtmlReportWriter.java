@@ -35,12 +35,18 @@ public final class HtmlReportWriter {
             }
             w.write("</table>");
             for (RunResult r : runs) {
-                w.write("<h2 id='" + id(r.scenarioName) + "'>" + e(r.scenarioName) + " — " + r.status + "</h2>");
+                w.write("<h2 id='" + id(r.scenarioName) + "'>" + e(r.scenarioName) + " — " + r.status
+                        + " <small>(compare: " + e(r.compare == null ? "all" : r.compare) + ")</small></h2>");
                 if (r.error != null) w.write("<pre class='ERROR'>" + e(r.error) + "</pre>");
                 if (!r.unnamedComponents.isEmpty()) {
                     w.write("<details><summary>Locator lint: " + r.unnamedComponents.size()
                             + " interactive components without setName()</summary><pre>");
                     for (String u : r.unnamedComponents) w.write(e(u) + "\n");
+                    w.write("</pre></details>");
+                }
+                if (!r.duplicateNames.isEmpty()) {
+                    w.write("<details><summary>Names that are not unique: " + r.duplicateNames.size() + "</summary><pre>");
+                    for (String d : r.duplicateNames) w.write(e(d) + "\n");
                     w.write("</pre></details>");
                 }
                 w.write("<table><tr><th style='width:160px'>Step</th><th style='width:90px'>Status</th><th>Details</th><th>Screenshot</th></tr>");

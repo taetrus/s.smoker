@@ -45,9 +45,14 @@ Three decisions carry the design:
 | Module | Package | Key classes |
 |---|---|---|
 | smoker-core | `smoker.core.model` | `Scenario`, `Step`, `Action`, `Locator`, `Snapshot`, `NodeSnapshot`, `IgnoreRules`, `RunResult` |
+| | `smoker.core.model` | `Golden` — the golden file: the first step in full, later steps as change lists |
+| | `smoker.core.model` | `WindowKey` — a title rule (pattern → fixed window key); `compile` checks the rules |
+| | `smoker.core.golden` | `GoldenCodec` — converts golden snapshots per step to a `Golden` and back |
+| | `smoker.core.io` | `ScenarioFiles` — reads and checks the scenario and golden files (`schemaVersion` 2) |
 | | `smoker.core.diff` | `SnapshotDiff` — path-keyed attribute diff with ignore rules |
 | | `smoker.core.io` / `.report` | `Json` (Gson, pretty, stable), `JUnitXmlWriter`, `HtmlReportWriter` |
 | smoker-agent | `smoker.agent` | `SmokerAgent` (premain), `AgentConfig`, `Observations` (+`LogTailer`), `EdtWatchdog`, `Quiescence`, `Locators`, `SnapshotTaker`, `ActionExecutor`, `Player`, `Recorder`, `RecorderToolbar`, `Screenshots` |
+| | `smoker.agent` | `WindowKeys` — applies the `WindowKey` rules to window titles |
 | smoker-cli | `smoker.cli` | `Main` — `run` / `record` / `approve` |
 | smoker-demo | `smoker.demo` | `DemoApp` + `scenarios/greet.json` + `scenarios-failing/` |
 
@@ -98,7 +103,7 @@ sub-second attribution and MDC fields if needed.
   (combo lists, context menus) resolve their window through `JPopupMenu.getInvoker()`.
 - `SnapshotTaker` walks only visible components and skips LAF internals (`javax.swing.plaf.*`, combo arrow buttons,
   scroll-bar buttons, table-header internals) so Metal-on-Linux and Windows-LAF goldens agree.
-- Paths: `[Title]/JRootPane[0]/.../#orders.table`; `IgnoreRules.paths` are regexes on this string.
+- Paths: `[Title]/#orders.table`, `[#orders.frame]/#orders.panel/JButton[0]` (WP-02 design, section 4.2); `IgnoreRules.paths` are regexes on this string.
 - Locator lint: every visible interactive component without a name is listed in `RunResult.unnamedComponents`.
 
 ## 6. Recorder (R-20, R-26)
@@ -112,8 +117,9 @@ sub-second attribution and MDC fields if needed.
 | picks a combo item, list row, table row, tab | `SELECT #name = value/index` (read back after Swing processed the click) |
 | ENTER / ESC / TAB / DELETE / F-keys / Ctrl+… | `KEY value` (VK name, modifiers) |
 
-After each recorded action, a background thread waits for quiescence and stores the golden snapshot into the step
-(the recording run defines v1 of the golden). `RecorderToolbar` (named `smoker.toolbar`, always-on-top) offers
+The recorder takes the golden snapshot of a step at the first input of the next step (F-21), before that input changes the UI.
+If no input comes, a background thread takes it when the UI is quiet.
+Save writes the scenario and the golden file `<scenario>.golden.json` (the recording run defines v1 of the golden). `RecorderToolbar` (named `smoker.toolbar`, always-on-top) offers
 Record/Pause, Pick (hover → red border + locator + "unnamed" warning), Rename, Delete, Save. Everything named
 `smoker.*` is excluded from recording and snapshots.
 

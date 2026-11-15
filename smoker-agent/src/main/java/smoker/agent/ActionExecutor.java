@@ -153,7 +153,7 @@ final class ActionExecutor {
 
     private static void closeWindow(Locator l) {
         for (Window w : Window.getWindows()) {
-            if (w.isShowing() && (l == null || Locators.eq(Locators.titleOf(w), l.windowTitle))) {
+            if (w.isShowing() && (l == null || Locators.eq(Locators.keyOf(w), l.windowTitle))) {
                 w.dispatchEvent(new WindowEvent(w, WindowEvent.WINDOW_CLOSING));
                 return;
             }

@@ -1,4 +1,5 @@
 {
+  "schemaVersion": 2,
   "name": "greet",
   "description": "Type a name, pick a language, greet; the table gains a row. Then open Help > About and close it.",
   "startupTimeoutMs": 30000,

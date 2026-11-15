@@ -20,8 +20,8 @@ public final class SnapshotDiff {
     public static List<String> diff(Snapshot expected, Snapshot actual, IgnoreRules rules) {
         List<String> out = new ArrayList<String>();
         if (rules == null) rules = new IgnoreRules();
-        Map<String, NodeSnapshot> exp = flatten(expected);
-        Map<String, NodeSnapshot> act = flatten(actual);
+        Map<String, NodeSnapshot> exp = byPath(expected);
+        Map<String, NodeSnapshot> act = byPath(actual);
 
         for (Map.Entry<String, NodeSnapshot> e : exp.entrySet()) {
             String path = e.getKey();
@@ -40,6 +40,8 @@ public final class SnapshotDiff {
             compareAttr(out, path, "rowCount", e.getValue().rowCount, a.rowCount, rules);
             compareAttr(out, path, "itemCount", e.getValue().itemCount, a.itemCount, rules);
             compareAttr(out, path, "selectedIndex", e.getValue().selectedIndex, a.selectedIndex, rules);
+            compareItems(out, path, e.getValue().items, a.items, rules);
+            compareCells(out, path, e.getValue().cells, a.cells, rules);
         }
         for (String path : act.keySet()) {
             if (!exp.containsKey(path) && !rules.ignoresPath(path)) out.add("UNEXPECTED " + path);
@@ -55,18 +57,52 @@ public final class SnapshotDiff {
         out.add("CHANGED " + path + " ." + attr + ": expected=" + fmt(e) + " actual=" + fmt(a));
     }
 
+    /** Null counts as absent: it equals an empty list. */
+    private static void compareItems(List<String> out, String path, List<String> e, List<String> a, IgnoreRules rules) {
+        if (rules.ignoresAttribute("items")) return;
+        int ne = e == null ? 0 : e.size();
+        int na = a == null ? 0 : a.size();
+        if (ne != na) out.add("CHANGED " + path + " .items: expected=" + ne + " rows actual=" + na + " rows");
+        for (int i = 0; i < Math.min(ne, na); i++) {
+            compareText(out, path + " .items[" + i + "]", e.get(i), a.get(i), rules);
+        }
+    }
+
+    private static void compareCells(List<String> out, String path, List<List<String>> e, List<List<String>> a, IgnoreRules rules) {
+        if (rules.ignoresAttribute("cells")) return;
+        int ne = e == null ? 0 : e.size();
+        int na = a == null ? 0 : a.size();
+        if (ne != na) out.add("CHANGED " + path + " .cells: expected=" + ne + " rows actual=" + na + " rows");
+        for (int r = 0; r < Math.min(ne, na); r++) {
+            List<String> er = e.get(r);
+            List<String> ar = a.get(r);
+            int ce = er == null ? 0 : er.size();
+            int ca = ar == null ? 0 : ar.size();
+            if (ce != ca) {
+                out.add("CHANGED " + path + " .cells[" + r + "]: expected=" + ce + " columns actual=" + ca + " columns");
+                continue;
+            }
+            for (int c = 0; c < ce; c++) {
+                compareText(out, path + " .cells[" + r + "][" + c + "]", er.get(c), ar.get(c), rules);
+            }
+        }
+    }
+
+    /** {@code where} is the path, a space and the attribute, as in the other CHANGED lines. */
+    private static void compareText(List<String> out, String where, String e, String a, IgnoreRules rules) {
+        if (e == null ? a == null : e.equals(a)) return;
+        if (rules.valuesEquivalent(e, a)) return;
+        out.add("CHANGED " + where + ": expected=" + fmt(e) + " actual=" + fmt(a));
+    }
+
     private static String fmt(Object o) {
         return o == null ? "<null>" : (o instanceof String ? "\"" + o + "\"" : o.toString());
     }
 
-    public static Map<String, NodeSnapshot> flatten(Snapshot s) {
-        Map<String, NodeSnapshot> m = new LinkedHashMap<String, NodeSnapshot>();
-        if (s != null) for (NodeSnapshot w : s.windows) walk(w, m);
+    /** The nodes of a snapshot by path, in the order of {@link Snapshot#nodes}. */
+    public static LinkedHashMap<String, NodeSnapshot> byPath(Snapshot s) {
+        LinkedHashMap<String, NodeSnapshot> m = new LinkedHashMap<String, NodeSnapshot>();
+        if (s != null) for (NodeSnapshot n : s.nodes) m.put(n.path, n);
         return m;
-    }
-
-    private static void walk(NodeSnapshot n, Map<String, NodeSnapshot> m) {
-        m.put(n.path, n);
-        if (n.children != null) for (NodeSnapshot c : n.children) walk(c, m);
     }
 }

@@ -1,13 +1,15 @@
 package smoker.agent;
 
-import smoker.core.io.Json;
+import smoker.core.io.ScenarioFiles;
 import smoker.core.model.Scenario;
+import smoker.core.model.Snapshot;
 
 import javax.swing.SwingUtilities;
 import java.awt.Frame;
 import java.awt.Window;
 import java.lang.instrument.Instrumentation;
 import java.nio.file.Files;
+import java.util.LinkedHashMap;
 
 /**
  * Entry point: {@code -javaagent:smoker-agent.jar=mode=play;scenario=x.json;out=run1;log=app.log} (R-04).
@@ -65,24 +67,29 @@ public final class SmokerAgent {
     }
 
     private static void play(AgentConfig cfg, Observations obs, EdtWatchdog watchdog) throws Exception {
-        Scenario sc = Json.read(cfg.scenario, Scenario.class);
+        Scenario sc = ScenarioFiles.readScenario(cfg.scenario);
         if (sc.name == null) sc.name = stripExt(cfg.scenario.getFileName().toString());
+        LinkedHashMap<String, Snapshot> golden = ScenarioFiles.readGolden(cfg.scenario);
+        Locators.useWindowKeys(new WindowKeys(sc.windowKeys));
         Files.createDirectories(cfg.out);
-        new Player(cfg, sc, obs, watchdog).run();
+        new Player(cfg, sc, golden, obs, watchdog).run();
     }
 
     private static void record(final AgentConfig cfg) throws Exception {
         final Scenario sc;
+        LinkedHashMap<String, Snapshot> golden = new LinkedHashMap<String, Snapshot>();
         if (Files.exists(cfg.scenario)) {
-            sc = Json.read(cfg.scenario, Scenario.class); // continue an existing scenario
+            sc = ScenarioFiles.readScenario(cfg.scenario); // continue an existing scenario and keep its snapshots
+            golden = ScenarioFiles.readGolden(cfg.scenario);
         } else {
             sc = new Scenario();
             sc.name = stripExt(cfg.scenario.getFileName().toString());
         }
+        Locators.useWindowKeys(new WindowKeys(sc.windowKeys));
         // show the toolbar once the app's first frame is up, so it floats above it
         long deadline = System.currentTimeMillis() + sc.startupTimeoutMs;
         while (System.currentTimeMillis() < deadline && !anyFrameShowing()) Thread.sleep(200);
-        final Recorder rec = new Recorder(cfg, sc);
+        final Recorder rec = new Recorder(cfg, sc, golden);
         SwingUtilities.invokeLater(new Runnable() {
             @Override
             public void run() {

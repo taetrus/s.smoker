@@ -23,7 +23,19 @@ import java.util.List;
 /** Resolves components to stable locators and back (R-21). */
 final class Locators {
 
+    private static volatile WindowKeys windowKeys = new WindowKeys(null);
+
     private Locators() {}
+
+    /** Sets the title rules of the scenario. {@code null} means no rules. */
+    static void useWindowKeys(WindowKeys k) {
+        windowKeys = k == null ? new WindowKeys(null) : k;
+    }
+
+    /** The key of a window: its title, or the fixed key of a matching title rule. */
+    static String keyOf(Window w) {
+        return windowKeys.keyOf(w);
+    }
 
     /**
      * The window a user would say the component belongs to: for items inside popup menus
@@ -42,7 +54,7 @@ final class Locators {
     static Locator resolve(Component c) {
         Locator l = new Locator();
         Window w = logicalWindowOf(c);
-        l.windowTitle = titleOf(w);
+        l.windowTitle = keyOf(w);
         l.className = classNameOf(c);
         if (c.getName() != null && !c.getName().isEmpty() && !isAutoName(c.getName())) {
             l.name = c.getName();
@@ -87,7 +99,7 @@ final class Locators {
         List<Component> matches = new ArrayList<Component>();
         for (Window w : Window.getWindows()) {
             if (!w.isShowing()) continue;
-            if (l.windowTitle != null && !l.isNamed() && !eq(titleOf(w), l.windowTitle)) continue;
+            if (l.windowTitle != null && !l.isNamed() && !eq(keyOf(w), l.windowTitle)) continue;
             for (Component c : allComponents(w)) {
                 if (l.isNamed()) {
                     if (l.name.equals(c.getName())) matches.add(c);

@@ -1,12 +1,10 @@
 package smoker.core.model;
 
-/** One scenario step: an action plus the golden state expected afterwards (R-30). */
+/** One scenario step: an action (R-30). The golden state is in the golden file (F-06). */
 public class Step {
     public String id;
     public String name;
     public Action action;
-    /** Golden snapshot. {@code null} until approved (R-33). */
-    public Snapshot expected;
 
     public Step() {}
 

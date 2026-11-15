@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 2,
+  "name": "table",
+  "description": "Greet three names in three languages, then select the first table row. The golden snapshot shows the cells of the table.",
+  "startupTimeoutMs": 30000,
+  "quietMs": 300,
+  "stepTimeoutMs": 10000,
+  "compare": "all",
+  "maxRows": 20,
+  "windowKeys": [],
+  "ignore": {"paths": [], "attributes": [], "valuePatterns": []},
+  "steps": [
+    {
+      "id": "s001",
+      "name": "enter name Kerem",
+      "action": {"type": "SET_TEXT", "locator": {"name": "demo.name"}, "value": "Kerem"}
+    },
+    {
+      "id": "s002",
+      "name": "choose Turkish",
+      "action": {"type": "SELECT", "locator": {"name": "demo.lang"}, "value": "tr"}
+    },
+    {
+      "id": "s003",
+      "name": "greet Kerem",
+      "action": {"type": "CLICK", "locator": {"name": "demo.greet"}}
+    },
+    {
+      "id": "s004",
+      "name": "enter name Ana",
+      "action": {"type": "SET_TEXT", "locator": {"name": "demo.name"}, "value": "Ana"}
+    },
+    {
+      "id": "s005",
+      "name": "choose English",
+      "action": {"type": "SELECT", "locator": {"name": "demo.lang"}, "value": "en"}
+    },
+    {"id": "s006", "name": "greet Ana", "action": {"type": "CLICK", "locator": {"name": "demo.greet"}}},
+    {
+      "id": "s007",
+      "name": "enter name Jonas",
+      "action": {"type": "SET_TEXT", "locator": {"name": "demo.name"}, "value": "Jonas"}
+    },
+    {
+      "id": "s008",
+      "name": "choose German",
+      "action": {"type": "SELECT", "locator": {"name": "demo.lang"}, "value": "de"}
+    },
+    {
+      "id": "s009",
+      "name": "greet Jonas",
+      "action": {"type": "CLICK", "locator": {"name": "demo.greet"}}
+    },
+    {
+      "id": "s010",
+      "name": "select first row",
+      "action": {"type": "SELECT", "locator": {"name": "demo.table"}, "value": "0"}
+    }
+  ]
+}

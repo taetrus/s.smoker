@@ -1,4 +1,5 @@
 {
+  "schemaVersion": 2,
   "name": "hang",
   "description": "Blocks the EDT for 8 s with stepTimeoutMs=3000 — smoker must report HANG with a thread dump.",
   "startupTimeoutMs": 30000,

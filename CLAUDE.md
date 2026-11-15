@@ -37,22 +37,24 @@ mvn -B verify -Plocale-tr              # all tests in tr_TR (F-16)
 Windows (PowerShell 5.1): put each `-D` argument in quotes, for example `"-Djvm=C:\Program Files\Java\jdk1.8.0_341\bin\java.exe"`.
 For the CLI, write each inner quote of `--app` as `\"` and enclose the value in single quotes. `!` in Claude Code runs Git Bash, not PowerShell.
 
-`SelfTestIT` replaces `selftest.sh`. It expects run1 NO_GOLDEN, run2 PASS, run3 FAIL with `CHANGED #demo.lang`,
-run4 FAIL (log hit) and HANG. Run `mvn -B verify` and `mvn -B verify -Plocale-tr` after every change to `smoker-agent` or `smoker-core`.
+`SelfTestIT` expects run1 NO_GOLDEN, run2 PASS, run3 FAIL with `CHANGED [#demo.frame]/#demo.lang`,
+run4 `empty-name` ERROR (s001 FAIL on the log hit, s002 ERROR on the exception thrown by the action) and `hang` HANG.
+It also checks the WP-02 criterion on `table.json`: scenario under 80 lines, golden under 150 lines, an extra unnamed
+panel gives PASS (modes `all` and `named`), a wrong cell gives FAIL. Run `mvn -B verify` and `mvn -B verify -Plocale-tr`
+after every change to `smoker-agent` or `smoker-core`.
 
-## State on 2026-11-14
+## State on 2026-11-15
 
-- WP-01 complete on 2026-11-15. Branch `wp-01-test-base`, pushed. Next: WP-02.
-- Tests: 22 in `smoker-core`, 28 in `smoker-agent`, 2 IT. They pass on macOS and on Windows 11
-  (JDK 25, default locale and tr_TR, and tr_TR with JRE 8 as test JVM).
-- WP-01 tasks 1–4, 6 and 7–10 done. The pilot p.osgi.ds operated on Windows with JRE 8u341:
-  - five-step scenario `docs/wp-01-pilot/pilot.json`: PASS 3 times in sequence;
-  - HANG test on spike.master: HANG with a thread dump; crash test: ERROR with exit code 7;
-  - lint: 14 unnamed interactive components, 0 named (input for WP-09).
-- Findings from the pilot: F-19, F-20, F-23 corrected. F-21 (WP-02, WP-06) and F-22 (WP-04) open. F-02 confirmed (WP-03).
-- 2026-11-15: the code of 2026-11-14 also passes on macOS (JDK 27 default and tr_TR, JRE 8 tr_TR): 22 + 28 unit tests, 2 IT.
-- Decision 5 (2026-11-15): smoke tests run on Windows only. No Linux replay in WP-01.
-- Decision 6 (2026-11-15): test reports go into `docs/` on GitHub, not Confluence. The WP-01 completion criterion passes.
+- WP-01 complete (branch `wp-01-test-base`, pushed). WP-02 complete on branch `wp-02-snapshot-model` (not pushed).
+- Tests: 56 in `smoker-core`, 60 in `smoker-agent`, 3 IT. They pass on macOS (JDK 27 default locale and tr_TR, tr_TR with JRE 8 as test JVM).
+- WP-02: golden file apart from the scenario (`schemaVersion: 2`), anchored paths, table cells, `compare` (`all` | `named`),
+  `maxRows`, `windowKeys`, lint for names that are not unique, player continues after FAIL.
+- Decision 6 (2026-11-15): test reports go into `docs/` on GitHub, not Confluence.
+- Open findings: F-22 (WP-04), F-02 confirmed (WP-03).
+- 2026-11-15: one SelfTestIT run failed 2 of 3 methods under load. It did not recur in 3 clean runs.
+  If it recurs, keep `smoker-it/target/failsafe-reports` and `smoker-it/target/it-work`.
+- Open: re-approve the pilot goldens on Windows (`docs/wp-01-handoff.md` section 5).
+- Next work package in plan order: WP-03 or WP-04.
 - Not verified: JRE 11 and JRE 17 at run time on a target application, a product with the hardware simulator.
 
 ## Decisions already made

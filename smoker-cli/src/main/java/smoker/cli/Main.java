@@ -1,8 +1,12 @@
 package smoker.cli;
 
+import smoker.core.diff.SnapshotDiff;
 import smoker.core.io.Json;
+import smoker.core.io.ScenarioFiles;
+import smoker.core.model.NodeSnapshot;
 import smoker.core.model.RunResult;
 import smoker.core.model.Scenario;
+import smoker.core.model.Snapshot;
 import smoker.core.model.Step;
 import smoker.core.report.HtmlReportWriter;
 import smoker.core.report.JUnitXmlWriter;
@@ -15,9 +19,12 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -51,6 +58,16 @@ public final class Main {
         Path out = Paths.get(o.containsKey("out") ? o.get("out") : "smoker-out").toAbsolutePath();
         List<Path> scenarios = scenarios(req(o, "scenarios"));
         boolean strict = o.containsKey("strict");
+        // Check every scenario and golden file before the first application starts.
+        Map<Path, Scenario> parsed = new HashMap<Path, Scenario>();
+        try {
+            for (Path sc : scenarios) {
+                parsed.put(sc, validated(sc));
+            }
+        } catch (IllegalArgumentException e) {
+            System.err.println(e.getMessage());
+            return 2;
+        }
         Files.createDirectories(out);
         List<RunResult> results = new ArrayList<RunResult>();
         int failures = 0;
@@ -65,7 +82,7 @@ public final class Main {
             if (o.containsKey("failRegex")) agentArgs.append(";failRegex=").append(o.get("failRegex"));
             if (o.containsKey("allowRegex")) agentArgs.append(";allowRegex=").append(o.get("allowRegex"));
 
-            Scenario scenario = Json.read(sc, Scenario.class);
+            Scenario scenario = parsed.get(sc);
             long budgetMs = scenario.startupTimeoutMs + (scenario.steps.size() + 1) * (scenario.stepTimeoutMs + 2000) + 10_000;
             if (o.containsKey("timeout")) budgetMs = Long.parseLong(o.get("timeout")) * 1000;
 
@@ -110,6 +127,15 @@ public final class Main {
     static int record(Map<String, String> o) throws Exception {
         Path agent = Paths.get(req(o, "agent")).toAbsolutePath();
         Path scenario = Paths.get(req(o, "scenario")).toAbsolutePath();
+        // The agent continues an existing scenario. Check it here: the agent can only log a wrong file.
+        if (Files.exists(scenario)) {
+            try {
+                validated(scenario);
+            } catch (IllegalArgumentException e) {
+                System.err.println(e.getMessage());
+                return 2;
+            }
+        }
         String agentArgs = "mode=record;scenario=" + scenario + (o.containsKey("log") ? ";log=" + o.get("log") : "");
         Path log = scenario.getParent().resolve(stripExt(scenario.getFileName().toString()) + ".record.log");
         int exit = launch(req(o, "app"), agent, agentArgs, log, Long.MAX_VALUE);
@@ -123,23 +149,87 @@ public final class Main {
         Path runDir = Paths.get(req(o, "run"));
         Path scFile = Paths.get(req(o, "scenario"));
         RunResult r = Json.read(runDir.resolve("run-result.json"), RunResult.class);
-        Scenario sc = Json.read(scFile, Scenario.class);
+        Scenario sc;
+        LinkedHashMap<String, Snapshot> old;
+        try {
+            sc = ScenarioFiles.readScenario(scFile);
+            old = ScenarioFiles.readGolden(scFile);
+        } catch (IllegalArgumentException e) {
+            System.err.println(e.getMessage());
+            return 2;
+        }
+        // A golden of the other compare mode has other nodes: every later run would fail.
+        String runCompare = r.compare != null ? r.compare : "all";
+        if (!runCompare.equals(sc.compare)) {
+            System.err.println("approve: run used compare=" + runCompare + ", scenario has compare=" + sc.compare
+                    + "; golden would not match");
+            return 2;
+        }
         List<String> only = o.containsKey("steps") ? Arrays.asList(o.get("steps").split(",")) : null;
-        int n = 0;
+        if (only != null) {
+            Set<String> inRun = new HashSet<String>();
+            for (RunResult.StepResult sr : r.steps) inRun.add(sr.stepId);
+            for (String id : only) {
+                if (!inRun.contains(id)) System.err.println("approve: step " + id + " is not in the run");
+            }
+        }
+        Map<String, Snapshot> merged = new HashMap<String, Snapshot>(old);
+        List<String> approved = new ArrayList<String>();
         for (RunResult.StepResult sr : r.steps) {
             if (sr.actual == null) continue;
             if (only != null && !only.contains(sr.stepId)) continue;
-            Step step = sc.findStep(sr.stepId);
-            if (step == null) continue;
-            step.expected = sr.actual;
-            n++;
+            if (sc.findStep(sr.stepId) == null) continue; // "startup" and steps removed from the scenario
+            merged.put(sr.stepId, sr.actual);
+            approved.add(sr.stepId);
         }
-        Json.write(scFile, sc);
-        System.out.println("approved " + n + " step snapshot(s) into " + scFile);
+        // The golden file has the steps of the scenario, in scenario order. Removed steps drop out.
+        LinkedHashMap<String, Snapshot> golden = new LinkedHashMap<String, Snapshot>();
+        for (Step s : sc.steps) {
+            if (merged.containsKey(s.id)) golden.put(s.id, merged.get(s.id));
+        }
+        String name = sc.name != null ? sc.name : stripExt(scFile.getFileName().toString());
+        ScenarioFiles.writeGolden(scFile, name, golden);
+        // Spec 4.5: how many steps changed and, for each step, the number of changed components.
+        Map<String, Integer> changed = new LinkedHashMap<String, Integer>();
+        for (String id : approved) {
+            int k = changedComponents(old.get(id), golden.get(id));
+            if (k > 0) changed.put(id, k);
+        }
+        System.out.println("approved " + approved.size() + " step(s) into " + ScenarioFiles.goldenPath(scFile));
+        System.out.println("changed " + changed.size() + " step(s)");
+        for (Map.Entry<String, Integer> e : changed.entrySet()) {
+            System.out.println("  " + e.getKey() + ": " + e.getValue() + " component(s) changed");
+        }
         return 0;
     }
 
+    /** Number of paths that were added, removed or changed. Without an old snapshot, all nodes count. */
+    static int changedComponents(Snapshot before, Snapshot after) {
+        Map<String, NodeSnapshot> a = SnapshotDiff.byPath(before);
+        Map<String, NodeSnapshot> b = SnapshotDiff.byPath(after);
+        Set<String> paths = new HashSet<String>(a.keySet());
+        paths.addAll(b.keySet());
+        int n = 0;
+        for (String p : paths) {
+            NodeSnapshot x = a.get(p);
+            NodeSnapshot y = b.get(p);
+            if (x == null || y == null || !Json.toString(x).equals(Json.toString(y))) n++;
+        }
+        return n;
+    }
+
     // ---- helpers -------------------------------------------------------------------------------
+
+    /**
+     * Reads the scenario file and its golden file, so that a wrong file stops the command before the application starts.
+     *
+     * @throws IllegalArgumentException for the old format, a newer schemaVersion or a wrong structure
+     */
+    static Scenario validated(Path scenario) throws IOException {
+        Scenario sc = ScenarioFiles.readScenario(scenario);
+        ScenarioFiles.readGolden(scenario);
+        return sc;
+    }
 
     /** @return exit code, or -999 if killed on timeout. */
     static int launch(String appCmd, Path agentJar, String agentArgs, Path outputLog, long budgetMs) throws IOException, InterruptedException {
@@ -183,7 +273,7 @@ public final class Main {
             if (Files.isDirectory(p)) {
                 DirectoryStream<Path> ds = Files.newDirectoryStream(p, "*.json");
                 try {
-                    for (Path f : ds) out.add(f);
+                    for (Path f : ds) if (!ScenarioFiles.isGoldenFile(f)) out.add(f);
                 } finally {
                     ds.close();
                 }

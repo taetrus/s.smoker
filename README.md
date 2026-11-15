@@ -21,7 +21,9 @@ xvfb-run -a mvn -B verify      # Linux without a display
 ```
 
 The integration test runs `run`, `approve`, `run`, `run` on `smoker-demo/scenarios` and `run` on
-`smoker-demo/scenarios-failing`. It expects NO_GOLDEN, PASS, FAIL with `CHANGED …#demo.lang`, FAIL on a log hit and HANG.
+`smoker-demo/scenarios-failing`. It expects NO_GOLDEN, PASS, FAIL with `CHANGED …#demo.lang`, ERROR for `empty-name` and HANG.
+`empty-name` gives FAIL for s001 (a log hit) and ERROR for s002 (the action throws an exception).
+It also adds a step, removes a step and approves one step, and checks the golden file after each change.
 It copies the scenarios to `smoker-it/target/it-work` and does not change the files in the repository.
 The CLI and the demo application use the JVM and the locale of the test.
 Without a display the integration test fails, and `LocatorsWindowTest` is skipped.
@@ -37,7 +39,7 @@ java -jar smoker-cli.jar record --agent smoker-agent.jar --app "java -jar myapp.
 # 2. run — first run has no goldens → NO_GOLDEN (exit 0 unless --strict)
 java -jar smoker-cli.jar run --agent smoker-agent.jar --app "java -jar myapp.jar" --scenarios scenarios/ --out out/ --log logs/app.log
 
-# 3. approve the observed state as golden (per scenario, or --steps s003,s004)
+# 3. approve the observed state as golden: writes scenarios/orders-create.golden.json (all steps, or --steps s003,s004)
 java -jar smoker-cli.jar approve --run out/orders-create --scenario scenarios/orders-create.json
 
 # 4. run again → PASS / FAIL; out/junit.xml + out/report.html
@@ -80,8 +82,10 @@ A path without spaces needs no quotes. This is the easier procedure.
 
 ```json
 {
+  "schemaVersion": 2,
   "name": "orders-create",
-  "startupTimeoutMs": 60000, "quietMs": 400, "stepTimeoutMs": 15000,
+  "startupTimeoutMs": 60000, "quietMs": 400, "stepTimeoutMs": 15000, "compare": "all", "maxRows": 20,
+  "windowKeys": [ { "pattern": "Editor - .*", "key": "Editor" } ],
   "ignore": { "paths": ["#statusbar\\.clock"], "attributes": [], "valuePatterns": ["\\d{2}:\\d{2}:\\d{2}"] },
   "steps": [
     { "id": "s001", "name": "open orders", "action": { "type": "CLICK",    "locator": { "name": "nav.orders" } } },
@@ -94,7 +98,36 @@ A path without spaces needs no quotes. This is the easier procedure.
 ```
 
 Actions: `CLICK`, `SET_TEXT`, `SELECT` (combo/list/tab by text or index, table by row), `KEY` (VK name, `modifiers` =
-`InputEvent.*_DOWN_MASK`), `WAIT` (ms), `CLOSE_WINDOW`. `expected` is filled by `approve` (or by the recorder).
+`InputEvent.*_DOWN_MASK`), `WAIT` (ms), `CLOSE_WINDOW`.
+
+`schemaVersion` is 2. The scenario file has no golden snapshots. s.smoker refuses a file without `schemaVersion`,
+with `schemaVersion` 1, or with an `expected` block in a step: that is the old format. To convert an old file,
+add `"schemaVersion": 2` as the first field, remove each `expected` block, then run and `approve` again.
+`compare` selects the compared components. Use `all` (the default): the snapshot diff compares all components.
+Use `named`: the diff compares only windows and components with a name from `setName()`. Any other value is refused.
+The report lists names that more than one component has in one window ("Names that are not unique").
+
+Golden file: `approve` and the recorder write the golden snapshots to `<scenario>.golden.json` in the folder of the
+scenario (`orders-create.json` gives `orders-create.golden.json`). It has `schemaVersion` 2, the first step in full
+(`full`), and for each later step the changes against the step before it (`changes`). A step without a golden
+gives `NO_GOLDEN`. `approve --steps` replaces only those steps. The other steps keep their golden. A step that is
+not in the scenario leaves the golden file. `approve` prints the number of approved steps, the number of changed
+steps and, for each changed step, the number of changed components. `approve` warns about a `--steps` id that is not
+in the run. If the run used another `compare` mode than the scenario, `approve` writes nothing and exits with 2.
+`run` does not read `*.golden.json` as a scenario. Commit the golden file with the scenario.
+
+Each change entry has the `path` of one component and an `op`. `add` gives the new component in full in `node`.
+`set` gives in `node` only the attributes with a new value. `set` lists in `unset` the attributes that have no value now.
+`remove` has no `node`. The entries are sorted by path. s.smoker refuses an entry with an unknown `op`.
+s.smoker writes all JSON files with one layout: an object or array is on one line when its one-line form has at most
+100 characters (indent and key not counted). A longer one has one member per line. A short change entry is one line with the path and the value.
+
+Title rules: a window title can change while the application runs. `windowKeys` maps a title to a fixed key.
+The first `pattern` (Java regex, matches the whole title) gives the `key`. The key replaces the title in paths and in
+`windowTitle` locators. A named window keeps its name. The `title` attribute stays the real title.
+
+Tables, lists and trees: the snapshot holds the text of the first `maxRows` rows (default 20). A table gives `cells`.
+A list or a tree gives `items`. A tree row has two spaces of indent per level. The diff reports `.items[i]` and `.cells[row][col]`.
 
 Password fields (`JPasswordField`): the snapshot gives the text `***` when the field has a value, and `""` when it is empty.
 The recorder does not record typing in a password field. If a scenario must fill one, add the `SET_TEXT` step by hand.
@@ -110,7 +143,9 @@ listed in the report ("locator lint"). Convention: `<view>.<widget>`.
 
 `PASS` · `FAIL` (snapshot diff or log hit) · `HANG` (EDT blocked / action timed out, thread dump attached) ·
 `ERROR` (component not found, exception thrown by the action) · `NO_GOLDEN` (nothing to compare yet).
-A scenario stops at its first non-PASS step; the next scenario starts a fresh JVM.
+The player continues after a `FAIL` step and stops after a `HANG` or `ERROR` step. The scenario status is the
+worst step status: `ERROR` > `HANG` > `FAIL` > `NO_GOLDEN` > `PASS`. One `approve` then covers all steps of the run.
+The next scenario starts a fresh JVM.
 
 ## CI
 
