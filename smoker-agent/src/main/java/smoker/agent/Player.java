@@ -66,6 +66,8 @@ final class Player implements Runnable {
             result.finishedAt = System.currentTimeMillis();
             result.unnamedComponents.addAll(taker.unnamedInteractive());
             result.duplicateNames.addAll(taker.duplicateNames());
+            result.lint.addAll(taker.lintEntries());
+            result.autoNames.addAll(taker.autoNamesUsed());
             try {
                 Json.write(cfg.out.resolve("run-result.json"), result);
             } catch (Exception e) {
