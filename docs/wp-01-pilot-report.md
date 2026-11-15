@@ -11,12 +11,12 @@ This report is the input for the Confluence page (WP-01 completion criterion).
 | 2 Add the agent option | No `eclipse.ini` and no launcher (`includeLaunchers="false"`). The agent option is in the `java` command. The agent attaches. |
 | 3 Record on Windows with JRE 8 | Done. JRE 1.8.0_341, Windows 11. |
 | 4 Record five steps | Done after the correction of F-20. The first recording had 3 of 5 steps. |
-| 5 Replay on Windows and Linux | Windows: PASS 3 times in sequence after the correction of F-23 (run 13 to run 15). The earlier PASS (run 7 to run 11) was not valid: step s002 typed into the wrong field. **Linux: open.** |
+| 5 Replay on Windows | Windows: PASS 3 times in sequence after the correction of F-23 (run 13 to run 15). The earlier PASS (run 7 to run 11) was not valid: step s002 typed into the wrong field. **Linux: open.** |
 | 6 Write down failures, lint, startup | Sections 3 to 6 of this report. |
 | 7–10 Tests, IT, `Locale.ROOT`, tr_TR | Done. On Windows: 22 + 28 unit tests and 2 IT pass in 3 configurations (section 2). |
 
-Completion criterion: the five-step scenario passes on Windows with JRE 8. **Not met yet**: the replay on Linux with JRE 17 (task 5),
-and the report in Confluence. Do not start WP-02.
+Completion criterion (changed by decision 5 on 2026-11-15): the five-step scenario passes on Windows with JRE 8. The test report is in Confluence.
+The Windows part is met. **Open: the report in Confluence.** Do not start WP-02.
 
 ## 2. Environment and s.smoker tests
 
@@ -101,6 +101,6 @@ On the test PC, not in the repository:
 
 ## 8. Open for WP-01
 
-1. Task 5 on Linux: replay `pilot.json` with JRE 17 and `xvfb-run -a` on the `linux.gtk.x86_64` product.
-   The procedure is in `docs/wp-01-handoff.md`, section 3.
-2. Put this report in Confluence.
+1. Put this report in Confluence.
+
+Decision 5 (2026-11-15) removes the Linux replay: the target applications load Windows DLLs and cannot start on Linux.

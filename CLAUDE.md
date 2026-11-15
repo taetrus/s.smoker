@@ -6,7 +6,7 @@ compares semantic component snapshots with golden snapshots, and reads the appli
 ## Read first
 
 1. `docs/development-plan.md` — audit findings F-01..F-23, changed requirements, work packages WP-01..WP-09. **This is the backlog.**
-2. `docs/wp-01-handoff.md` — the next WP-01 task (Linux replay) and the commands that operated on Windows.
+2. `docs/wp-01-handoff.md` — WP-01 state and the commands that operated on Windows.
 3. `docs/wp-01-pilot-report.md` — results of the pilot on Windows. Input for the Confluence page.
 4. `docs/architecture.md` — design decisions and class map of the current skeleton.
 5. `docs/requirements.md` — original requirements. The development plan wins where they differ.
@@ -50,12 +50,14 @@ run4 FAIL (log hit) and HANG. Run `mvn -B verify` and `mvn -B verify -Plocale-tr
   - HANG test on spike.master: HANG with a thread dump; crash test: ERROR with exit code 7;
   - lint: 14 unnamed interactive components, 0 named (input for WP-09).
 - Findings from the pilot: F-19, F-20, F-23 corrected. F-21 (WP-02, WP-06) and F-22 (WP-04) open. F-02 confirmed (WP-03).
-- Open for the WP-01 completion criterion: task 5, the replay on Linux with JRE 17 and `xvfb-run`
-  (`docs/wp-01-handoff.md`, section 3), and the test report in Confluence.
-- Not verified: Linux at run time with JRE 17, JRE 11, a product with the hardware simulator.
+- 2026-11-15: the code of 2026-11-14 also passes on macOS (JDK 27 default and tr_TR, JRE 8 tr_TR): 22 + 28 unit tests, 2 IT.
+- Decision 5 (2026-11-15): smoke tests run on Windows only. No Linux replay in WP-01.
+- Open for the WP-01 completion criterion: the test report in Confluence. Then WP-01 is complete.
+- Not verified: JRE 11 and JRE 17 at run time on a target application, a product with the hardware simulator.
 
 ## Decisions already made
 
+- Smoke tests run on Windows only: the target applications load Windows DLLs (2026-11-15).
 - Pilot application for WP-01 (2026-11-14): p.osgi.ds. `p2.product` for the five-step scenario, `spike.master` for HANG. No simulator: F-02 and F-04 stay untested until WP-03 and WP-05.
 - Naming rule `<view>.<widget>` applies to all teams.
 - Lint results fail the pipeline from version 1.1, against a baseline file (only new results fail).
