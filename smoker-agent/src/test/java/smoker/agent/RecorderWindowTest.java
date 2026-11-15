@@ -14,7 +14,11 @@ import javax.swing.JButton;
 import javax.swing.JDialog;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JMenuItem;
 import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
+import javax.swing.MenuElement;
+import javax.swing.MenuSelectionManager;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
@@ -48,7 +52,11 @@ public class RecorderWindowTest {
     private JButton clear;
     private JTextField field;
     private JButton done;
+    private JButton flat;
+    private JPopupMenu popup;
+    private JMenuItem item;
     private JLabel status;
+    private KeyboardFocusManager previousFocusManager;
     private Recorder recorder;
     private final AtomicInteger dialogsShown = new AtomicInteger();
 
@@ -83,22 +91,41 @@ public class RecorderWindowTest {
                 status.setName("t.status");
                 done = new JButton("Done");
                 done.setName("t.done");
-                done.setRequestFocusEnabled(false);   // the press asks for no real focus: the test sends the focus events
-                done.addActionListener(new ActionListener() {
+                ActionListener setDone = new ActionListener() {
                     public void actionPerformed(ActionEvent e) {
                         status.setText("done");   // at once, before the background snapshot could run
+                    }
+                };
+                done.addActionListener(setDone);
+                flat = new JButton("Flat");       // a toolbar-like button: it takes no focus, so no FOCUS_LOST
+                flat.setName("t.flat");
+                flat.setFocusable(false);
+                flat.addActionListener(setDone);
+                popup = new JPopupMenu();
+                item = new JMenuItem("Item");
+                item.setName("t.item");
+                item.addActionListener(setDone);
+                popup.add(item);
+                field.addActionListener(new ActionListener() {
+                    public void actionPerformed(ActionEvent e) {
+                        status.setText("entered");   // ENTER in the field
                     }
                 });
                 p.add(settings);
                 p.add(clear);
                 p.add(field);
                 p.add(done);
+                p.add(flat);
                 p.add(status);
                 frame.getContentPane().add(p);
                 frame.pack();
                 frame.setVisible(true);
             }
         });
+        // The OS does not always give the window of a test JVM the focus (macOS). The focus events are synthetic:
+        // DirectFocus lets them go to the component, through the AWT event listeners, as real focus events do.
+        previousFocusManager = KeyboardFocusManager.getCurrentKeyboardFocusManager();
+        KeyboardFocusManager.setCurrentKeyboardFocusManager(new DirectFocus());
         recorder = new Recorder(AgentConfig.parse("mode=record;scenario=target/recorder-window-test.json"), new Scenario(),
                 new HashMap<String, Snapshot>());
         recorder.start();
@@ -107,6 +134,7 @@ public class RecorderWindowTest {
     @After
     public void disposeFrame() throws Exception {
         if (recorder != null) recorder.pause();
+        if (previousFocusManager != null) KeyboardFocusManager.setCurrentKeyboardFocusManager(previousFocusManager);
         if (frame == null) return;
         SwingUtilities.invokeAndWait(new Runnable() {
             public void run() {
@@ -132,43 +160,89 @@ public class RecorderWindowTest {
     }
 
     /**
-     * F-21: the user types into a field and clicks a button at once. The golden snapshot of the SET_TEXT step must
-     * show the typed text and not the state that the click produces. The events come in the AWT order:
+     * F-21: the user types into a field and clicks a focusable button at once. The golden snapshot of the SET_TEXT
+     * step must show the typed text and not the state that the click produces. The events come in the AWT order:
      * KEY_PRESSED in the field, MOUSE_PRESSED on the button, FOCUS_LOST / FOCUS_GAINED, MOUSE_RELEASED.
+     * The press can also ask the OS for real focus: DirectFocus gives those events to the components, and the
+     * recorder takes no second snapshot (nothing is pending) and adds no second SET_TEXT (the text did not change).
      */
     @Test
     public void goldenOfATextStepDoesNotShowTheNextClick() throws Exception {
-        // The OS does not always give the window of a test JVM the focus (macOS). The focus events are synthetic:
-        // DirectFocus lets them go to the component, through the AWT event listeners, as real focus events do.
-        final KeyboardFocusManager previous = KeyboardFocusManager.getCurrentKeyboardFocusManager();
-        KeyboardFocusManager.setCurrentKeyboardFocusManager(new DirectFocus());
-        try {
-            dispatch(new FocusEvent(field, FocusEvent.FOCUS_GAINED));
-            dispatch(new KeyEvent(field, KeyEvent.KEY_PRESSED, System.currentTimeMillis(), 0, KeyEvent.VK_K, 'K'));
-            onEdt(new Runnable() {
-                public void run() {
-                    field.setText("Kerem");   // the typed text
-                }
-            });
-            dispatch(new MouseEvent(done, MouseEvent.MOUSE_PRESSED, System.currentTimeMillis(),
-                    MouseEvent.BUTTON1_DOWN_MASK, 5, 5, 1, false, MouseEvent.BUTTON1));
-            dispatch(new FocusEvent(field, FocusEvent.FOCUS_LOST, false, done));
-            dispatch(new FocusEvent(done, FocusEvent.FOCUS_GAINED, false, field));
-            dispatch(new MouseEvent(done, MouseEvent.MOUSE_RELEASED, System.currentTimeMillis(),
-                    0, 5, 5, 1, false, MouseEvent.BUTTON1));
-        } finally {
-            KeyboardFocusManager.setCurrentKeyboardFocusManager(previous);
-        }
-        assertEquals("done", Quiescence.onEdt(new Callable<String>() {
+        typeIntoField();
+        dispatch(press(done));
+        dispatch(new FocusEvent(field, FocusEvent.FOCUS_LOST, false, done));
+        dispatch(new FocusEvent(done, FocusEvent.FOCUS_GAINED, false, field));
+        dispatch(release(done));
+        assertTextStepThen(Action.Type.CLICK, "done");
+    }
+
+    /** F-21: a click on a button that takes no focus gives no FOCUS_LOST in the field. The text is flushed on the press. */
+    @Test
+    public void textIsFlushedBeforeAClickOnANonFocusableButton() throws Exception {
+        typeIntoField();
+        dispatch(press(flat));
+        dispatch(release(flat));
+        assertTextStepThen(Action.Type.CLICK, "done");
+        assertEquals("t.flat", recorder.scenario().steps.get(1).action.locator.name);
+    }
+
+    /** F-21: a menu item takes no focus either. */
+    @Test
+    public void textIsFlushedBeforeAClickOnAMenuItem() throws Exception {
+        typeIntoField();
+        onEdt(new Runnable() {
+            public void run() {
+                popup.show(frame.getContentPane(), 10, 10);
+                MenuSelectionManager.defaultManager().setSelectedPath(new MenuElement[] {popup, item});   // arms the item
+            }
+        });
+        dispatch(press(item));
+        dispatch(release(item));
+        assertTextStepThen(Action.Type.CLICK, "done");
+        assertEquals("t.item", recorder.scenario().steps.get(1).action.locator.name);
+    }
+
+    /** F-21: ENTER in the field flushes the text. The SET_TEXT snapshot shows the state before the field acts on ENTER. */
+    @Test
+    public void goldenOfATextStepDoesNotShowTheEnterKey() throws Exception {
+        typeIntoField();
+        dispatch(new KeyEvent(field, KeyEvent.KEY_PRESSED, System.currentTimeMillis(), 0, KeyEvent.VK_ENTER, '\n'));
+        assertTextStepThen(Action.Type.KEY, "entered");
+    }
+
+    private void typeIntoField() throws Exception {
+        dispatch(new FocusEvent(field, FocusEvent.FOCUS_GAINED));
+        dispatch(new KeyEvent(field, KeyEvent.KEY_PRESSED, System.currentTimeMillis(), 0, KeyEvent.VK_K, 'K'));
+        onEdt(new Runnable() {
+            public void run() {
+                field.setText("Kerem");   // the typed text
+            }
+        });
+    }
+
+    private static MouseEvent press(Component c) {
+        return new MouseEvent(c, MouseEvent.MOUSE_PRESSED, System.currentTimeMillis(),
+                MouseEvent.BUTTON1_DOWN_MASK, 5, 5, 1, false, MouseEvent.BUTTON1);
+    }
+
+    private static MouseEvent release(Component c) {
+        return new MouseEvent(c, MouseEvent.MOUSE_RELEASED, System.currentTimeMillis(), 0, 5, 5, 1, false, MouseEvent.BUTTON1);
+    }
+
+    /**
+     * The scenario is SET_TEXT, then {@code next}. The second action set the status label to {@code statusAfter}.
+     * The SET_TEXT snapshot shows the typed text and the status of before; the snapshot of the next step shows the new status.
+     */
+    private void assertTextStepThen(Action.Type next, String statusAfter) throws Exception {
+        assertEquals(statusAfter, Quiescence.onEdt(new Callable<String>() {
             public String call() {
                 return status.getText();
             }
         }));
-
         List<Step> steps = recorder.scenario().steps;
         assertEquals(describe(steps), 2, steps.size());
-        assertEquals(Action.Type.SET_TEXT, steps.get(0).action.type);
-        assertEquals(Action.Type.CLICK, steps.get(1).action.type);
+        assertEquals(describe(steps), Action.Type.SET_TEXT, steps.get(0).action.type);
+        assertEquals(describe(steps), next, steps.get(1).action.type);
         long deadline = System.currentTimeMillis() + 10000;
         while (!(recorder.hasSnapshot(steps.get(0)) && recorder.hasSnapshot(steps.get(1)))) {
             if (System.currentTimeMillis() > deadline) fail("no snapshots");
@@ -177,7 +251,7 @@ public class RecorderWindowTest {
         Snapshot setText = recorder.snapshot(steps.get(0));
         assertEquals("Kerem", node(setText, "t.name").text);
         assertEquals("idle", node(setText, "t.status").text);
-        assertEquals("done", node(recorder.snapshot(steps.get(1)), "t.status").text);
+        assertEquals(statusAfter, node(recorder.snapshot(steps.get(1)), "t.status").text);
     }
 
     /** Gives focus and key events of the test frame to the component, with no check of the focused window. */

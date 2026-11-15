@@ -151,6 +151,11 @@ final class Recorder implements AWTEventListener {
         if (isSmokerUi(src)) return;
 
         int id = event.getID();
+        if (id == MouseEvent.MOUSE_PRESSED && editing != null && !SwingUtilities.isDescendingFrom(src, editing)) {
+            // A target that takes no focus (menu item, toolbar button) gives the field no FOCUS_LOST.
+            // Flush the typed text now, so that SET_TEXT comes before the click and has its own snapshot (F-21).
+            flushText();
+        }
         if (id == MouseEvent.MOUSE_PRESSED || id == KeyEvent.KEY_PRESSED || id == FocusEvent.FOCUS_GAINED) {
             // First input of the next step: the component has not processed it yet (F-21).
             takePendingSnapshots();
