@@ -20,8 +20,8 @@ public final class SnapshotDiff {
     public static List<String> diff(Snapshot expected, Snapshot actual, IgnoreRules rules) {
         List<String> out = new ArrayList<String>();
         if (rules == null) rules = new IgnoreRules();
-        Map<String, NodeSnapshot> exp = flatten(expected);
-        Map<String, NodeSnapshot> act = flatten(actual);
+        Map<String, NodeSnapshot> exp = byPath(expected);
+        Map<String, NodeSnapshot> act = byPath(actual);
 
         for (Map.Entry<String, NodeSnapshot> e : exp.entrySet()) {
             String path = e.getKey();
@@ -59,14 +59,10 @@ public final class SnapshotDiff {
         return o == null ? "<null>" : (o instanceof String ? "\"" + o + "\"" : o.toString());
     }
 
-    public static Map<String, NodeSnapshot> flatten(Snapshot s) {
-        Map<String, NodeSnapshot> m = new LinkedHashMap<String, NodeSnapshot>();
-        if (s != null) for (NodeSnapshot w : s.windows) walk(w, m);
+    /** The nodes of a snapshot by path, in the order of {@link Snapshot#nodes}. */
+    public static LinkedHashMap<String, NodeSnapshot> byPath(Snapshot s) {
+        LinkedHashMap<String, NodeSnapshot> m = new LinkedHashMap<String, NodeSnapshot>();
+        if (s != null) for (NodeSnapshot n : s.nodes) m.put(n.path, n);
         return m;
-    }
-
-    private static void walk(NodeSnapshot n, Map<String, NodeSnapshot> m) {
-        m.put(n.path, n);
-        if (n.children != null) for (NodeSnapshot c : n.children) walk(c, m);
     }
 }

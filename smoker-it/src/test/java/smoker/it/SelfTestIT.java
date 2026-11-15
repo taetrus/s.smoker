@@ -106,7 +106,7 @@ public class SelfTestIT {
         assertEquals(run3.output, RunResult.Status.FAIL, r3.status);
         RunResult.StepResult s002 = assertStepStatus(r3, "s002", RunResult.Status.FAIL);
         assertTrue(String.valueOf(s002.differences),
-                contains(s002.differences, "CHANGED ", "/#demo.lang .text: expected=\"tr\" actual=\"de\""));
+                contains(s002.differences, "CHANGED [#demo.frame]/#demo.lang ", ".text: expected=\"tr\" actual=\"de\""));
         assertJUnitXmlIsValid(dir.resolve("run3/junit.xml"));
     }
 

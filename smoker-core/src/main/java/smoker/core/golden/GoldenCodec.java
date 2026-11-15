@@ -54,7 +54,7 @@ public final class GoldenCodec {
                 }
             }
             Snapshot s = new Snapshot();
-            s.windows.addAll(state.values());
+            s.nodes.addAll(state.values());
             out.put(step.id, s);
         }
         return out;
@@ -82,10 +82,10 @@ public final class GoldenCodec {
         return c;
     }
 
-    /** Flat copies of all nodes of a snapshot, sorted by path, without children. */
+    /** Copies of all nodes of a snapshot, sorted by path. */
     private static TreeMap<String, NodeSnapshot> nodes(Snapshot s) {
         TreeMap<String, NodeSnapshot> m = new TreeMap<String, NodeSnapshot>();
-        for (NodeSnapshot n : SnapshotDiff.flatten(s).values()) m.put(n.path, copy(n));
+        for (NodeSnapshot n : SnapshotDiff.byPath(s).values()) m.put(n.path, copy(n));
         return m;
     }
 

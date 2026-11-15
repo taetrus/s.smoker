@@ -15,24 +15,23 @@ import static org.junit.Assert.assertTrue;
 
 public class SnapshotDiffTest {
 
-    private static NodeSnapshot node(String path, String text, NodeSnapshot... children) {
+    private static NodeSnapshot node(String path, String text) {
         NodeSnapshot n = new NodeSnapshot();
         n.path = path;
         n.type = "JLabel";
         n.text = text;
         n.visible = Boolean.TRUE;
-        if (children.length > 0) n.children = new ArrayList<NodeSnapshot>(Arrays.asList(children));
         return n;
     }
 
-    private static Snapshot snapshot(NodeSnapshot... windows) {
+    private static Snapshot snapshot(NodeSnapshot... nodes) {
         Snapshot s = new Snapshot();
-        s.windows.addAll(Arrays.asList(windows));
+        s.nodes.addAll(Arrays.asList(nodes));
         return s;
     }
 
     private static Snapshot demo(String resultText) {
-        return snapshot(node("[Demo]", null, node("[Demo]/#demo.result", resultText), node("[Demo]/#demo.name", "Kerem")));
+        return snapshot(node("[Demo]", null), node("[Demo]/#demo.name", "Kerem"), node("[Demo]/#demo.result", resultText));
     }
 
     @Test
@@ -50,26 +49,26 @@ public class SnapshotDiffTest {
     public void nonStringAttributesAndNullAreFormatted() {
         Snapshot e = demo("x");
         Snapshot a = demo("x");
-        e.windows.get(0).children.get(0).selectedIndex = 1;
-        a.windows.get(0).children.get(0).selectedIndex = 2;
-        a.windows.get(0).children.get(1).enabled = Boolean.FALSE;
+        e.nodes.get(2).selectedIndex = 1;
+        a.nodes.get(2).selectedIndex = 2;
+        a.nodes.get(1).enabled = Boolean.FALSE;
         List<String> d = SnapshotDiff.diff(e, a, new IgnoreRules());
         assertEquals(Arrays.asList(
-                "CHANGED [Demo]/#demo.result .selectedIndex: expected=1 actual=2",
-                "CHANGED [Demo]/#demo.name .enabled: expected=<null> actual=false"), d);
+                "CHANGED [Demo]/#demo.name .enabled: expected=<null> actual=false",
+                "CHANGED [Demo]/#demo.result .selectedIndex: expected=1 actual=2"), d);
     }
 
     @Test
     public void missingAndUnexpectedNodesAreReported() {
-        Snapshot e = snapshot(node("[Demo]", null, node("[Demo]/#old", "a")));
-        Snapshot a = snapshot(node("[Demo]", null, node("[Demo]/#new", "a")));
+        Snapshot e = snapshot(node("[Demo]", null), node("[Demo]/#old", "a"));
+        Snapshot a = snapshot(node("[Demo]", null), node("[Demo]/#new", "a"));
         assertEquals(Arrays.asList("MISSING [Demo]/#old", "UNEXPECTED [Demo]/#new"),
                 SnapshotDiff.diff(e, a, new IgnoreRules()));
     }
 
     @Test
     public void nullExpectedSnapshotReportsEachActualNodeAsUnexpected() {
-        assertEquals(Arrays.asList("UNEXPECTED [Demo]", "UNEXPECTED [Demo]/#demo.result", "UNEXPECTED [Demo]/#demo.name"),
+        assertEquals(Arrays.asList("UNEXPECTED [Demo]", "UNEXPECTED [Demo]/#demo.name", "UNEXPECTED [Demo]/#demo.result"),
                 SnapshotDiff.diff(null, demo("x"), new IgnoreRules()));
     }
 
@@ -83,8 +82,8 @@ public class SnapshotDiffTest {
         IgnoreRules r = new IgnoreRules();
         r.paths.add("#demo\\.result$");
         r.paths.add("#(old|new)");
-        Snapshot e = snapshot(node("[Demo]", null, node("[Demo]/#demo.result", "a"), node("[Demo]/#old", "a")));
-        Snapshot a = snapshot(node("[Demo]", null, node("[Demo]/#demo.result", "b"), node("[Demo]/#new", "a")));
+        Snapshot e = snapshot(node("[Demo]", null), node("[Demo]/#demo.result", "a"), node("[Demo]/#old", "a"));
+        Snapshot a = snapshot(node("[Demo]", null), node("[Demo]/#demo.result", "b"), node("[Demo]/#new", "a"));
         assertEquals(new ArrayList<String>(), SnapshotDiff.diff(e, a, r));
     }
 
@@ -104,11 +103,10 @@ public class SnapshotDiffTest {
     }
 
     @Test
-    public void flattenKeepsDepthFirstOrder() {
-        Map<String, NodeSnapshot> m = SnapshotDiff.flatten(snapshot(
-                node("[A]", null, node("[A]/p", null, node("[A]/p/x", "1")), node("[A]/q", "2")),
-                node("[B]", null)));
-        assertEquals(Arrays.asList("[A]", "[A]/p", "[A]/p/x", "[A]/q", "[B]"), new ArrayList<String>(m.keySet()));
-        assertTrue(SnapshotDiff.flatten(null).isEmpty());
+    public void byPathKeepsTheOrderOfTheNodes() {
+        Map<String, NodeSnapshot> m = SnapshotDiff.byPath(snapshot(
+                node("[A]", null), node("[A]/#p", null), node("[A]/#p/JLabel[0]", "1"), node("[B]", null)));
+        assertEquals(Arrays.asList("[A]", "[A]/#p", "[A]/#p/JLabel[0]", "[B]"), new ArrayList<String>(m.keySet()));
+        assertTrue(SnapshotDiff.byPath(null).isEmpty());
     }
 }

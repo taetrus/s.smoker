@@ -29,7 +29,7 @@ public class GoldenCodecTest {
 
     private static Snapshot snap(NodeSnapshot... nodes) {
         Snapshot s = new Snapshot();
-        for (NodeSnapshot n : nodes) s.windows.add(n);
+        for (NodeSnapshot n : nodes) s.nodes.add(n);
         return s;
     }
 
@@ -43,7 +43,7 @@ public class GoldenCodecTest {
 
     private static List<String> flatJson(Snapshot s) {
         List<String> out = new ArrayList<String>();
-        for (Map.Entry<String, NodeSnapshot> e : SnapshotDiff.flatten(s).entrySet()) {
+        for (Map.Entry<String, NodeSnapshot> e : SnapshotDiff.byPath(s).entrySet()) {
             out.add(e.getKey() + "=" + Json.toString(e.getValue()));
         }
         return out;

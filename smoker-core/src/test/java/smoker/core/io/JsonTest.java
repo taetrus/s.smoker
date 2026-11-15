@@ -38,7 +38,7 @@ public class JsonTest {
         n.text = "İsmail ğüşçö";
         n.enabled = Boolean.TRUE;
         sc.steps.get(0).expected = new Snapshot();
-        sc.steps.get(0).expected.windows.add(n);
+        sc.steps.get(0).expected.nodes.add(n);
         return sc;
     }
 
@@ -54,9 +54,9 @@ public class JsonTest {
         assertEquals(Action.Type.SET_TEXT, s1.action.type);
         assertEquals("demo.name", s1.action.locator.name);
         assertEquals("İsmail ğüşçö", s1.action.value);
-        assertEquals("İsmail ğüşçö", s1.expected.windows.get(0).text);
-        assertEquals(Boolean.TRUE, s1.expected.windows.get(0).enabled);
-        assertNull(s1.expected.windows.get(0).visible);
+        assertEquals("İsmail ğüşçö", s1.expected.nodes.get(0).text);
+        assertEquals(Boolean.TRUE, s1.expected.nodes.get(0).enabled);
+        assertNull(s1.expected.nodes.get(0).visible);
         assertEquals(Action.Type.KEY, back.steps.get(1).action.type);
         assertNull("modifier 0 is not written", back.steps.get(1).action.modifiers);
         assertNull(back.steps.get(1).expected);

@@ -98,7 +98,7 @@ sub-second attribution and MDC fields if needed.
   (combo lists, context menus) resolve their window through `JPopupMenu.getInvoker()`.
 - `SnapshotTaker` walks only visible components and skips LAF internals (`javax.swing.plaf.*`, combo arrow buttons,
   scroll-bar buttons, table-header internals) so Metal-on-Linux and Windows-LAF goldens agree.
-- Paths: `[Title]/JRootPane[0]/.../#orders.table`; `IgnoreRules.paths` are regexes on this string.
+- Paths: `[Title]/#orders.table`, `[#orders.frame]/#orders.panel/JButton[0]` (WP-02 design, section 4.2); `IgnoreRules.paths` are regexes on this string.
 - Locator lint: every visible interactive component without a name is listed in `RunResult.unnamedComponents`.
 
 ## 6. Recorder (R-20, R-26)
