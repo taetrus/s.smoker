@@ -142,8 +142,14 @@ public class SelfTestIT {
                 "--scenario", regressed.toString(), "--steps", "s002");
         assertEquals(approve3.output, 0, approve3.exit);
         assertTrue(approve3.output, approve3.output.contains("approved 1 step(s) into " + ScenarioFiles.goldenPath(regressed)));
+        assertTrue(approve3.output, approve3.output.contains("changed 1 step(s)"));
         assertTrue(approve3.output, approve3.output.contains("  s002: "));
-        assertFalse(approve3.output, approve3.output.contains("  s001: "));
+        // The same approve again changes nothing: no step line.
+        Cli again = cli("approve", "--run", dir.resolve("run3/greet-regressed").toString(),
+                "--scenario", regressed.toString(), "--steps", "s002");
+        assertEquals(again.output, 0, again.exit);
+        assertTrue(again.output, again.output.contains("changed 0 step(s)"));
+        assertFalse(again.output, again.output.contains(" component(s) changed"));
         LinkedHashMap<String, Snapshot> after = ScenarioFiles.readGolden(regressed);
         assertEquals(keys(before), keys(after));
         for (String id : before.keySet()) {
@@ -213,6 +219,7 @@ public class SelfTestIT {
 
         Cli base = run(scenario, dir.resolve("run-base"), log);
         assertEquals(base.output, 0, base.exit);
+        assertEquals(base.output, RunResult.Status.PASS, result(dir.resolve("run-base/table")).status);
 
         // R-30a: a new unnamed panel causes no difference (mode all).
         // The application logs "extra panel" when it builds the wrapper panel: the PASS is not vacuous.

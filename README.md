@@ -21,7 +21,8 @@ xvfb-run -a mvn -B verify      # Linux without a display
 ```
 
 The integration test runs `run`, `approve`, `run`, `run` on `smoker-demo/scenarios` and `run` on
-`smoker-demo/scenarios-failing`. It expects NO_GOLDEN, PASS, FAIL with `CHANGED …#demo.lang`, FAIL on a log hit and HANG.
+`smoker-demo/scenarios-failing`. It expects NO_GOLDEN, PASS, FAIL with `CHANGED …#demo.lang`, ERROR for `empty-name` and HANG.
+`empty-name` gives FAIL for s001 (a log hit) and ERROR for s002 (the action throws an exception).
 It also adds a step, removes a step and approves one step, and checks the golden file after each change.
 It copies the scenarios to `smoker-it/target/it-work` and does not change the files in the repository.
 The CLI and the demo application use the JVM and the locale of the test.
@@ -110,8 +111,10 @@ Golden file: `approve` and the recorder write the golden snapshots to `<scenario
 scenario (`orders-create.json` gives `orders-create.golden.json`). It has `schemaVersion` 2, the first step in full
 (`full`), and for each later step the changes against the step before it (`changes`). A step without a golden
 gives `NO_GOLDEN`. `approve --steps` replaces only those steps. The other steps keep their golden. A step that is
-not in the scenario leaves the golden file. `approve` prints the number of approved steps and, for each step, the
-number of changed components. `run` does not read `*.golden.json` as a scenario. Commit the golden file with the scenario.
+not in the scenario leaves the golden file. `approve` prints the number of approved steps, the number of changed
+steps and, for each changed step, the number of changed components. `approve` warns about a `--steps` id that is not
+in the run. If the run used another `compare` mode than the scenario, `approve` writes nothing and exits with 2.
+`run` does not read `*.golden.json` as a scenario. Commit the golden file with the scenario.
 
 Each change entry has the `path` of one component and an `op`. `add` gives the new component in full in `node`.
 `set` gives in `node` only the attributes with a new value. `set` lists in `unset` the attributes that have no value now.

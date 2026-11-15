@@ -209,4 +209,22 @@ public class JsonTest {
         Json.write(gf, g);
         assertEquals(Json.toString(g), Json.toString(Json.read(gf, Golden.class)));
     }
+
+    /** The compact printer escapes as JSON needs, writes UTF-8 and does no HTML escaping. */
+    @Test
+    public void compactOutputEscapesSpecialCharacters() throws Exception {
+        String special = "q\"b\\n\nt\tc\u0001 ç ğ İ <&>";
+        StringBuilder longText = new StringBuilder(special);
+        while (longText.length() < 120) longText.append(' ').append(special);
+        for (String text : Arrays.asList(special, longText.toString())) {
+            NodeSnapshot n = label("[W]/#a", text);
+            Path f = tmp.getRoot().toPath().resolve("e.json");
+            Json.write(f, n);
+            String written = written(f);
+            assertEquals(written, text, Json.read(f, NodeSnapshot.class).text);
+            assertTrue(written, written.contains("<&>"));
+            assertTrue(written, written.contains("ç ğ İ"));
+            assertTrue(written, written.contains("q\\\"b\\\\n\\nt\\tc\\u0001"));
+        }
+    }
 }

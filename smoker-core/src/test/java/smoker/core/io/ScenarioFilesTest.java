@@ -180,4 +180,28 @@ public class ScenarioFilesTest {
         assertEquals(f + ": compare must be \"all\" or \"named\", not \"some\".", refusal(f, false));
         assertEquals("named", ScenarioFiles.readScenario(file("d.json", "{'schemaVersion':2,'name':'d','compare':'named','steps':[]}")).compare);
     }
+
+    @Test
+    public void invalidWindowKeyIsRefused() throws Exception {
+        Path f = file("w.json", "{'schemaVersion': 2, 'name': 'w', 'windowKeys': [{'pattern': 'Edit(or', 'key': 'E'}], 'steps': []}");
+        String m = refusal(f, false);
+        assertTrue(m, m.startsWith(f + ": windowKeys: invalid pattern 'Edit(or': "));
+        Path noKey = file("k.json", "{'schemaVersion': 2, 'name': 'k', 'windowKeys': [{'pattern': 'x'}], 'steps': []}");
+        assertEquals(noKey + ": windowKeys: invalid pattern 'x': pattern and key are required", refusal(noKey, false));
+        Path noPattern = file("p.json", "{'schemaVersion': 2, 'name': 'p', 'windowKeys': [{'key': 'x'}], 'steps': []}");
+        assertEquals(noPattern + ": windowKeys: invalid pattern 'null': pattern and key are required", refusal(noPattern, false));
+        Path nullRule = file("n.json", "{'schemaVersion': 2, 'name': 'n', 'windowKeys': [null], 'steps': []}");
+        assertEquals(nullRule + ": windowKeys: invalid pattern 'null': pattern and key are required", refusal(nullRule, false));
+        Path ok = file("o.json", "{'schemaVersion': 2, 'name': 'o', 'windowKeys': [{'pattern': 'Editor - .*', 'key': 'Editor'}], 'steps': []}");
+        assertEquals("Editor", ScenarioFiles.readScenario(ok).windowKeys.get(0).key);
+    }
+
+    @Test
+    public void goldenWithoutStepsOrWithANullStepIsRefused() throws Exception {
+        Path f = tmp.getRoot().toPath().resolve("greet.json");
+        Path g = file("greet.golden.json", "{'schemaVersion': 2, 'scenario': 'greet', 'steps': null}");
+        assertEquals(g + ": \"steps\" is missing.", refusal(f, true));
+        file("greet.golden.json", "{'schemaVersion': 2, 'scenario': 'greet', 'steps': [{'id': 's001', 'full': []}, null]}");
+        assertEquals(g + ": step 2 of \"steps\" is null.", refusal(f, true));
+    }
 }

@@ -10,6 +10,7 @@ import javax.swing.JList;
 import javax.swing.JPasswordField;
 import javax.swing.JTabbedPane;
 import javax.swing.JTable;
+import javax.swing.JToolTip;
 import javax.swing.JTree;
 import javax.swing.text.JTextComponent;
 import javax.swing.tree.TreePath;
@@ -61,6 +62,7 @@ final class SnapshotTaker {
         for (Window w : Window.getWindows()) {
             if (!w.isShowing()) continue;
             if (w.getName() != null && w.getName().startsWith(SMOKER_WINDOW_PREFIX)) continue;
+            if (onlyToolTips(w)) continue;   // a tool tip across the frame edge has its own window
             String title = Locators.titleOf(w);
             String name = applicationName(w);
             String key = Locators.keyOf(w);
@@ -130,6 +132,29 @@ final class SnapshotTaker {
                 || c instanceof javax.swing.JScrollBar || c instanceof javax.swing.CellRendererPane || lafInternal(c);
     }
 
+    /**
+     * True when {@code c} shows at least one tool tip and nothing else that a snapshot compares.
+     * A tool tip shows only while the mouse hovers, and replay does not hover: it gives no node (F-21).
+     */
+    static boolean onlyToolTips(Container c) {
+        int[] tips = {0};
+        return !otherContent(c, tips) && tips[0] > 0;
+    }
+
+    /** True when a visible descendant of {@code p} outside a tool tip gives a node. Counts the tool tips in {@code tips[0]}. */
+    private static boolean otherContent(Container p, int[] tips) {
+        for (Component k : p.getComponents()) {
+            if (!k.isVisible() || lafInternal(k)) continue;
+            if (k instanceof JToolTip) {
+                tips[0]++;
+                continue;
+            }
+            if (applicationName(k) != null || !isLayoutContainer(k)) return true;
+            if (k instanceof Container && otherContent((Container) k, tips)) return true;
+        }
+        return false;
+    }
+
     /** The name the application gave the component, or null when it has none (no name or a generated name). */
     private static String applicationName(Component c) {
         String n = c.getName();
@@ -168,9 +193,11 @@ final class SnapshotTaker {
     private void walk(Container parent, String windowPart, String anchor, Map<String, Integer> counters,
                       Map<String, Integer> names, Set<String> taken, List<NodeSnapshot> out) {
         for (Component k : parent.getComponents()) {
-            if (!k.isVisible() || lafInternal(k)) continue;
+            if (!k.isVisible() || lafInternal(k) || k instanceof JToolTip) continue;
             String childAnchor = anchor;
             String name = applicationName(k);
+            // An unnamed holder of a tool tip (the panel of a medium-weight popup) gives no node either.
+            if (name == null && !isLayoutContainer(k) && k instanceof Container && onlyToolTips((Container) k)) continue;
             if (name != null || !isLayoutContainer(k)) {
                 String cls = Locators.classNameOf(k);
                 int idx = next(counters, anchor + "/" + cls);
@@ -194,7 +221,17 @@ final class SnapshotTaker {
         return javax.swing.SwingUtilities.getAncestorOfClass(javax.swing.JOptionPane.class, c) != null;
     }
 
-    /** The text of the first rows of a table as the user sees it: the renderer label text, else the value. */
+    /**
+     * The text of a cell as the user sees it: the text of a label renderer, the text of a text component renderer
+     * (a password field gives {@link #MASK}, F-19), else the value.
+     */
+    private static String cellText(Component renderer, Object value) {
+        if (renderer instanceof JLabel) return ((JLabel) renderer).getText();
+        if (renderer instanceof JTextComponent) return textOf((JTextComponent) renderer);
+        return String.valueOf(value);
+    }
+
+    /** The text of the first rows of a table as the user sees it ({@link #cellText}). */
     private List<List<String>> tableCells(JTable t) {
         List<List<String>> rows = new ArrayList<List<String>>();
         int nr = Math.min(maxRows, t.getRowCount());
@@ -202,7 +239,7 @@ final class SnapshotTaker {
             List<String> row = new ArrayList<String>();
             for (int c = 0; c < t.getColumnCount(); c++) {
                 Component rc = t.prepareRenderer(t.getCellRenderer(r, c), r, c);
-                row.add(rc instanceof JLabel ? ((JLabel) rc).getText() : String.valueOf(t.getValueAt(r, c)));
+                row.add(cellText(rc, t.getValueAt(r, c)));
             }
             rows.add(row);
         }
@@ -215,7 +252,7 @@ final class SnapshotTaker {
         for (int i = 0; i < n; i++) {
             E v = l.getModel().getElementAt(i);
             Component rc = l.getCellRenderer().getListCellRendererComponent(l, v, i, l.isSelectedIndex(i), false);
-            items.add(rc instanceof JLabel ? ((JLabel) rc).getText() : String.valueOf(v));
+            items.add(cellText(rc, v));
         }
         return items;
     }

@@ -6,6 +6,7 @@ import smoker.core.golden.GoldenCodec;
 import smoker.core.model.Golden;
 import smoker.core.model.Scenario;
 import smoker.core.model.Snapshot;
+import smoker.core.model.WindowKey;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -25,7 +26,7 @@ public final class ScenarioFiles {
 
     private ScenarioFiles() {}
 
-    /** @throws IllegalArgumentException for the old format or a newer schemaVersion */
+    /** @throws IllegalArgumentException for the old format, a newer schemaVersion, a wrong compare or window key */
     public static Scenario readScenario(Path file) throws IOException {
         JsonObject root = checkedRoot(file);
         JsonElement steps = root.get("steps");
@@ -37,6 +38,11 @@ public final class ScenarioFiles {
         Scenario sc = Json.fromTree(root, Scenario.class);
         if (!"all".equals(sc.compare) && !"named".equals(sc.compare)) {
             throw new IllegalArgumentException(file + ": compare must be \"all\" or \"named\", not \"" + sc.compare + "\".");
+        }
+        try {
+            WindowKey.compile(sc.windowKeys);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException(file + ": " + e.getMessage(), e);
         }
         return sc;
     }
@@ -61,8 +67,10 @@ public final class ScenarioFiles {
         Path file = goldenPath(scenario);
         if (!Files.exists(file)) return new LinkedHashMap<String, Snapshot>();
         Golden g = Json.fromTree(checkedRoot(file), Golden.class);
+        if (g.steps == null) throw new IllegalArgumentException(file + ": \"steps\" is missing.");
         for (int i = 0; i < g.steps.size(); i++) {
             Golden.GoldenStep s = g.steps.get(i);
+            if (s == null) throw new IllegalArgumentException(file + ": step " + (i + 1) + " of \"steps\" is null.");
             boolean ok = i == 0 ? s.full != null && s.changes == null : s.changes != null && s.full == null;
             if (!ok) {
                 throw new IllegalArgumentException(file + ": step " + s.id

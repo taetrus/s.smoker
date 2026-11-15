@@ -62,8 +62,7 @@ public final class Main {
         Map<Path, Scenario> parsed = new HashMap<Path, Scenario>();
         try {
             for (Path sc : scenarios) {
-                parsed.put(sc, ScenarioFiles.readScenario(sc));
-                ScenarioFiles.readGolden(sc);
+                parsed.put(sc, validated(sc));
             }
         } catch (IllegalArgumentException e) {
             System.err.println(e.getMessage());
@@ -128,6 +127,15 @@ public final class Main {
     static int record(Map<String, String> o) throws Exception {
         Path agent = Paths.get(req(o, "agent")).toAbsolutePath();
         Path scenario = Paths.get(req(o, "scenario")).toAbsolutePath();
+        // The agent continues an existing scenario. Check it here: the agent can only log a wrong file.
+        if (Files.exists(scenario)) {
+            try {
+                validated(scenario);
+            } catch (IllegalArgumentException e) {
+                System.err.println(e.getMessage());
+                return 2;
+            }
+        }
         String agentArgs = "mode=record;scenario=" + scenario + (o.containsKey("log") ? ";log=" + o.get("log") : "");
         Path log = scenario.getParent().resolve(stripExt(scenario.getFileName().toString()) + ".record.log");
         int exit = launch(req(o, "app"), agent, agentArgs, log, Long.MAX_VALUE);
@@ -150,7 +158,21 @@ public final class Main {
             System.err.println(e.getMessage());
             return 2;
         }
+        // A golden of the other compare mode has other nodes: every later run would fail.
+        String runCompare = r.compare != null ? r.compare : "all";
+        if (!runCompare.equals(sc.compare)) {
+            System.err.println("approve: run used compare=" + runCompare + ", scenario has compare=" + sc.compare
+                    + "; golden would not match");
+            return 2;
+        }
         List<String> only = o.containsKey("steps") ? Arrays.asList(o.get("steps").split(",")) : null;
+        if (only != null) {
+            Set<String> inRun = new HashSet<String>();
+            for (RunResult.StepResult sr : r.steps) inRun.add(sr.stepId);
+            for (String id : only) {
+                if (!inRun.contains(id)) System.err.println("approve: step " + id + " is not in the run");
+            }
+        }
         Map<String, Snapshot> merged = new HashMap<String, Snapshot>(old);
         List<String> approved = new ArrayList<String>();
         for (RunResult.StepResult sr : r.steps) {
@@ -167,10 +189,16 @@ public final class Main {
         }
         String name = sc.name != null ? sc.name : stripExt(scFile.getFileName().toString());
         ScenarioFiles.writeGolden(scFile, name, golden);
-        System.out.println("approved " + approved.size() + " step(s) into " + ScenarioFiles.goldenPath(scFile));
+        // Spec 4.5: how many steps changed and, for each step, the number of changed components.
+        Map<String, Integer> changed = new LinkedHashMap<String, Integer>();
         for (String id : approved) {
             int k = changedComponents(old.get(id), golden.get(id));
-            if (k > 0) System.out.println("  " + id + ": " + k + " component(s) changed");
+            if (k > 0) changed.put(id, k);
+        }
+        System.out.println("approved " + approved.size() + " step(s) into " + ScenarioFiles.goldenPath(scFile));
+        System.out.println("changed " + changed.size() + " step(s)");
+        for (Map.Entry<String, Integer> e : changed.entrySet()) {
+            System.out.println("  " + e.getKey() + ": " + e.getValue() + " component(s) changed");
         }
         return 0;
     }
@@ -191,6 +219,17 @@ public final class Main {
     }
 
     // ---- helpers -------------------------------------------------------------------------------
+
+    /**
+     * Reads the scenario file and its golden file, so that a wrong file stops the command before the application starts.
+     *
+     * @throws IllegalArgumentException for the old format, a newer schemaVersion or a wrong structure
+     */
+    static Scenario validated(Path scenario) throws IOException {
+        Scenario sc = ScenarioFiles.readScenario(scenario);
+        ScenarioFiles.readGolden(scenario);
+        return sc;
+    }
 
     /** @return exit code, or -999 if killed on timeout. */
     static int launch(String appCmd, Path agentJar, String agentArgs, Path outputLog, long budgetMs) throws IOException, InterruptedException {

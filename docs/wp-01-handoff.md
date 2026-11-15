@@ -96,6 +96,9 @@ The goldens are now in a golden file beside each scenario. The pilot has no gold
 4. Run each scenario again. Expect PASS for `pilot.json`.
    `hang.json` and `crash.json` give HANG and ERROR (report section 4). Their steps have no snapshot, so their golden files have no steps.
 5. Copy the golden files to `docs/wp-01-pilot/` and commit them.
+6. In the WP-06 recording session, make a test for focus changes. The recorder takes the pending snapshot of a step at `FOCUS_GAINED`.
+   - [ ] Record a step whose action opens a dialog. Make sure that the golden of the step shows the dialog.
+   - [ ] Record a step after which the application moves the focus by code. Make sure that the golden of the step is not taken too early.
 
 ## 6. Open points
 
@@ -104,7 +107,6 @@ The goldens are now in a golden file beside each scenario. The pilot has no gold
 
 | Point | Effect | Work package |
 |---|---|---|
-| The player stops at the first step that does not pass. | Each `approve` corrects one step (F-21). Step `s002` of `empty-name.json` never runs. | WP-02, WP-04 |
 | The `build` job in `.gitlab-ci.yml` uses `-DskipTests`. | CI does not run the unit tests. | WP-07 |
 | Without a display, `SelfTestIT` fails and the window tests are skipped. | A developer on Linux must use `xvfb-run -a mvn -B verify`. The CI uses Windows runners (decision 5). | WP-07 |
 | Equinox framework errors are not read (F-22). | A product with unresolved bundles gives startup PASS. | WP-04 |
