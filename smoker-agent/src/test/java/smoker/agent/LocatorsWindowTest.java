@@ -231,12 +231,28 @@ public class LocatorsWindowTest {
         assertNull(find(l));
     }
 
+    /** Two panels of one class: the automatic name is not unique, so the locator is the WP-02 one. */
+    @Test
+    public void repeatedAutomaticNameGivesTheUnnamedLocator() throws Exception {
+        addOrdersPanel();
+        final OrdersPanel second = addOrdersPanel();
+        Locator l = onEdt(new Callable<Locator>() {
+            public Locator call() {
+                return Locators.resolve(second.saveButton());
+            }
+        });
+        assertNull(l.toString(), l.name);
+        assertEquals("Save", l.text);
+        assertSame(second.saveButton(), find(l));
+    }
+
     /** Adds an application panel with an unnamed button in a field to the frame. */
     private OrdersPanel addOrdersPanel() throws Exception {
         return onEdt(new Callable<OrdersPanel>() {
             public OrdersPanel call() {
                 OrdersPanel o = new OrdersPanel();
-                frame.getContentPane().add(o, java.awt.BorderLayout.SOUTH);
+                frame.getContentPane().add(o, frame.getContentPane().getComponentCount() == 1
+                        ? java.awt.BorderLayout.SOUTH : java.awt.BorderLayout.NORTH);
                 frame.pack();
                 return o;
             }

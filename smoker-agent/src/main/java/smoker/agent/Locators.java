@@ -56,8 +56,15 @@ final class Locators {
         Window w = logicalWindowOf(c);
         l.windowTitle = keyOf(w);
         l.className = classNameOf(c);
-        l.name = nameOf(c);
+        l.name = realName(c);
         if (l.name != null) return l;
+        // An automatic name is a locator only when it is unique in the window. Two panels of one class give
+        // the same name, and find would give the first one: such a component gets the locator of an unnamed one.
+        AutoNames.Hit auto = AutoNames.of(c);
+        if (auto != null && uniqueIn(w, c, auto.name)) {
+            l.name = auto.name;
+            return l;
+        }
         l.text = textOf(c);
         // index among same class + text within the window
         int idx = 0;
@@ -77,7 +84,21 @@ final class Locators {
         return l;
     }
 
-    /** Name prefixes that Swing UI delegates give to the parts they make, such as "Spinner.formattedTextField". */
+    /** True when no other component of {@code w} has the name {@code name} ({@link #nameOf}). */
+    private static boolean uniqueIn(Window w, Component c, String name) {
+        if (w == null) return true;
+        for (Component o : allComponents(w)) {
+            if (o != c && name.equals(nameOf(o))) return false;
+        }
+        return true;
+    }
+
+    /**
+     * Name prefixes that Swing UI delegates give to the parts they make, such as "Spinner.formattedTextField".
+     * The check is case-sensitive. An application name that starts with one of these prefixes, such as
+     * "Table.orders", also counts as a generated name. This is accepted: application names follow the
+     * lower-case {@code <view>.<widget>} rule.
+     */
     private static final String[] UI_DELEGATE_PREFIXES = {
             "Spinner.", "ComboBox.", "Table.", "Tree.", "List.", "FileChooser.", "ColorChooser."};
 
