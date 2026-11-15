@@ -5,10 +5,12 @@ compares semantic component snapshots with golden snapshots, and reads the appli
 
 ## Read first
 
-1. `docs/development-plan.md` — audit findings F-01..F-18, changed requirements, work packages WP-01..WP-09. **This is the backlog.**
-2. `docs/architecture.md` — design decisions and class map of the current skeleton.
-3. `docs/requirements.md` — original requirements. The development plan wins where they differ.
-4. `README.md` — build and CLI usage.
+1. `docs/development-plan.md` — audit findings F-01..F-23, changed requirements, work packages WP-01..WP-09. **This is the backlog.**
+2. `docs/wp-01-handoff.md` — WP-01 state and the commands that operated on Windows.
+3. `docs/wp-01-pilot-report.md` — WP-01 test report (pilot on Windows). Reports stay in `docs/` (decision 6).
+4. `docs/architecture.md` — design decisions and class map of the current skeleton.
+5. `docs/requirements.md` — original requirements. The development plan wins where they differ.
+6. `README.md` — build and CLI usage.
 
 ## Hard constraints
 
@@ -18,29 +20,45 @@ compares semantic component snapshots with golden snapshots, and reads the appli
 - Every Swing access goes through the EDT. Never wait on an action `Runnable` directly: a modal dialog blocks it. Wait for a later ping (`Quiescence.edtResponds`).
 - All case conversion uses `Locale.ROOT` (Turkish locale defect F-16).
 - Windows named `smoker.*` are the tool's own UI. Exclude them from recording and snapshots.
+- Never write the text of a `JPasswordField` to a scenario, a snapshot or a report (F-19). The snapshot gives `***` or `""`.
+- `Locators.resolve` and `Locators.find` must use the same class rule, `Locators.classNameOf` (F-23).
 - Target applications: Swing in Equinox/OSGi, SLF4J + Logback in bundles, hardware simulator behind the UI.
 - Corporate build is air-gapped behind Nexus: add no dependency without a clear need.
 
 ## Commands
 
 ```bash
-mvn -B package                         # build all modules
-xvfb-run -a ./selftest.sh              # Linux, no display: full record-free cycle on the demo application
-./selftest.sh                          # macOS / Linux with a display
+mvn -B package                         # build all modules, run the unit tests
+mvn -B verify                          # also the integration test smoker-it (macOS / Windows / Linux with a display)
+xvfb-run -a mvn -B verify              # Linux, no display
+mvn -B verify -Plocale-tr              # all tests in tr_TR (F-16)
 ```
 
-`selftest.sh` must show: run1 NO_GOLDEN, run2 PASS, run3 FAIL with `CHANGED #demo.lang`, run4 FAIL (log hit) and HANG.
-Run it after every change to `smoker-agent` or `smoker-core`.
+Windows (PowerShell 5.1): put each `-D` argument in quotes, for example `"-Djvm=C:\Program Files\Java\jdk1.8.0_341\bin\java.exe"`.
+For the CLI, write each inner quote of `--app` as `\"` and enclose the value in single quotes. `!` in Claude Code runs Git Bash, not PowerShell.
 
-## State on 2026-11-12
+`SelfTestIT` replaces `selftest.sh`. It expects run1 NO_GOLDEN, run2 PASS, run3 FAIL with `CHANGED #demo.lang`,
+run4 FAIL (log hit) and HANG. Run `mvn -B verify` and `mvn -B verify -Plocale-tr` after every change to `smoker-agent` or `smoker-core`.
 
-- Skeleton 0.1.0-SNAPSHOT builds and passes the self-test on JDK 21 + Xvfb only.
-- Not verified: JRE 8/11/17 at run time, Windows, a real Equinox application, the recorder toolbar with a person.
-- No unit tests exist.
+## State on 2026-11-14
+
+- WP-01 complete on 2026-11-15. Branch `wp-01-test-base`, pushed. Next: WP-02.
+- Tests: 22 in `smoker-core`, 28 in `smoker-agent`, 2 IT. They pass on macOS and on Windows 11
+  (JDK 25, default locale and tr_TR, and tr_TR with JRE 8 as test JVM).
+- WP-01 tasks 1–4, 6 and 7–10 done. The pilot p.osgi.ds operated on Windows with JRE 8u341:
+  - five-step scenario `docs/wp-01-pilot/pilot.json`: PASS 3 times in sequence;
+  - HANG test on spike.master: HANG with a thread dump; crash test: ERROR with exit code 7;
+  - lint: 14 unnamed interactive components, 0 named (input for WP-09).
+- Findings from the pilot: F-19, F-20, F-23 corrected. F-21 (WP-02, WP-06) and F-22 (WP-04) open. F-02 confirmed (WP-03).
+- 2026-11-15: the code of 2026-11-14 also passes on macOS (JDK 27 default and tr_TR, JRE 8 tr_TR): 22 + 28 unit tests, 2 IT.
+- Decision 5 (2026-11-15): smoke tests run on Windows only. No Linux replay in WP-01.
+- Decision 6 (2026-11-15): test reports go into `docs/` on GitHub, not Confluence. The WP-01 completion criterion passes.
+- Not verified: JRE 11 and JRE 17 at run time on a target application, a product with the hardware simulator.
 
 ## Decisions already made
 
-- Pilot application for WP-01: a typical product that uses the simulator.
+- Smoke tests run on Windows only: the target applications load Windows DLLs (2026-11-15).
+- Pilot application for WP-01 (2026-11-14): p.osgi.ds. `p2.product` for the five-step scenario, `spike.master` for HANG. No simulator: F-02 and F-04 stay untested until WP-03 and WP-05.
 - Naming rule `<view>.<widget>` applies to all teams.
 - Lint results fail the pipeline from version 1.1, against a baseline file (only new results fail).
 - WP-09 (naming assistant) follows WP-01.
@@ -52,3 +70,5 @@ Run it after every change to `smoker-agent` or `smoker-core`.
 - Each work package has a completion criterion in the plan. Do not report a work package as complete before the criterion passes.
 - When a change alters the scenario or golden file format, update `README.md` and the demo scenarios in the same commit.
 - Write documentation in Simplified Technical English: short sentences, active voice, one term for one thing.
+- Commit with the GitHub noreply address `6750412+taetrus@users.noreply.github.com`. GitHub rejects a push that contains
+  the private address (GH007). The repository config (`git config --local user.email`) sets the noreply address.

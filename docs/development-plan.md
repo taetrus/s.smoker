@@ -45,6 +45,11 @@ The audit found 18 defects or gaps. Severity A stops the use on a real applicati
 | F-16 | C | `AgentConfig` calls `toUpperCase()` without a locale. In the Turkish locale the letter `i` changes to `İ`. A value such as `evidence` can then fail to parse. | Use `Locale.ROOT` for all case changes. Run the tests with `-Duser.language=tr`. | WP-01 |
 | F-17 | C | The scenario format has no version field. Two components can have the same name. The lint does not report this. | Add `schemaVersion`. Make the lint report each name that occurs more than one time in a window. | WP-02 |
 | F-18 | C | Requirements R-05, R-15, R-34, R-41 and R-42 have no implementation. No requirement has an acceptance criterion or a priority. | Section 3 adds priorities and criteria. WP-07 and WP-08 implement the open requirements. | WP-07, WP-08 |
+| F-19 | A | The snapshot and the recorder read the text of a `JPasswordField`. A password or API key then goes into the scenario file, the golden snapshots and the reports in plain text. Found on 2026-11-14 in the settings dialog of p.osgi.ds. | Give a password field as `***` (or empty) in the snapshot. Do not record typing in a password field. Done in WP-01. | WP-01 |
+| F-20 | A | The recorder recorded a button click on `MOUSE_CLICKED`. Swing fires the action on `MOUSE_RELEASED`. If the action opens or closes a modal dialog, no `MOUSE_CLICKED` arrives, and the recorder loses the step. Found on 2026-11-14 in p.osgi.ds: the clicks on Settings and Cancel were lost (3 of 5 steps). | Record buttons and menu items on `MOUSE_RELEASED` when the model fires the action. Done in WP-01. | WP-01 |
+| F-21 | B | The recorder takes the golden snapshot of a step after the UI is quiet for `quietMs`. If the next action comes before that time, the snapshot shows the state after the next step. Found on 2026-11-14 in p.osgi.ds: `SET_TEXT` is recorded when the field loses focus, which is the press on the next button. The goldens of s002 and s004 showed the state after s003 and s005. `approve` corrects the goldens, but the player stops at the first failing step, so each `approve` corrects one step. | Take the snapshot of a step before the recorder adds the next step. Let `approve` continue after a failing step, or replay all steps in approve mode. | WP-02, WP-06 |
+| F-22 | B | The agent reads `System.err` and the log file. Equinox writes framework errors to the console (`-consoleLog`) and to `configuration/*.log`. Found on 2026-11-14 in p.osgi.ds: on JRE 8, 14 bundles of spike.master did not resolve, and startup was PASS. When the application calls `System.exit`, the report gives only the exit code. The step and the last ERROR line are only in `app-output.log`. | Read the Equinox log, or fail on `FrameworkEvent ERROR` in the application output. Write the step and the last log hits to `run-result.json` before each action. | WP-04 |
+| F-23 | A | `Locators.resolve` counts the index among components of the same class. `Locators.find` also accepts a component whose superclass has the locator class. `JPasswordField` extends `JTextField`, so the locator `JTextField` index 0 finds the password field in front of the first text field. Found on 2026-11-14 in p.osgi.ds: step s002 typed the model name into the API key field. `approve` accepted the wrong state, and the run gave PASS. | In `find`, use the same class rule as in `resolve`: the simple class name, or the superclass name only for an anonymous class. Add a test with a `JPasswordField` in front of a `JTextField`. Done in WP-01. | WP-01 |
 
 One more risk has no technical correction: a locator without a name uses the visible text. The locator fails when the language of the user interface changes. The rule must be: each interactive component gets a name.
 
@@ -64,11 +69,11 @@ Priority M = necessary for version 1.0. Priority S = necessary for version 1.1. 
 | R-37 | M | The suite file shall contain `before`, `after` and `reset` commands. | The `before` command starts the simulator. The `after` command stops it also after a failure. |
 | R-38 | M | The agent shall stop an OSGi application through the framework before it calls `System.exit`. | No lock file remains in the workspace after 20 runs. |
 | R-39 | M | The agent shall get its configuration from one properties file. | A path with `;` and spaces operates correctly on Windows. |
-| R-02a | M | The CI pipeline shall run the integration test on JRE 8, 11, 17 and 21, on Windows and Linux. | All eight jobs pass. |
+| R-02a | M | The CI pipeline shall run the integration test on JRE 8, 11, 17 and 21, on Windows (decision 5). | All four jobs pass. |
 | R-22a | S | The lint shall report missing names and names that are not unique. An option shall change lint results into failures. | A window with two components named `x` gives one lint result. |
 | R-20a | S | The recorder shall record tree selection, the double-click, the context menu, table cell edits and spinner values. | A replay of each recorded type passes on the demo application. |
 | R-34 | S | The agent shall set locale, time zone, look and feel and window size from the configuration. | The same scenario passes with operating system locale `tr_TR` and `en_US`. |
-| R-41, R-42 | S | The report shall join the results of all matrix jobs. It shall show the step results of the last 20 runs. | One report shows eight matrix columns. |
+| R-41, R-42 | S | The report shall join the results of all matrix jobs. It shall show the step results of the last 20 runs. | One report shows four matrix columns. |
 | R-05, R-15 | C | Hints API and Logback fragment (see WP-08). | See WP-08. |
 | R-40a | M | The build shall prevent the release of an application that contains the agent option. | A release build with `-javaagent:smoker` in `eclipse.ini` fails. |
 
@@ -98,13 +103,13 @@ WP-02, WP-03 and WP-04 are independent. Three developers can do them at the same
 
 | WP | Title | Findings | Effort (pd) | Result |
 |---|---|---|---|---|
-| WP-01 | Verification and test base | F-01, F-15, F-16 | 6 | Test report for one real application. Unit tests. Integration test in Maven. |
-| WP-02 | Snapshot model | F-05, F-06, F-07, F-17 | 8 | Golden file apart from the scenario. Named-component comparison. Cell content. |
+| WP-01 | Verification and test base | F-01, F-15, F-16, F-19, F-20, F-23 | 6 | Test report for one real application. Unit tests. Integration test in Maven. |
+| WP-02 | Snapshot model | F-05, F-06, F-07, F-17, F-21 | 8 | Golden file apart from the scenario. Named-component comparison. Cell content. |
 | WP-03 | Wait conditions | F-02 | 3 | `WAIT_FOR` action in player and recorder. |
-| WP-04 | Log analysis | F-08, F-09 | 4 | Level-based fail rules. One hit for each stack trace. Correct step assignment. |
+| WP-04 | Log analysis | F-08, F-09, F-22 | 4 | Level-based fail rules. One hit for each stack trace. Correct step assignment. |
 | WP-05 | Suite mode and lifecycle | F-03, F-04, F-10, F-11 | 8 | Suite file. One JVM for many scenarios. Clean OSGi stop. Properties configuration. |
-| WP-06 | Recorder | F-13, F-14 | 10 | More event types. Usability corrections. Golden preview. |
-| WP-07 | CI matrix and report | F-18 | 5 | Eight matrix jobs. Joined report. Run history. Release guard. |
+| WP-06 | Recorder | F-13, F-14, F-21 | 10 | More event types. Usability corrections. Golden preview. |
+| WP-07 | CI matrix and report | F-18 | 5 | Four matrix jobs. Joined report. Run history. Release guard. |
 | WP-08 | Extensions | F-12, F-18 | 10 | Hints API. Logback fragment. Robot fallback. Region screenshot comparison. |
 | WP-09 | Naming assistant | Risk: components without a name | 6 | Lint with proposed names. Patch lines. Automatic names at run time. |
 
@@ -118,14 +123,14 @@ Total for version 1.0 (WP-01 to WP-05, WP-09): 35 pd. Total for version 1.1 (WP-
 2. Add the agent option to `eclipse.ini` below `-vmargs`.
 3. Start the application in record mode on Windows with JRE 8.
 4. Record one scenario with five steps. Save it.
-5. Replay the scenario on Windows and on a Linux runner with Xvfb.
+5. Replay the scenario on Windows. (Decision 5 removes the Linux replay.)
 6. Write down each failure, the lint result and the startup time.
 7. Add JUnit tests for `SnapshotDiff`, `Locators`, `IgnoreRules` and `Json`.
 8. Change `selftest.sh` into a Maven integration test in module `smoker-it`.
 9. Replace each `toUpperCase()` and `toLowerCase()` call with the `Locale.ROOT` form.
 10. Run all tests with `-Duser.language=tr -Duser.country=TR`.
 
-Completion criterion: the five-step scenario passes on Windows with JRE 8 and on Linux with JRE 17. The test report is in Confluence.
+Completion criterion: the five-step scenario passes on Windows with JRE 8. The test report is in the GitHub repository (decision 6). (Decision 5 removes "on Linux with JRE 17".)
 Decision point: if the agent cannot attach to the application, stop. Analyze the launcher before you start WP-02.
 
 **WP-02 Snapshot model (8 pd)**
@@ -196,7 +201,7 @@ Completion criterion: R-20a passes. A developer who did not see the tool before 
 1. Add the parameter `--label` to the CLI. Write the label into `run-result.json`.
 2. Add the command `report --merge <dirs>`. It joins the results of all jobs into one HTML file.
 3. Keep the step results of the last 20 runs in `history.json`. Show them in the report.
-4. Add the eight matrix jobs to `.gitlab-ci.yml`.
+4. Add the four matrix jobs (Windows, JRE 8, 11, 17, 21) to `.gitlab-ci.yml`. Remove the job `smoke:linux`.
 5. Add the locale, time zone, look and feel and window size parameters (R-34).
 6. Add a Maven Enforcer rule or a script that finds `-javaagent:smoker` in a release build and fails the build.
 7. Add the command `lint --baseline <file>`. It writes the current lint results to a baseline file. The pipeline fails only for a result that is not in the baseline file.
@@ -226,7 +231,7 @@ Purpose: decrease the work to give names to the components of an existing applic
 6. Add the option `autoNames=true`. The agent then uses the name `@<Class>.<field>` at run time for a component without a name. The source code does not change.
 7. Mark each automatic name in the report. An automatic name changes when a developer renames the field.
 
-Completion criterion: on the pilot application, the tool proposes a name for a minimum of 80 % of the unnamed interactive components. A scenario that uses automatic names passes on Windows and Linux.
+Completion criterion: on the pilot application, the tool proposes a name for a minimum of 80 % of the unnamed interactive components. A scenario that uses automatic names passes on Windows.
 Sequence: do WP-09 immediately after WP-01. The lint result from WP-01 is its input.
 
 ## 5. Risks
@@ -237,11 +242,20 @@ Sequence: do WP-09 immediately after WP-01. The lint result from WP-01 is its in
 | Many components have no name. | High | Locators use text and position. Scenarios fail after layout or language changes. | Use the lint result from WP-01 to estimate the work. Add a naming rule to the code review checklist. |
 | Important state is in components that paint their own content. | Medium | The snapshot does not show the state. | Count these components in WP-01. Move the hints API from WP-08 to version 1.0 if the count is high. |
 | The simulator gives different answers in each run. | Medium | Golden snapshots fail without a software defect. | Use `ignore` rules and `WAIT_FOR`. Use simulator scenarios that do not change. |
-| The Windows runner operates as a service. | Medium | Screenshots fail. Replay and snapshots continue to operate. | Set `screenshots=off` for these runners, or run the runner in a user session. |
+| The Windows runner operates as a service. All smoke tests use Windows runners (decision 5). | Medium | Screenshots fail. Replay and snapshots continue to operate. | Set `screenshots=off` for these runners, or run the runner in a user session. |
 
 ## 6. Decisions that the owner must make
 
-1. DECIDED 2026-11-12: the pilot application for WP-01 is a typical product that uses the simulator.
+1. DECIDED 2026-11-14 (replaces the decision of 2026-11-12): the pilot application for WP-01 is p.osgi.ds.
+   The five-step scenario uses `com.kk.pde.ds.product` (`p2.product`). The HANG test uses `com.kk.pde.ds.spike.master.product`.
+   Effects: p.osgi.ds has no simulator, no component names, no `eclipse.ini` and no log file.
+   WP-01 does not test the simulator risks (F-02, F-04). WP-03 and WP-05 must test them on a product with a simulator.
+5. DECIDED 2026-11-15: the smoke tests run on Windows only. The target applications load Windows DLLs and cannot start on Linux.
+   s.smoker operates in the JVM of the application, so a Linux runner cannot test them.
+   Effects: WP-01 task 5 and the completion criterion have no Linux replay. R-02a has four jobs, not eight. R-41 shows four columns.
+   WP-07 removes the job `smoke:linux`. s.smoker itself continues to build and test on macOS and Linux (`xvfb-run`) for its developers.
+6. DECIDED 2026-11-15: test reports go into the GitHub repository (`docs/`), not into Confluence. Confluence is not available on the Atlassian site now.
+   Move the reports to Confluence when the space `s.smoker` exists.
 2. Select the number of developers who build s.smoker (not the developers of the application). With three developers, version 1.0 needs approximately three to four calendar weeks. With one developer, it needs approximately seven weeks.
 3. DECIDED 2026-11-12: the naming rule `<view>.<widget>` applies to all teams. The lint uses a baseline file. Only new lint results fail the pipeline.
 4. DECIDED 2026-11-12: lint results fail the pipeline from version 1.1.

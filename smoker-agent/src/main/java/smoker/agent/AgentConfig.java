@@ -5,6 +5,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -46,7 +47,7 @@ public final class AgentConfig {
             kv.put(part.substring(0, i).trim(), part.substring(i + 1).trim());
         }
         String mode = kv.get("mode");
-        if (mode != null) c.mode = Mode.valueOf(mode.toUpperCase());
+        if (mode != null) c.mode = Mode.valueOf(mode.toUpperCase(Locale.ROOT));
         if (kv.get("scenario") == null) throw new IllegalArgumentException("smoker: scenario=<file> is required");
         c.scenario = Paths.get(kv.get("scenario"));
         if (kv.get("out") != null) c.out = Paths.get(kv.get("out"));

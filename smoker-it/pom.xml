@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>smoker</groupId>
+    <artifactId>smoker-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>smoker-it</artifactId>
+  <name>smoker-it (end-to-end test: CLI + agent + demo application)</name>
+
+  <dependencies>
+    <!-- Reads run-result.json in the assertions. -->
+    <dependency>
+      <groupId>smoker</groupId>
+      <artifactId>smoker-core</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+    </dependency>
+    <!-- These three make the reactor build the jars before this module. The test starts them as processes. -->
+    <dependency>
+      <groupId>smoker</groupId>
+      <artifactId>smoker-agent</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>smoker</groupId>
+      <artifactId>smoker-cli</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>smoker</groupId>
+      <artifactId>smoker-demo</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <executions>
+          <execution>
+            <goals>
+              <goal>integration-test</goal>
+              <goal>verify</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <classpathDependencyExcludes>
+            <classpathDependencyExclude>smoker:smoker-agent</classpathDependencyExclude>
+            <classpathDependencyExclude>smoker:smoker-cli</classpathDependencyExclude>
+            <classpathDependencyExclude>smoker:smoker-demo</classpathDependencyExclude>
+          </classpathDependencyExcludes>
+          <systemPropertyVariables combine.children="append">
+            <smoker.agentJar>${project.basedir}/../smoker-agent/target/smoker-agent.jar</smoker.agentJar>
+            <smoker.cliJar>${project.basedir}/../smoker-cli/target/smoker-cli.jar</smoker.cliJar>
+            <smoker.demoJar>${project.basedir}/../smoker-demo/target/smoker-demo.jar</smoker.demoJar>
+            <smoker.demoDir>${project.basedir}/../smoker-demo</smoker.demoDir>
+            <smoker.workDir>${project.build.directory}/it-work</smoker.workDir>
+          </systemPropertyVariables>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

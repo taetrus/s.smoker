@@ -1,0 +1,1077 @@
+{
+  "name": "pilot",
+  "startupTimeoutMs": 60000,
+  "quietMs": 400,
+  "stepTimeoutMs": 15000,
+  "ignore": {
+    "paths": [
+      "^\\[OSGi Chatbot\\]/JRootPane\\[0\\]/JLayeredPane\\[0\\]/JPanel\\[0\\]/JPanel\\[0\\]/JComboBox\\[0\\]$",
+      "^\\[OSGi Chatbot\\]/JRootPane\\[0\\]/JLayeredPane\\[0\\]/JPanel\\[0\\]/ChatPanel\\[0\\]/JViewport\\[0\\]/JTextPane\\[0\\]$"
+    ],
+    "attributes": [],
+    "valuePatterns": []
+  },
+  "steps": [
+    {
+      "id": "s001",
+      "name": "CLICK [OSGi Chatbot] JButton('Settings')",
+      "action": {
+        "type": "CLICK",
+        "locator": {
+          "windowTitle": "OSGi Chatbot",
+          "className": "JButton",
+          "text": "Settings",
+          "x": 662,
+          "y": 54
+        }
+      },
+      "expected": {
+        "windows": [
+          {
+            "path": "[🕐 OSGi Clock]",
+            "type": "ClockFrame",
+            "title": "🕐 OSGi Clock",
+            "children": [
+              {
+                "path": "[🕐 OSGi Clock]/JRootPane[0]",
+                "type": "JRootPane",
+                "children": [
+                  {
+                    "path": "[🕐 OSGi Clock]/JRootPane[0]/JLayeredPane[0]",
+                    "type": "JLayeredPane",
+                    "children": [
+                      {
+                        "path": "[🕐 OSGi Clock]/JRootPane[0]/JLayeredPane[0]/JPanel[0]",
+                        "type": "JPanel",
+                        "children": [
+                          {
+                            "path": "[🕐 OSGi Clock]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/ClockPanel[0]",
+                            "type": "ClockPanel"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "path": "[OSGi Chatbot]",
+            "type": "ChatFrame",
+            "title": "OSGi Chatbot",
+            "children": [
+              {
+                "path": "[OSGi Chatbot]/JRootPane[0]",
+                "type": "JRootPane",
+                "children": [
+                  {
+                    "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]",
+                    "type": "JLayeredPane",
+                    "children": [
+                      {
+                        "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]",
+                        "type": "JPanel",
+                        "children": [
+                          {
+                            "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]",
+                            "type": "JPanel",
+                            "children": [
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JLabel[0]",
+                                "type": "JLabel",
+                                "text": "Model:"
+                              },
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JComboBox[0]",
+                                "type": "JComboBox",
+                                "text": "minimax/minimax-m3.1-flash:free",
+                                "itemCount": 407,
+                                "selectedIndex": -1
+                              },
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JButton[0]",
+                                "type": "JButton",
+                                "text": "Refresh Models"
+                              },
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JButton[1]",
+                                "type": "JButton",
+                                "text": "Set Default"
+                              },
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JButton[2]",
+                                "type": "JButton",
+                                "text": "Settings"
+                              }
+                            ]
+                          },
+                          {
+                            "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/ChatPanel[0]",
+                            "type": "ChatPanel",
+                            "children": [
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/ChatPanel[0]/JViewport[0]",
+                                "type": "JViewport",
+                                "children": [
+                                  {
+                                    "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/ChatPanel[0]/JViewport[0]/JTextPane[0]",
+                                    "type": "JTextPane",
+                                    "text": "\r\nTesting connection to https://openrouter.ai/api/v1...\r\n\r\nConnected! Loaded 407 tool-capable models.\r\n"
+                                  }
+                                ]
+                              },
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/ChatPanel[0]/ScrollBar[0]",
+                                "type": "ScrollBar"
+                              }
+                            ]
+                          },
+                          {
+                            "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/InputPanel[0]",
+                            "type": "InputPanel",
+                            "children": [
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/InputPanel[0]/JScrollPane[0]",
+                                "type": "JScrollPane",
+                                "children": [
+                                  {
+                                    "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/InputPanel[0]/JScrollPane[0]/JViewport[0]",
+                                    "type": "JViewport",
+                                    "children": [
+                                      {
+                                        "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/InputPanel[0]/JScrollPane[0]/JViewport[0]/JTextArea[0]",
+                                        "type": "JTextArea",
+                                        "text": ""
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/InputPanel[0]/JScrollPane[0]/ScrollBar[0]",
+                                    "type": "ScrollBar"
+                                  }
+                                ]
+                              },
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/InputPanel[0]/JPanel[0]",
+                                "type": "JPanel",
+                                "children": [
+                                  {
+                                    "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/InputPanel[0]/JPanel[0]/JButton[0]",
+                                    "type": "JButton",
+                                    "text": "Clear"
+                                  },
+                                  {
+                                    "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/InputPanel[0]/JPanel[0]/JButton[1]",
+                                    "type": "JButton",
+                                    "text": "Send"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "path": "[Settings]",
+            "type": "SettingsDialog",
+            "title": "Settings",
+            "children": [
+              {
+                "path": "[Settings]/JRootPane[0]",
+                "type": "JRootPane",
+                "children": [
+                  {
+                    "path": "[Settings]/JRootPane[0]/JLayeredPane[0]",
+                    "type": "JLayeredPane",
+                    "children": [
+                      {
+                        "path": "[Settings]/JRootPane[0]/JLayeredPane[0]/JPanel[0]",
+                        "type": "JPanel",
+                        "children": [
+                          {
+                            "path": "[Settings]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]",
+                            "type": "JPanel",
+                            "children": [
+                              {
+                                "path": "[Settings]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JLabel[0]",
+                                "type": "JLabel",
+                                "text": "API Key:"
+                              },
+                              {
+                                "path": "[Settings]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JPasswordField[0]",
+                                "type": "JPasswordField",
+                                "text": ""
+                              },
+                              {
+                                "path": "[Settings]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JLabel[1]",
+                                "type": "JLabel",
+                                "text": "Empty: no key. Set OPENROUTER_API_KEY or enter a key."
+                              },
+                              {
+                                "path": "[Settings]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JLabel[2]",
+                                "type": "JLabel",
+                                "text": "Model:"
+                              },
+                              {
+                                "path": "[Settings]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JTextField[0]",
+                                "type": "JTextField",
+                                "text": ""
+                              },
+                              {
+                                "path": "[Settings]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JLabel[3]",
+                                "type": "JLabel",
+                                "text": "Empty: uses minimax/minimax-m3.1-flash:free."
+                              },
+                              {
+                                "path": "[Settings]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JLabel[4]",
+                                "type": "JLabel",
+                                "text": "Base URL:"
+                              },
+                              {
+                                "path": "[Settings]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JTextField[1]",
+                                "type": "JTextField",
+                                "text": ""
+                              },
+                              {
+                                "path": "[Settings]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JLabel[5]",
+                                "type": "JLabel",
+                                "text": "Empty: uses https://openrouter.ai/api/v1."
+                              }
+                            ]
+                          },
+                          {
+                            "path": "[Settings]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[1]",
+                            "type": "JPanel",
+                            "children": [
+                              {
+                                "path": "[Settings]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[1]/JLabel[0]",
+                                "type": "JLabel",
+                                "text": " "
+                              },
+                              {
+                                "path": "[Settings]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[1]/JPanel[0]",
+                                "type": "JPanel",
+                                "children": [
+                                  {
+                                    "path": "[Settings]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[1]/JPanel[0]/JButton[0]",
+                                    "type": "JButton",
+                                    "text": "Test Connection"
+                                  },
+                                  {
+                                    "path": "[Settings]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[1]/JPanel[0]/JButton[1]",
+                                    "type": "JButton",
+                                    "text": "Cancel"
+                                  },
+                                  {
+                                    "path": "[Settings]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[1]/JPanel[0]/JButton[2]",
+                                    "type": "JButton",
+                                    "text": "Save"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "s002",
+      "name": "SET_TEXT [Settings] JTextField = \"MODEL\"",
+      "action": {
+        "type": "SET_TEXT",
+        "locator": {
+          "windowTitle": "Settings",
+          "className": "JTextField",
+          "x": 295,
+          "y": 159
+        },
+        "value": "MODEL"
+      },
+      "expected": {
+        "windows": [
+          {
+            "path": "[🕐 OSGi Clock]",
+            "type": "ClockFrame",
+            "title": "🕐 OSGi Clock",
+            "children": [
+              {
+                "path": "[🕐 OSGi Clock]/JRootPane[0]",
+                "type": "JRootPane",
+                "children": [
+                  {
+                    "path": "[🕐 OSGi Clock]/JRootPane[0]/JLayeredPane[0]",
+                    "type": "JLayeredPane",
+                    "children": [
+                      {
+                        "path": "[🕐 OSGi Clock]/JRootPane[0]/JLayeredPane[0]/JPanel[0]",
+                        "type": "JPanel",
+                        "children": [
+                          {
+                            "path": "[🕐 OSGi Clock]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/ClockPanel[0]",
+                            "type": "ClockPanel"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "path": "[OSGi Chatbot]",
+            "type": "ChatFrame",
+            "title": "OSGi Chatbot",
+            "children": [
+              {
+                "path": "[OSGi Chatbot]/JRootPane[0]",
+                "type": "JRootPane",
+                "children": [
+                  {
+                    "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]",
+                    "type": "JLayeredPane",
+                    "children": [
+                      {
+                        "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]",
+                        "type": "JPanel",
+                        "children": [
+                          {
+                            "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]",
+                            "type": "JPanel",
+                            "children": [
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JLabel[0]",
+                                "type": "JLabel",
+                                "text": "Model:"
+                              },
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JComboBox[0]",
+                                "type": "JComboBox",
+                                "text": "minimax/minimax-m3.1-flash:free",
+                                "itemCount": 407,
+                                "selectedIndex": -1
+                              },
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JButton[0]",
+                                "type": "JButton",
+                                "text": "Refresh Models"
+                              },
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JButton[1]",
+                                "type": "JButton",
+                                "text": "Set Default"
+                              },
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JButton[2]",
+                                "type": "JButton",
+                                "text": "Settings"
+                              }
+                            ]
+                          },
+                          {
+                            "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/ChatPanel[0]",
+                            "type": "ChatPanel",
+                            "children": [
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/ChatPanel[0]/JViewport[0]",
+                                "type": "JViewport",
+                                "children": [
+                                  {
+                                    "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/ChatPanel[0]/JViewport[0]/JTextPane[0]",
+                                    "type": "JTextPane",
+                                    "text": "\r\nTesting connection to https://openrouter.ai/api/v1...\r\n\r\nConnected! Loaded 407 tool-capable models.\r\n"
+                                  }
+                                ]
+                              },
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/ChatPanel[0]/ScrollBar[0]",
+                                "type": "ScrollBar"
+                              }
+                            ]
+                          },
+                          {
+                            "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/InputPanel[0]",
+                            "type": "InputPanel",
+                            "children": [
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/InputPanel[0]/JScrollPane[0]",
+                                "type": "JScrollPane",
+                                "children": [
+                                  {
+                                    "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/InputPanel[0]/JScrollPane[0]/JViewport[0]",
+                                    "type": "JViewport",
+                                    "children": [
+                                      {
+                                        "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/InputPanel[0]/JScrollPane[0]/JViewport[0]/JTextArea[0]",
+                                        "type": "JTextArea",
+                                        "text": ""
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/InputPanel[0]/JScrollPane[0]/ScrollBar[0]",
+                                    "type": "ScrollBar"
+                                  }
+                                ]
+                              },
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/InputPanel[0]/JPanel[0]",
+                                "type": "JPanel",
+                                "children": [
+                                  {
+                                    "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/InputPanel[0]/JPanel[0]/JButton[0]",
+                                    "type": "JButton",
+                                    "text": "Clear"
+                                  },
+                                  {
+                                    "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/InputPanel[0]/JPanel[0]/JButton[1]",
+                                    "type": "JButton",
+                                    "text": "Send"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "path": "[Settings]",
+            "type": "SettingsDialog",
+            "title": "Settings",
+            "children": [
+              {
+                "path": "[Settings]/JRootPane[0]",
+                "type": "JRootPane",
+                "children": [
+                  {
+                    "path": "[Settings]/JRootPane[0]/JLayeredPane[0]",
+                    "type": "JLayeredPane",
+                    "children": [
+                      {
+                        "path": "[Settings]/JRootPane[0]/JLayeredPane[0]/JPanel[0]",
+                        "type": "JPanel",
+                        "children": [
+                          {
+                            "path": "[Settings]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]",
+                            "type": "JPanel",
+                            "children": [
+                              {
+                                "path": "[Settings]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JLabel[0]",
+                                "type": "JLabel",
+                                "text": "API Key:"
+                              },
+                              {
+                                "path": "[Settings]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JPasswordField[0]",
+                                "type": "JPasswordField",
+                                "text": ""
+                              },
+                              {
+                                "path": "[Settings]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JLabel[1]",
+                                "type": "JLabel",
+                                "text": "Empty: no key. Set OPENROUTER_API_KEY or enter a key."
+                              },
+                              {
+                                "path": "[Settings]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JLabel[2]",
+                                "type": "JLabel",
+                                "text": "Model:"
+                              },
+                              {
+                                "path": "[Settings]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JTextField[0]",
+                                "type": "JTextField",
+                                "text": "MODEL"
+                              },
+                              {
+                                "path": "[Settings]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JLabel[3]",
+                                "type": "JLabel",
+                                "text": "Empty: uses minimax/minimax-m3.1-flash:free."
+                              },
+                              {
+                                "path": "[Settings]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JLabel[4]",
+                                "type": "JLabel",
+                                "text": "Base URL:"
+                              },
+                              {
+                                "path": "[Settings]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JTextField[1]",
+                                "type": "JTextField",
+                                "text": ""
+                              },
+                              {
+                                "path": "[Settings]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JLabel[5]",
+                                "type": "JLabel",
+                                "text": "Empty: uses https://openrouter.ai/api/v1."
+                              }
+                            ]
+                          },
+                          {
+                            "path": "[Settings]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[1]",
+                            "type": "JPanel",
+                            "children": [
+                              {
+                                "path": "[Settings]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[1]/JLabel[0]",
+                                "type": "JLabel",
+                                "text": " "
+                              },
+                              {
+                                "path": "[Settings]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[1]/JPanel[0]",
+                                "type": "JPanel",
+                                "children": [
+                                  {
+                                    "path": "[Settings]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[1]/JPanel[0]/JButton[0]",
+                                    "type": "JButton",
+                                    "text": "Test Connection"
+                                  },
+                                  {
+                                    "path": "[Settings]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[1]/JPanel[0]/JButton[1]",
+                                    "type": "JButton",
+                                    "text": "Cancel"
+                                  },
+                                  {
+                                    "path": "[Settings]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[1]/JPanel[0]/JButton[2]",
+                                    "type": "JButton",
+                                    "text": "Save"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "s003",
+      "name": "CLICK [Settings] JButton('Cancel')",
+      "action": {
+        "type": "CLICK",
+        "locator": {
+          "windowTitle": "Settings",
+          "className": "JButton",
+          "text": "Cancel",
+          "x": 400,
+          "y": 324
+        }
+      },
+      "expected": {
+        "windows": [
+          {
+            "path": "[🕐 OSGi Clock]",
+            "type": "ClockFrame",
+            "title": "🕐 OSGi Clock",
+            "children": [
+              {
+                "path": "[🕐 OSGi Clock]/JRootPane[0]",
+                "type": "JRootPane",
+                "children": [
+                  {
+                    "path": "[🕐 OSGi Clock]/JRootPane[0]/JLayeredPane[0]",
+                    "type": "JLayeredPane",
+                    "children": [
+                      {
+                        "path": "[🕐 OSGi Clock]/JRootPane[0]/JLayeredPane[0]/JPanel[0]",
+                        "type": "JPanel",
+                        "children": [
+                          {
+                            "path": "[🕐 OSGi Clock]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/ClockPanel[0]",
+                            "type": "ClockPanel"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "path": "[OSGi Chatbot]",
+            "type": "ChatFrame",
+            "title": "OSGi Chatbot",
+            "children": [
+              {
+                "path": "[OSGi Chatbot]/JRootPane[0]",
+                "type": "JRootPane",
+                "children": [
+                  {
+                    "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]",
+                    "type": "JLayeredPane",
+                    "children": [
+                      {
+                        "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]",
+                        "type": "JPanel",
+                        "children": [
+                          {
+                            "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]",
+                            "type": "JPanel",
+                            "children": [
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JLabel[0]",
+                                "type": "JLabel",
+                                "text": "Model:"
+                              },
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JComboBox[0]",
+                                "type": "JComboBox",
+                                "text": "minimax/minimax-m3.1-flash:free",
+                                "itemCount": 407,
+                                "selectedIndex": -1
+                              },
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JButton[0]",
+                                "type": "JButton",
+                                "text": "Refresh Models"
+                              },
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JButton[1]",
+                                "type": "JButton",
+                                "text": "Set Default"
+                              },
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JButton[2]",
+                                "type": "JButton",
+                                "text": "Settings"
+                              }
+                            ]
+                          },
+                          {
+                            "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/ChatPanel[0]",
+                            "type": "ChatPanel",
+                            "children": [
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/ChatPanel[0]/JViewport[0]",
+                                "type": "JViewport",
+                                "children": [
+                                  {
+                                    "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/ChatPanel[0]/JViewport[0]/JTextPane[0]",
+                                    "type": "JTextPane",
+                                    "text": "\r\nTesting connection to https://openrouter.ai/api/v1...\r\n\r\nConnected! Loaded 407 tool-capable models.\r\n"
+                                  }
+                                ]
+                              },
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/ChatPanel[0]/ScrollBar[0]",
+                                "type": "ScrollBar"
+                              }
+                            ]
+                          },
+                          {
+                            "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/InputPanel[0]",
+                            "type": "InputPanel",
+                            "children": [
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/InputPanel[0]/JScrollPane[0]",
+                                "type": "JScrollPane",
+                                "children": [
+                                  {
+                                    "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/InputPanel[0]/JScrollPane[0]/JViewport[0]",
+                                    "type": "JViewport",
+                                    "children": [
+                                      {
+                                        "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/InputPanel[0]/JScrollPane[0]/JViewport[0]/JTextArea[0]",
+                                        "type": "JTextArea",
+                                        "text": ""
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/InputPanel[0]/JScrollPane[0]/ScrollBar[0]",
+                                    "type": "ScrollBar"
+                                  }
+                                ]
+                              },
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/InputPanel[0]/JPanel[0]",
+                                "type": "JPanel",
+                                "children": [
+                                  {
+                                    "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/InputPanel[0]/JPanel[0]/JButton[0]",
+                                    "type": "JButton",
+                                    "text": "Clear"
+                                  },
+                                  {
+                                    "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/InputPanel[0]/JPanel[0]/JButton[1]",
+                                    "type": "JButton",
+                                    "text": "Send"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "s004",
+      "name": "SET_TEXT [OSGi Chatbot] JTextArea = \"HELLO\"",
+      "action": {
+        "type": "SET_TEXT",
+        "locator": {
+          "windowTitle": "OSGi Chatbot",
+          "className": "JTextArea",
+          "x": 376,
+          "y": 549
+        },
+        "value": "HELLO"
+      },
+      "expected": {
+        "windows": [
+          {
+            "path": "[🕐 OSGi Clock]",
+            "type": "ClockFrame",
+            "title": "🕐 OSGi Clock",
+            "children": [
+              {
+                "path": "[🕐 OSGi Clock]/JRootPane[0]",
+                "type": "JRootPane",
+                "children": [
+                  {
+                    "path": "[🕐 OSGi Clock]/JRootPane[0]/JLayeredPane[0]",
+                    "type": "JLayeredPane",
+                    "children": [
+                      {
+                        "path": "[🕐 OSGi Clock]/JRootPane[0]/JLayeredPane[0]/JPanel[0]",
+                        "type": "JPanel",
+                        "children": [
+                          {
+                            "path": "[🕐 OSGi Clock]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/ClockPanel[0]",
+                            "type": "ClockPanel"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "path": "[OSGi Chatbot]",
+            "type": "ChatFrame",
+            "title": "OSGi Chatbot",
+            "children": [
+              {
+                "path": "[OSGi Chatbot]/JRootPane[0]",
+                "type": "JRootPane",
+                "children": [
+                  {
+                    "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]",
+                    "type": "JLayeredPane",
+                    "children": [
+                      {
+                        "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]",
+                        "type": "JPanel",
+                        "children": [
+                          {
+                            "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]",
+                            "type": "JPanel",
+                            "children": [
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JLabel[0]",
+                                "type": "JLabel",
+                                "text": "Model:"
+                              },
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JComboBox[0]",
+                                "type": "JComboBox",
+                                "text": "minimax/minimax-m3.1-flash:free",
+                                "itemCount": 407,
+                                "selectedIndex": -1
+                              },
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JButton[0]",
+                                "type": "JButton",
+                                "text": "Refresh Models"
+                              },
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JButton[1]",
+                                "type": "JButton",
+                                "text": "Set Default"
+                              },
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JButton[2]",
+                                "type": "JButton",
+                                "text": "Settings"
+                              }
+                            ]
+                          },
+                          {
+                            "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/ChatPanel[0]",
+                            "type": "ChatPanel",
+                            "children": [
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/ChatPanel[0]/JViewport[0]",
+                                "type": "JViewport",
+                                "children": [
+                                  {
+                                    "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/ChatPanel[0]/JViewport[0]/JTextPane[0]",
+                                    "type": "JTextPane",
+                                    "text": "\r\nTesting connection to https://openrouter.ai/api/v1...\r\n\r\nConnected! Loaded 407 tool-capable models.\r\n"
+                                  }
+                                ]
+                              },
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/ChatPanel[0]/ScrollBar[0]",
+                                "type": "ScrollBar"
+                              }
+                            ]
+                          },
+                          {
+                            "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/InputPanel[0]",
+                            "type": "InputPanel",
+                            "children": [
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/InputPanel[0]/JScrollPane[0]",
+                                "type": "JScrollPane",
+                                "children": [
+                                  {
+                                    "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/InputPanel[0]/JScrollPane[0]/JViewport[0]",
+                                    "type": "JViewport",
+                                    "children": [
+                                      {
+                                        "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/InputPanel[0]/JScrollPane[0]/JViewport[0]/JTextArea[0]",
+                                        "type": "JTextArea",
+                                        "text": "HELLO"
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/InputPanel[0]/JScrollPane[0]/ScrollBar[0]",
+                                    "type": "ScrollBar"
+                                  }
+                                ]
+                              },
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/InputPanel[0]/JPanel[0]",
+                                "type": "JPanel",
+                                "children": [
+                                  {
+                                    "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/InputPanel[0]/JPanel[0]/JButton[0]",
+                                    "type": "JButton",
+                                    "text": "Clear"
+                                  },
+                                  {
+                                    "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/InputPanel[0]/JPanel[0]/JButton[1]",
+                                    "type": "JButton",
+                                    "text": "Send"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "s005",
+      "name": "CLICK [OSGi Chatbot] JButton('Clear')",
+      "action": {
+        "type": "CLICK",
+        "locator": {
+          "windowTitle": "OSGi Chatbot",
+          "className": "JButton",
+          "text": "Clear",
+          "x": 791,
+          "y": 527
+        }
+      },
+      "expected": {
+        "windows": [
+          {
+            "path": "[🕐 OSGi Clock]",
+            "type": "ClockFrame",
+            "title": "🕐 OSGi Clock",
+            "children": [
+              {
+                "path": "[🕐 OSGi Clock]/JRootPane[0]",
+                "type": "JRootPane",
+                "children": [
+                  {
+                    "path": "[🕐 OSGi Clock]/JRootPane[0]/JLayeredPane[0]",
+                    "type": "JLayeredPane",
+                    "children": [
+                      {
+                        "path": "[🕐 OSGi Clock]/JRootPane[0]/JLayeredPane[0]/JPanel[0]",
+                        "type": "JPanel",
+                        "children": [
+                          {
+                            "path": "[🕐 OSGi Clock]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/ClockPanel[0]",
+                            "type": "ClockPanel"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "path": "[OSGi Chatbot]",
+            "type": "ChatFrame",
+            "title": "OSGi Chatbot",
+            "children": [
+              {
+                "path": "[OSGi Chatbot]/JRootPane[0]",
+                "type": "JRootPane",
+                "children": [
+                  {
+                    "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]",
+                    "type": "JLayeredPane",
+                    "children": [
+                      {
+                        "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]",
+                        "type": "JPanel",
+                        "children": [
+                          {
+                            "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]",
+                            "type": "JPanel",
+                            "children": [
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JLabel[0]",
+                                "type": "JLabel",
+                                "text": "Model:"
+                              },
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JComboBox[0]",
+                                "type": "JComboBox",
+                                "text": "minimax/minimax-m3.1-flash:free",
+                                "itemCount": 407,
+                                "selectedIndex": -1
+                              },
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JButton[0]",
+                                "type": "JButton",
+                                "text": "Refresh Models"
+                              },
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JButton[1]",
+                                "type": "JButton",
+                                "text": "Set Default"
+                              },
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/JPanel[0]/JButton[2]",
+                                "type": "JButton",
+                                "text": "Settings"
+                              }
+                            ]
+                          },
+                          {
+                            "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/ChatPanel[0]",
+                            "type": "ChatPanel",
+                            "children": [
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/ChatPanel[0]/JViewport[0]",
+                                "type": "JViewport",
+                                "children": [
+                                  {
+                                    "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/ChatPanel[0]/JViewport[0]/JTextPane[0]",
+                                    "type": "JTextPane",
+                                    "text": "\r\nConversation cleared.\r\n"
+                                  }
+                                ]
+                              },
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/ChatPanel[0]/ScrollBar[0]",
+                                "type": "ScrollBar"
+                              }
+                            ]
+                          },
+                          {
+                            "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/InputPanel[0]",
+                            "type": "InputPanel",
+                            "children": [
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/InputPanel[0]/JScrollPane[0]",
+                                "type": "JScrollPane",
+                                "children": [
+                                  {
+                                    "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/InputPanel[0]/JScrollPane[0]/JViewport[0]",
+                                    "type": "JViewport",
+                                    "children": [
+                                      {
+                                        "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/InputPanel[0]/JScrollPane[0]/JViewport[0]/JTextArea[0]",
+                                        "type": "JTextArea",
+                                        "text": "HELLO"
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/InputPanel[0]/JScrollPane[0]/ScrollBar[0]",
+                                    "type": "ScrollBar"
+                                  }
+                                ]
+                              },
+                              {
+                                "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/InputPanel[0]/JPanel[0]",
+                                "type": "JPanel",
+                                "children": [
+                                  {
+                                    "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/InputPanel[0]/JPanel[0]/JButton[0]",
+                                    "type": "JButton",
+                                    "text": "Clear"
+                                  },
+                                  {
+                                    "path": "[OSGi Chatbot]/JRootPane[0]/JLayeredPane[0]/JPanel[0]/InputPanel[0]/JPanel[0]/JButton[1]",
+                                    "type": "JButton",
+                                    "text": "Send"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

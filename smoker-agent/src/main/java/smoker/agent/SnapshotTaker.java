@@ -7,6 +7,7 @@ import javax.swing.AbstractButton;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JList;
+import javax.swing.JPasswordField;
 import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JTree;
@@ -47,6 +48,18 @@ final class SnapshotTaker {
         return unnamed;
     }
 
+    /** The snapshot text of a password field that is not empty. */
+    static final String MASK = "***";
+
+    /**
+     * The text of a text component for the snapshot. A password field gives {@link #MASK} or "",
+     * never its value or its length: snapshots go into scenario files and reports (F-19). Must run on the EDT.
+     */
+    static String textOf(JTextComponent c) {
+        if (c instanceof JPasswordField) return c.getDocument().getLength() == 0 ? "" : MASK;
+        return c.getText();
+    }
+
     /**
      * Look-and-feel internals (combo arrow buttons, scroll bar buttons, JOptionPane's generated buttons) differ
      * between Metal on a Linux runner and the Windows LAF on a dev box; keeping them out makes goldens LAF-independent.
@@ -68,8 +81,7 @@ final class SnapshotTaker {
     private NodeSnapshot node(Component c, String path) {
         NodeSnapshot n = new NodeSnapshot();
         n.path = path;
-        n.type = c.getClass().getSimpleName();
-        if (n.type.isEmpty()) n.type = c.getClass().getSuperclass().getSimpleName();
+        n.type = Locators.classNameOf(c);
         if (c.getName() != null && !Locators.isAutoName(c.getName())) n.name = c.getName();
         n.visible = c.isVisible() ? null : Boolean.FALSE;   // visible is the default; only record the exception
         n.enabled = c.isEnabled() ? null : Boolean.FALSE;
@@ -82,7 +94,7 @@ final class SnapshotTaker {
         } else if (c instanceof JLabel) {
             n.text = ((JLabel) c).getText();
         } else if (c instanceof JTextComponent) {
-            n.text = ((JTextComponent) c).getText();
+            n.text = textOf((JTextComponent) c);
         } else if (c instanceof JComboBox) {
             JComboBox<?> cb = (JComboBox<?>) c;
             n.itemCount = cb.getItemCount();
@@ -115,8 +127,7 @@ final class SnapshotTaker {
                 if (k.getName() != null && !Locators.isAutoName(k.getName())) {
                     seg = "#" + k.getName();
                 } else {
-                    String t = k.getClass().getSimpleName();
-                    if (t.isEmpty()) t = k.getClass().getSuperclass().getSimpleName();
+                    String t = Locators.classNameOf(k);
                     Integer i = counters.get(t);
                     int idx = i == null ? 0 : i;
                     counters.put(t, idx + 1);

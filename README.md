@@ -8,16 +8,25 @@ smoker-core   model (Scenario/Step/Action/Locator/Snapshot), diff, JSON, JUnit-X
 smoker-agent  -javaagent: recorder toolbar, semantic player, snapshot taker, log tailer, EDT watchdog   → smoker-agent.jar (shaded)
 smoker-cli    launches the app with the agent, approves goldens, writes reports                           → smoker-cli.jar   (shaded)
 smoker-demo   tiny Swing app + scenarios for the self-test
+smoker-it     integration test: CLI + agent + demo app, full record-free cycle
 ```
 
 ## Build
 
 ```bash
-mvn -B package                 # JDK 8–21; on JDK 9+ compiles with --release 8
-./selftest.sh                  # Linux/macOS with a display; Linux CI: xvfb-run -a ./selftest.sh
+mvn -B package                 # JDK 8–21; on JDK 9+ compiles with --release 8; runs the unit tests
+mvn -B verify                  # also runs the integration test in smoker-it (needs a display)
+mvn -B verify -Plocale-tr      # all tests in the Turkish locale (tr_TR)
+xvfb-run -a mvn -B verify      # Linux without a display
 ```
 
-Windows (PowerShell): `mvn -B package` then run the commands below; no Xvfb needed on a logged-in desktop.
+The integration test runs `run`, `approve`, `run`, `run` on `smoker-demo/scenarios` and `run` on
+`smoker-demo/scenarios-failing`. It expects NO_GOLDEN, PASS, FAIL with `CHANGED …#demo.lang`, FAIL on a log hit and HANG.
+It copies the scenarios to `smoker-it/target/it-work` and does not change the files in the repository.
+The CLI and the demo application use the JVM and the locale of the test.
+Without a display the integration test fails, and `LocatorsWindowTest` is skipped.
+
+Windows (PowerShell): `mvn -B verify` then run the commands below; no Xvfb needed on a logged-in desktop.
 
 ## Use
 
@@ -37,6 +46,21 @@ java -jar smoker-cli.jar approve --run out/orders-create --scenario scenarios/or
 `--app` is the full command line. The agent option is inserted after the first word, or where you put the
 token `{agent}`. Equinox product: `--app "myapp.exe -vmargs {agent}"` — or add
 `-javaagent:C:\tools\smoker-agent.jar=mode=play;scenario=...;out=...;log=...` to `eclipse.ini` under `-vmargs`.
+
+Windows: if a path in `--app` contains spaces, put the path in double quotes and write each inner quote as `\"`.
+If you do not, Windows splits the `--app` value into many arguments.
+
+```powershell
+# Windows PowerShell 5.1: enclose the --app value in single quotes
+java -jar smoker-cli.jar run --agent smoker-agent.jar --app '\"C:\Program Files\Java\bin\java.exe\" -jar myapp.jar' --scenarios scenarios --out out
+```
+
+```bat
+rem cmd.exe: enclose the --app value in double quotes
+java -jar smoker-cli.jar run --agent smoker-agent.jar --app "\"C:\Program Files\Java\bin\java.exe\" -jar myapp.jar" --scenarios scenarios --out out
+```
+
+A path without spaces needs no quotes. This is the easier procedure.
 
 ### Agent arguments (`-javaagent:smoker-agent.jar=k=v;k=v`)
 
@@ -71,6 +95,10 @@ token `{agent}`. Equinox product: `--app "myapp.exe -vmargs {agent}"` — or add
 
 Actions: `CLICK`, `SET_TEXT`, `SELECT` (combo/list/tab by text or index, table by row), `KEY` (VK name, `modifiers` =
 `InputEvent.*_DOWN_MASK`), `WAIT` (ms), `CLOSE_WINDOW`. `expected` is filled by `approve` (or by the recorder).
+
+Password fields (`JPasswordField`): the snapshot gives the text `***` when the field has a value, and `""` when it is empty.
+The recorder does not record typing in a password field. If a scenario must fill one, add the `SET_TEXT` step by hand.
+Do not put a real password in a scenario file.
 
 ### Locators
 

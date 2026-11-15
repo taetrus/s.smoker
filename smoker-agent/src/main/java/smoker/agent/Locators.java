@@ -43,8 +43,7 @@ final class Locators {
         Locator l = new Locator();
         Window w = logicalWindowOf(c);
         l.windowTitle = titleOf(w);
-        l.className = c.getClass().getSimpleName();
-        if (l.className.isEmpty()) l.className = c.getClass().getSuperclass().getSimpleName(); // anonymous subclasses
+        l.className = classNameOf(c);
         if (c.getName() != null && !c.getName().isEmpty() && !isAutoName(c.getName())) {
             l.name = c.getName();
             return l;
@@ -55,7 +54,7 @@ final class Locators {
         if (w != null) {
             for (Component o : allComponents(w)) {
                 if (o == c) break;
-                if (o.getClass() == c.getClass() && eq(textOf(o), l.text)) idx++;
+                if (classNameOf(o).equals(l.className) && eq(textOf(o), l.text)) idx++;
             }
         }
         l.index = idx == 0 ? null : idx;
@@ -74,6 +73,16 @@ final class Locators {
                 || n.endsWith(".glassPane") || n.endsWith(".layeredPane") || n.endsWith(".contentPane");
     }
 
+    /**
+     * The class name of a locator: the simple class name, or the superclass name for an anonymous class.
+     * {@link #resolve} and {@link #find} must use this same rule. A subclass such as {@code JPasswordField}
+     * must not match the locator {@code JTextField} (F-23).
+     */
+    static String classNameOf(Component c) {
+        String n = c.getClass().getSimpleName();
+        return n.isEmpty() ? c.getClass().getSuperclass().getSimpleName() : n;
+    }
+
     static Component find(Locator l) {
         List<Component> matches = new ArrayList<Component>();
         for (Window w : Window.getWindows()) {
@@ -83,8 +92,7 @@ final class Locators {
                 if (l.isNamed()) {
                     if (l.name.equals(c.getName())) matches.add(c);
                 } else {
-                    if (!c.getClass().getSimpleName().equals(l.className)
-                            && !c.getClass().getSuperclass().getSimpleName().equals(l.className)) continue;
+                    if (!classNameOf(c).equals(l.className)) continue;
                     if (!eq(textOf(c), l.text)) continue;
                     matches.add(c);
                 }

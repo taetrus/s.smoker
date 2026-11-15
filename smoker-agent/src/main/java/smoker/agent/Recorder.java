@@ -8,8 +8,12 @@ import smoker.core.model.Snapshot;
 import smoker.core.model.Step;
 
 import javax.swing.AbstractButton;
+import javax.swing.ButtonModel;
 import javax.swing.JComboBox;
 import javax.swing.JList;
+import javax.swing.JMenu;
+import javax.swing.JMenuItem;
+import javax.swing.JPasswordField;
 import javax.swing.JPopupMenu;
 import javax.swing.JTabbedPane;
 import javax.swing.JTable;
@@ -26,6 +30,7 @@ import java.awt.event.MouseEvent;
 import java.nio.file.Files;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.Callable;
 
 /**
@@ -118,7 +123,12 @@ final class Recorder implements AWTEventListener {
     }
 
     private void onFocus(FocusEvent e, Component src) {
-        if (e.getID() == FocusEvent.FOCUS_GAINED && src instanceof JTextComponent) {
+        if (e.getID() == FocusEvent.FOCUS_GAINED && src instanceof JPasswordField) {
+            // Do not record a password: the scenario file would contain it in plain text (F-19).
+            if (editing != null) flushText();
+            editing = null;
+            say("password field: typing is not recorded. Add a SET_TEXT step by hand, or set the value outside the scenario.");
+        } else if (e.getID() == FocusEvent.FOCUS_GAINED && src instanceof JTextComponent) {
             editing = (JTextComponent) src;
             textAtFocusGain = editing.getText();
         } else if (e.getID() == FocusEvent.FOCUS_LOST && src == editing) {
@@ -173,8 +183,13 @@ final class Recorder implements AWTEventListener {
     }
 
     private void onMouse(MouseEvent e, Component src) {
-        if (e.getID() != MouseEvent.MOUSE_CLICKED || e.getButton() != MouseEvent.BUTTON1) return;
+        if (e.getButton() != MouseEvent.BUTTON1) return;
         final Component target = interactiveAncestor(src);
+        if (actsOnRelease(target)) {
+            if (firesActionOnRelease(e, target)) add(Action.click(Locators.resolve(target)));
+            return;
+        }
+        if (e.getID() != MouseEvent.MOUSE_CLICKED) return;
         if (target == null) {
             add(Action.click(Locators.resolve(src)));
             return;
@@ -216,6 +231,27 @@ final class Recorder implements AWTEventListener {
         });
     }
 
+    /**
+     * Buttons and menu items fire their action on MOUSE_RELEASED. If the action opens or closes a modal dialog,
+     * no MOUSE_CLICKED arrives for the button (F-20), so the recorder records these on the release.
+     * A JMenu only opens its menu and stays on MOUSE_CLICKED.
+     */
+    static boolean actsOnRelease(Component target) {
+        return target instanceof AbstractButton && !(target instanceof JMenu);
+    }
+
+    /**
+     * True if Swing fires the action of the button for this event. The AWT event listener sees the event before
+     * the button, so the model still has the state of before the release. Must run on the EDT.
+     */
+    static boolean firesActionOnRelease(MouseEvent e, Component target) {
+        if (e.getID() != MouseEvent.MOUSE_RELEASED || e.getButton() != MouseEvent.BUTTON1) return false;
+        if (!actsOnRelease(target) || !target.isEnabled()) return false;
+        ButtonModel m = ((AbstractButton) target).getModel();
+        if (target instanceof JMenuItem) return m.isArmed();
+        return m.isArmed() && m.isPressed();
+    }
+
     private static Component interactiveAncestor(Component c) {
         for (Component p = c; p != null && !(p instanceof Window); p = p.getParent()) {
             if (Locators.isInteractive(p)) return p;
@@ -231,7 +267,7 @@ final class Recorder implements AWTEventListener {
     // ---- steps -------------------------------------------------------------------------------
 
     private void add(Action a) {
-        Step s = new Step(String.format("s%03d", ++counter), a.toString(), a);
+        Step s = new Step(String.format(Locale.ROOT, "s%03d", ++counter), a.toString(), a);
         scenario.steps.add(s);
         if (listener != null) listener.stepAdded(s);
         synchronized (pendingSnapshots) {
