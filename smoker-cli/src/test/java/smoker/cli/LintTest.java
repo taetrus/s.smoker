@@ -110,4 +110,29 @@ public class LintTest {
         assertEquals(0, Main.lint(o));
         assertTrue(new String(Files.readAllBytes(patch), StandardCharsets.UTF_8).contains("saveButton.setName"));
     }
+
+    @Test
+    public void patchEscapesTextAndStaysOnOneLine() {
+        String p = Lint.patch(Arrays.asList(entry("settings", "nametest.SettingsPanel", null, null, "JButton",
+                "say \"hi\" \\u00zz\nline2\r", null, "a\"b\\c", "text")));
+        assertEquals("// nametest.SettingsPanel\n"
+                + "// JButton \"say \\\"hi\\\" \\\\u00zz\\nline2\\r\" has no field: setName(\"a\\\"b\\\\c\") where it is created\n", p);
+        assertEquals("a\\\"b\\\\c", Lint.lit("a\"b\\c"));
+    }
+
+    @Test
+    public void tableFlattensLineBreaks() {
+        String t = Lint.table(Arrays.asList(entry("w", "p.A", null, null, "JButton", "a\nb", null, null, null)));
+        assertEquals(2, t.split("\n").length);
+    }
+
+    @Test
+    public void unwritablePatchTargetExitsTwo() throws Exception {
+        result("a", fieldEntry("saveButton", "orders.btn.save"));
+        Path blocker = tmp.newFile("blocker").toPath();
+        Map<String, String> o = new LinkedHashMap<String, String>();
+        o.put("run", tmp.getRoot().toPath().resolve("a").toString());
+        o.put("emit-patch", blocker.resolve("p.txt").toString());
+        assertEquals(2, Main.lint(o));
+    }
 }

@@ -224,28 +224,30 @@ public final class Main {
 
     static int lint(Map<String, String> o) throws Exception {
         Path dir = Paths.get(req(o, "run"));
-        List<smoker.core.model.LintEntry> entries = Files.isDirectory(dir) ? Lint.read(dir)
-                : new ArrayList<smoker.core.model.LintEntry>();
-        boolean found = false;
-        if (Files.isDirectory(dir)) {
-            java.util.stream.Stream<Path> w = Files.walk(dir);
-            try {
-                found = w.anyMatch(p -> p.getFileName() != null && "run-result.json".equals(p.getFileName().toString()));
-            } finally {
-                w.close();
-            }
+        Lint.Loaded loaded;
+        try {
+            loaded = Files.isDirectory(dir) ? Lint.load(dir) : new Lint.Loaded();
+        } catch (IOException | java.io.UncheckedIOException e) {
+            System.err.println("lint: cannot read " + dir + ": " + e.getMessage());
+            return 2;
         }
-        if (!found) {
+        if (loaded.files == 0) {
             System.err.println("lint: no run-result.json below " + dir);
             return 2;
         }
+        List<smoker.core.model.LintEntry> entries = loaded.entries;
         System.out.print(Lint.table(entries));
         System.out.println();
         System.out.println(Lint.summary(entries));
         if (o.containsKey("emit-patch")) {
             Path f = Paths.get(o.get("emit-patch"));
-            if (f.toAbsolutePath().getParent() != null) Files.createDirectories(f.toAbsolutePath().getParent());
-            Files.write(f, Lint.patch(entries).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            try {
+                if (f.toAbsolutePath().getParent() != null) Files.createDirectories(f.toAbsolutePath().getParent());
+                Files.write(f, Lint.patch(entries).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            } catch (IOException e) {
+                System.err.println("lint: cannot write " + f + ": " + e.getMessage());
+                return 2;
+            }
             System.out.println("patch written to " + f);
         }
         return 0;

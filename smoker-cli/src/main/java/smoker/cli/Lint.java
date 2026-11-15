@@ -11,7 +11,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -26,6 +25,16 @@ final class Lint {
 
     /** All entries of all run-result.json files below the directory. One entry per key; the first one wins. */
     static List<LintEntry> read(Path outDir) throws IOException {
+        return load(outDir).entries;
+    }
+
+    /** The joined entries and the number of run-result.json files found. */
+    static final class Loaded {
+        final List<LintEntry> entries = new ArrayList<LintEntry>();
+        int files;
+    }
+
+    static Loaded load(Path outDir) throws IOException {
         List<Path> files;
         Stream<Path> walk = Files.walk(outDir);
         try {
@@ -38,7 +47,9 @@ final class Lint {
             walk.close();
         }
         Set<String> seen = new HashSet<String>();
-        List<LintEntry> out = new ArrayList<LintEntry>();
+        Loaded loaded = new Loaded();
+        List<LintEntry> out = loaded.entries;
+        loaded.files = files.size();
         for (Path f : files) {
             RunResult r;
             try {
@@ -54,7 +65,7 @@ final class Lint {
                 if (seen.add(key)) out.add(e);
             }
         }
-        return out;
+        return loaded;
     }
 
     static String table(List<LintEntry> entries) {
@@ -128,17 +139,33 @@ final class Lint {
             for (LintEntry e : list) {
                 if (e.field != null) {
                     if (e.declaringClass == null || e.declaringClass.equals(e.runtimeClass)) {
-                        sb.append(e.field).append(".setName(\"").append(e.proposedName).append("\");\n");
+                        sb.append(e.field).append(".setName(\"").append(lit(e.proposedName)).append("\");\n");
                     } else {
                         sb.append("// ").append(e.field).append(" is declared in ").append(simple(e.declaringClass))
-                                .append(": set \"").append(e.proposedName).append("\" in ")
+                                .append(": set \"").append(lit(e.proposedName)).append("\" in ")
                                 .append(simple(e.runtimeClass)).append('\n');
                     }
                 } else if ("text".equals(e.source)) {
-                    sb.append("// ").append(e.type).append(" \"").append(e.text)
-                            .append("\" has no field: setName(\"").append(e.proposedName)
+                    sb.append("// ").append(e.type).append(" \"").append(lit(e.text))
+                            .append("\" has no field: setName(\"").append(lit(e.proposedName))
                             .append("\") where it is created\n");
                 }
+            }
+        }
+        return sb.toString();
+    }
+
+    /** Escapes a value for a Java string literal. Every backslash is doubled, so no unicode escape can form. */
+    static String lit(String s) {
+        StringBuilder sb = new StringBuilder();
+        for (char c : s.toCharArray()) {
+            switch (c) {
+                case '\\': sb.append("\\\\"); break;
+                case '"': sb.append("\\\""); break;
+                case '\n': sb.append("\\n"); break;
+                case '\r': sb.append("\\r"); break;
+                case '\t': sb.append("\\t"); break;
+                default: sb.append(c);
             }
         }
         return sb.toString();
@@ -149,7 +176,7 @@ final class Lint {
     }
 
     private static String cell(String s) {
-        return s == null ? "-" : s;
+        return s == null ? "-" : s.replaceAll("\\r\\n|[\\r\\n]", " ");
     }
 
     private static int nullsLast(String a, String b) {
