@@ -22,8 +22,8 @@ Verified on Windows 11 on 2026-11-14 (Maven 3.9.6, JDK 25 in a path with spaces,
 | `mvn -B verify -Plocale-tr` | 50/50 | 2/2 |
 | `mvn -B verify -Plocale-tr "-Djvm=<JDK 8>\bin\java.exe"` | 50/50 | 2/2 |
 
-Completion criterion of WP-01 (changed by decision 5): the five-step scenario passes on Windows with JRE 8. The test report is in Confluence.
-**Not met: the Confluence page is open.** Do not start WP-02.
+Completion criterion of WP-01 (changed by decisions 5 and 6): the five-step scenario passes on Windows with JRE 8. The test report is in the GitHub repository.
+**Met on 2026-11-15.** WP-01 is complete.
 
 ## 2. Done on Windows: correction of F-23
 

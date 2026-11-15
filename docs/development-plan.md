@@ -130,7 +130,7 @@ Total for version 1.0 (WP-01 to WP-05, WP-09): 35 pd. Total for version 1.1 (WP-
 9. Replace each `toUpperCase()` and `toLowerCase()` call with the `Locale.ROOT` form.
 10. Run all tests with `-Duser.language=tr -Duser.country=TR`.
 
-Completion criterion: the five-step scenario passes on Windows with JRE 8. The test report is in Confluence. (Decision 5 removes "on Linux with JRE 17".)
+Completion criterion: the five-step scenario passes on Windows with JRE 8. The test report is in the GitHub repository (decision 6). (Decision 5 removes "on Linux with JRE 17".)
 Decision point: if the agent cannot attach to the application, stop. Analyze the launcher before you start WP-02.
 
 **WP-02 Snapshot model (8 pd)**
@@ -254,6 +254,8 @@ Sequence: do WP-09 immediately after WP-01. The lint result from WP-01 is its in
    s.smoker operates in the JVM of the application, so a Linux runner cannot test them.
    Effects: WP-01 task 5 and the completion criterion have no Linux replay. R-02a has four jobs, not eight. R-41 shows four columns.
    WP-07 removes the job `smoke:linux`. s.smoker itself continues to build and test on macOS and Linux (`xvfb-run`) for its developers.
+6. DECIDED 2026-11-15: test reports go into the GitHub repository (`docs/`), not into Confluence. Confluence is not available on the Atlassian site now.
+   Move the reports to Confluence when the space `s.smoker` exists.
 2. Select the number of developers who build s.smoker (not the developers of the application). With three developers, version 1.0 needs approximately three to four calendar weeks. With one developer, it needs approximately seven weeks.
 3. DECIDED 2026-11-12: the naming rule `<view>.<widget>` applies to all teams. The lint uses a baseline file. Only new lint results fail the pipeline.
 4. DECIDED 2026-11-12: lint results fail the pipeline from version 1.1.

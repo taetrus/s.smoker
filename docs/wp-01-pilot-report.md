@@ -1,7 +1,7 @@
 # WP-01 test report: pilot application p.osgi.ds on Windows
 
 Date: 2026-11-14. Branch: `wp-01-test-base`. Tester: one developer with Claude Code.
-This report is the input for the Confluence page (WP-01 completion criterion).
+This report is the WP-01 test report. It stays in the GitHub repository (decision 6) and is part of the WP-01 completion criterion.
 
 ## 1. Result
 
@@ -15,8 +15,8 @@ This report is the input for the Confluence page (WP-01 completion criterion).
 | 6 Write down failures, lint, startup | Sections 3 to 6 of this report. |
 | 7–10 Tests, IT, `Locale.ROOT`, tr_TR | Done. On Windows: 22 + 28 unit tests and 2 IT pass in 3 configurations (section 2). |
 
-Completion criterion (changed by decision 5 on 2026-11-15): the five-step scenario passes on Windows with JRE 8. The test report is in Confluence.
-The Windows part is met. **Open: the report in Confluence.** Do not start WP-02.
+Completion criterion (changed by decision 5 on 2026-11-15): the five-step scenario passes on Windows with JRE 8. The test report is in the GitHub repository.
+Decision 6 (2026-11-15) replaces Confluence with the GitHub repository. **The criterion passes. WP-01 is complete.**
 
 ## 2. Environment and s.smoker tests
 
@@ -101,6 +101,6 @@ On the test PC, not in the repository:
 
 ## 8. Open for WP-01
 
-1. Put this report in Confluence.
+Nothing. Copy this report to Confluence when the space `s.smoker` exists (decision 6).
 
 Decision 5 (2026-11-15) removes the Linux replay: the target applications load Windows DLLs and cannot start on Linux.

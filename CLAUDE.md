@@ -7,7 +7,7 @@ compares semantic component snapshots with golden snapshots, and reads the appli
 
 1. `docs/development-plan.md` — audit findings F-01..F-23, changed requirements, work packages WP-01..WP-09. **This is the backlog.**
 2. `docs/wp-01-handoff.md` — WP-01 state and the commands that operated on Windows.
-3. `docs/wp-01-pilot-report.md` — results of the pilot on Windows. Input for the Confluence page.
+3. `docs/wp-01-pilot-report.md` — WP-01 test report (pilot on Windows). Reports stay in `docs/` (decision 6).
 4. `docs/architecture.md` — design decisions and class map of the current skeleton.
 5. `docs/requirements.md` — original requirements. The development plan wins where they differ.
 6. `README.md` — build and CLI usage.
@@ -42,7 +42,7 @@ run4 FAIL (log hit) and HANG. Run `mvn -B verify` and `mvn -B verify -Plocale-tr
 
 ## State on 2026-11-14
 
-- Work package: WP-01. Branch `wp-01-test-base`, pushed. Do not start WP-02.
+- WP-01 complete on 2026-11-15. Branch `wp-01-test-base`, pushed. Next: WP-02.
 - Tests: 22 in `smoker-core`, 28 in `smoker-agent`, 2 IT. They pass on macOS and on Windows 11
   (JDK 25, default locale and tr_TR, and tr_TR with JRE 8 as test JVM).
 - WP-01 tasks 1–4, 6 and 7–10 done. The pilot p.osgi.ds operated on Windows with JRE 8u341:
@@ -52,7 +52,7 @@ run4 FAIL (log hit) and HANG. Run `mvn -B verify` and `mvn -B verify -Plocale-tr
 - Findings from the pilot: F-19, F-20, F-23 corrected. F-21 (WP-02, WP-06) and F-22 (WP-04) open. F-02 confirmed (WP-03).
 - 2026-11-15: the code of 2026-11-14 also passes on macOS (JDK 27 default and tr_TR, JRE 8 tr_TR): 22 + 28 unit tests, 2 IT.
 - Decision 5 (2026-11-15): smoke tests run on Windows only. No Linux replay in WP-01.
-- Open for the WP-01 completion criterion: the test report in Confluence. Then WP-01 is complete.
+- Decision 6 (2026-11-15): test reports go into `docs/` on GitHub, not Confluence. The WP-01 completion criterion passes.
 - Not verified: JRE 11 and JRE 17 at run time on a target application, a product with the hardware simulator.
 
 ## Decisions already made
