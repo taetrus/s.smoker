@@ -29,6 +29,8 @@ import java.awt.event.FocusEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
 import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -54,6 +56,7 @@ final class Recorder implements AWTEventListener {
     private final SnapshotTaker taker;
     /** Golden snapshot per step id. The snapshot thread writes it, the EDT reads it: guard it with its own lock. */
     private final LinkedHashMap<String, Snapshot> snapshots = new LinkedHashMap<String, Snapshot>();
+    /** Steps without a snapshot yet. Only the EDT removes a step from it (F-21), together with its snapshot. */
     private final List<Step> pendingSnapshots = new LinkedList<Step>();
     private volatile boolean recording;
     private Listener listener;
@@ -110,6 +113,13 @@ final class Recorder implements AWTEventListener {
         }
     }
 
+    /** The golden snapshot of {@code s}, or null while it is pending. */
+    Snapshot snapshot(Step s) {
+        synchronized (snapshots) {
+            return snapshots.get(s.id);
+        }
+    }
+
     /** Writes the scenario and its golden file. The golden file has the steps in scenario order. */
     void save() throws Exception {
         Files.createDirectories(cfg.scenario.toAbsolutePath().getParent());
@@ -140,6 +150,11 @@ final class Recorder implements AWTEventListener {
         Component src = (Component) event.getSource();
         if (isSmokerUi(src)) return;
 
+        int id = event.getID();
+        if (id == MouseEvent.MOUSE_PRESSED || id == KeyEvent.KEY_PRESSED || id == FocusEvent.FOCUS_GAINED) {
+            // First input of the next step: the component has not processed it yet (F-21).
+            takePendingSnapshots();
+        }
         if (event instanceof FocusEvent) {
             onFocus((FocusEvent) event, src);
         } else if (event instanceof KeyEvent) {
@@ -181,7 +196,10 @@ final class Recorder implements AWTEventListener {
                 || code == KeyEvent.VK_DELETE || (code >= KeyEvent.VK_F1 && code <= KeyEvent.VK_F12);
         if (!modifier && !special) return;
         if (code == KeyEvent.VK_CONTROL || code == KeyEvent.VK_ALT || code == KeyEvent.VK_SHIFT || code == KeyEvent.VK_META) return;
-        if (src == editing) flushText(); // text first, then the key (e.g. ENTER in a field)
+        if (src == editing) {
+            flushText();               // text first, then the key (e.g. ENTER in a field)
+            takePendingSnapshots();    // the field has not processed the key yet: this is the state after typing
+        }
         Locator target = src.getName() != null && !Locators.isAutoName(src.getName()) ? Locators.resolve(src) : null;
         String vk = vkName(code);
         if (vk == null) return;
@@ -303,29 +321,60 @@ final class Recorder implements AWTEventListener {
         }
     }
 
-    /** Off-EDT loop: wait for the UI to settle after each recorded action, then store the golden snapshot. */
+    /**
+     * On the EDT, at the first input of the next step: takes the snapshot of every pending step now, before the input
+     * changes the UI (F-21). Normally only the newest step is pending. An older pending step had no input after it
+     * either, so the current state is its state too: one snapshot serves all of them.
+     */
+    private void takePendingSnapshots() {
+        List<Step> due;
+        synchronized (pendingSnapshots) {
+            if (pendingSnapshots.isEmpty()) return;
+            due = new ArrayList<Step>(pendingSnapshots);
+            pendingSnapshots.clear();
+        }
+        try {
+            store(due, taker.take());
+        } catch (RuntimeException e) {
+            say("snapshot failed: " + e);
+        }
+    }
+
+    private void store(List<Step> steps, Snapshot snap) {
+        synchronized (snapshots) {
+            for (Step s : steps) {
+                if (!snapshots.containsKey(s.id)) snapshots.put(s.id, snap);
+            }
+        }
+        if (listener != null) for (Step s : steps) listener.stepUpdated(s);
+    }
+
+    /**
+     * Off-EDT loop for the last step and for steps that become quiet in time: wait for the UI to settle, then store
+     * the golden snapshot. The step stays pending while the loop waits. The snapshot runs on the EDT and takes the
+     * step only if it is still pending: if an input came first, the EDT has already taken its snapshot.
+     */
     private void snapshotLoop() {
         while (true) {
-            Step s;
+            final Step s;
             synchronized (pendingSnapshots) {
                 while (pendingSnapshots.isEmpty()) {
                     try { pendingSnapshots.wait(); } catch (InterruptedException e) { return; }
                 }
-                s = pendingSnapshots.remove(0);
+                s = pendingSnapshots.get(0);
             }
             try {
                 Quiescence.await(scenario.quietMs, scenario.stepTimeoutMs);
-                // if more actions were recorded meanwhile, this snapshot still belongs to the oldest step
-                Snapshot snap = Quiescence.onEdt(new Callable<Snapshot>() {
+                Quiescence.onEdt(new Callable<Void>() {
                     @Override
-                    public Snapshot call() {
-                        return taker.take();
+                    public Void call() {
+                        synchronized (pendingSnapshots) {
+                            if (!pendingSnapshots.remove(s)) return null;
+                        }
+                        store(Collections.singletonList(s), taker.take());
+                        return null;
                     }
                 });
-                synchronized (snapshots) {
-                    snapshots.put(s.id, snap);
-                }
-                if (listener != null) listener.stepUpdated(s);
             } catch (Exception e) {
                 say("snapshot failed: " + e);
             }

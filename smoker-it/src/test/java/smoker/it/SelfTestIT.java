@@ -133,6 +133,8 @@ public class SelfTestIT {
         RunResult.StepResult s002 = assertStepStatus(r3, "s002", RunResult.Status.FAIL);
         assertTrue(String.valueOf(s002.differences),
                 contains(s002.differences, "CHANGED [#demo.frame]/#demo.lang ", ".text: expected=\"tr\" actual=\"de\""));
+        // F-21: the player continues after FAIL, so the steps after s002 also ran.
+        for (String id : Arrays.asList("s003", "s004", "s006")) assertStepRan(r3, id);
         assertJUnitXmlIsValid(dir.resolve("run3/junit.xml"));
 
         // approve --steps s002: only the golden of s002 changes.
@@ -148,6 +150,15 @@ public class SelfTestIT {
             boolean same = Json.toString(before.get(id)).equals(Json.toString(after.get(id)));
             assertEquals("golden of " + id + " unchanged", !"s002".equals(id), same);
         }
+
+        // One approve of run3 corrects the golden of all steps: the next run gives PASS.
+        Cli approve4 = cli("approve", "--run", dir.resolve("run3/greet-regressed").toString(), "--scenario", regressed.toString());
+        assertEquals(approve4.output, 0, approve4.exit);
+        Cli run5 = run(regressed, dir.resolve("run5"), log);
+        assertEquals(run5.output, 0, run5.exit);
+        RunResult r5 = result(dir.resolve("run5/greet-regressed"));
+        assertEquals(run5.output, RunResult.Status.PASS, r5.status);
+        for (String id : Arrays.asList("s001", "s002", "s003", "s004", "s006")) assertStepStatus(r5, id, RunResult.Status.PASS);
     }
 
     @Test
@@ -162,11 +173,16 @@ public class SelfTestIT {
         assertEquals(run4.output, 1, run4.exit);
 
         RunResult empty = result(dir.resolve("run4/empty-name"));
-        assertEquals(run4.output, RunResult.Status.FAIL, empty.status);
+        // The worst step status: s002 gives ERROR.
+        assertEquals(run4.output, RunResult.Status.ERROR, empty.status);
         RunResult.StepResult s001 = assertStepStatus(empty, "s001", RunResult.Status.FAIL);
         List<String> lines = new ArrayList<String>();
         for (RunResult.LogHit h : s001.logHits) lines.add(h.source + ":" + h.line);
         assertTrue(String.valueOf(lines), contains(lines, "file:", "greet called with empty name"));
+        // F-21: the player continues after the log hit of s001. The action of s002 (doClick on the EDT) throws
+        // the exception of the button listener: ERROR (exception thrown by the action).
+        RunResult.StepResult s002 = assertStepStatus(empty, "s002", RunResult.Status.ERROR);
+        assertTrue(s002.error, s002.error.contains("IllegalStateException: demo exception on EDT"));
 
         RunResult hang = result(dir.resolve("run4/hang"));
         assertEquals(run4.output, RunResult.Status.HANG, hang.status);
@@ -274,6 +290,11 @@ public class SelfTestIT {
         }
         fail(r.scenarioName + " has no step " + stepId);
         return null;
+    }
+
+    private static void assertStepRan(RunResult r, String stepId) {
+        for (RunResult.StepResult s : r.steps) if (stepId.equals(s.stepId)) return;
+        fail(r.scenarioName + " has no step " + stepId + ": the player stopped early");
     }
 
     private static boolean contains(List<String> lines, String prefix, String part) {

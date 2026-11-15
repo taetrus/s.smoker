@@ -53,13 +53,10 @@ final class Player implements Runnable {
             for (Step step : scenario.steps) {
                 RunResult.StepResult sr = runStep(step);
                 result.steps.add(sr);
-                if (sr.status != RunResult.Status.PASS && sr.status != RunResult.Status.NO_GOLDEN) {
-                    result.status = sr.status;
-                    break; // fail fast within a scenario (R-35)
-                }
-                if (sr.status == RunResult.Status.NO_GOLDEN && result.status == RunResult.Status.PASS) {
-                    result.status = RunResult.Status.NO_GOLDEN;
-                }
+                result.status = worse(result.status, sr.status);
+                // Continue after FAIL, so that one approve covers all steps (F-21).
+                // After HANG or ERROR the state of the UI is not known: stop (R-35).
+                if (sr.status == RunResult.Status.HANG || sr.status == RunResult.Status.ERROR) break;
             }
         } catch (Throwable t) {
             result.status = RunResult.Status.ERROR;
@@ -79,6 +76,21 @@ final class Player implements Runnable {
                 int code = result.status == RunResult.Status.PASS || result.status == RunResult.Status.NO_GOLDEN ? 0 : 1;
                 System.exit(code);
             }
+        }
+    }
+
+    /** Order ERROR > HANG > FAIL > NO_GOLDEN > PASS. */
+    static RunResult.Status worse(RunResult.Status a, RunResult.Status b) {
+        return rank(b) > rank(a) ? b : a;
+    }
+
+    private static int rank(RunResult.Status s) {
+        switch (s) {
+            case ERROR: return 4;
+            case HANG: return 3;
+            case FAIL: return 2;
+            case NO_GOLDEN: return 1;
+            default: return 0;
         }
     }
 

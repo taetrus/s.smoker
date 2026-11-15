@@ -133,7 +133,9 @@ listed in the report ("locator lint"). Convention: `<view>.<widget>`.
 
 `PASS` · `FAIL` (snapshot diff or log hit) · `HANG` (EDT blocked / action timed out, thread dump attached) ·
 `ERROR` (component not found, exception thrown by the action) · `NO_GOLDEN` (nothing to compare yet).
-A scenario stops at its first non-PASS step; the next scenario starts a fresh JVM.
+The player continues after a `FAIL` step and stops after a `HANG` or `ERROR` step. The scenario status is the
+worst step status: `ERROR` > `HANG` > `FAIL` > `NO_GOLDEN` > `PASS`. One `approve` then covers all steps of the run.
+The next scenario starts a fresh JVM.
 
 ## CI
 
