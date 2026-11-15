@@ -98,7 +98,7 @@ public final class ScenarioFiles {
 
     /** Writes the golden file beside the scenario. The order of {@code byStep} is the order in the file. */
     public static void writeGolden(Path scenario, String name, LinkedHashMap<String, Snapshot> byStep) throws IOException {
-        Json.writeGolden(goldenPath(scenario), GoldenCodec.encode(name, byStep));
+        Json.write(goldenPath(scenario), GoldenCodec.encode(name, byStep));
     }
 
     private static JsonObject checkedRoot(Path file) throws IOException {

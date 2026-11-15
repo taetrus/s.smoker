@@ -124,28 +124,61 @@ public class JsonTest {
         assertEquals("{\n  \"name\": \"" + l.name + "\"\n}\n", written(f));
     }
 
-    @Test
-    public void goldenLayoutPutsEachAttributeOnItsOwnLine() throws Exception {
+    private static NodeSnapshot label(String path, String text) {
         NodeSnapshot n = new NodeSnapshot();
-        n.path = "[W]/#a";
+        n.path = path;
         n.type = "JLabel";
-        n.text = "a";
-        Path f = tmp.getRoot().toPath().resolve("g.golden.json");
-        Json.writeGolden(f, n);
-        assertEquals("{\n  \"path\": \"[W]/#a\",\n  \"type\": \"JLabel\",\n  \"text\": \"a\"\n}\n", written(f));
+        n.text = text;
+        return n;
+    }
+
+    private static String golden(Path f, NodeSnapshot first, NodeSnapshot second) throws Exception {
+        Snapshot s1 = new Snapshot();
+        s1.nodes.add(first);
+        Snapshot s2 = new Snapshot();
+        s2.nodes.add(second);
+        LinkedHashMap<String, Snapshot> m = new LinkedHashMap<String, Snapshot>();
+        m.put("s001", s1);
+        m.put("s002", s2);
+        Json.write(f, GoldenCodec.encode("demo", m));
+        return new String(Files.readAllBytes(f), StandardCharsets.UTF_8);
     }
 
     @Test
-    public void goldenLayoutPutsAPrimitiveArrayOnOneLine() throws Exception {
-        NodeSnapshot n = new NodeSnapshot();
-        n.items = Arrays.asList("a", "b");
-        n.cells = new ArrayList<List<String>>();
-        n.cells.add(Arrays.asList("a", "b"));
-        n.cells.add(Arrays.asList("c", "d"));
+    public void goldenShortNodeAndChangeAreOneLineEach() throws Exception {
         Path f = tmp.getRoot().toPath().resolve("g.golden.json");
-        Json.writeGolden(f, n);
-        assertEquals("{\n  \"items\": [\"a\", \"b\"],\n  \"cells\": [\n    [\"a\", \"b\"],\n    [\"c\", \"d\"]\n  ]\n}\n",
-                written(f));
+        String text = golden(f, label("[W]/#a", "a"), label("[W]/#a", "b"));
+        assertTrue(text, text.contains("[{\"path\": \"[W]/#a\", \"type\": \"JLabel\", \"text\": \"a\"}]"));
+        assertTrue(text, text.contains("[{\"path\": \"[W]/#a\", \"op\": \"set\", \"node\": {\"text\": \"b\"}}]"));
+    }
+
+    @Test
+    public void goldenLongNodeSpansSeveralLines() throws Exception {
+        StringBuilder t = new StringBuilder();
+        while (t.length() < 100) t.append("long text ");
+        Path f = tmp.getRoot().toPath().resolve("g.golden.json");
+        String text = golden(f, label("[W]/#a", t.toString()), label("[W]/#a", "b"));
+        assertTrue(text, text.contains("\n        {\n          \"path\": \"[W]/#a\",\n          \"type\": \"JLabel\",\n"
+                + "          \"text\": \"" + t + "\"\n        }"));
+    }
+
+    /** A short cells list stays on the line of {@code cells}; a long one gives one row per line, each row on one line. */
+    @Test
+    public void goldenTableCellsKeepOneRowPerLine() throws Exception {
+        NodeSnapshot a = label("[W]/#t", null);
+        a.type = "JTable";
+        a.cells = new ArrayList<List<String>>();
+        a.cells.add(Arrays.asList("Kerem", "tr"));
+        NodeSnapshot b = label("[W]/#t", null);
+        b.type = "JTable";
+        b.cells = new ArrayList<List<String>>();
+        for (int i = 0; i < 8; i++) b.cells.add(Arrays.asList("Name " + i, "de"));
+        Path f = tmp.getRoot().toPath().resolve("g.golden.json");
+        String text = golden(f, a, b);
+        assertTrue(text, text.contains("{\"path\": \"[W]/#t\", \"type\": \"JTable\", \"cells\": [[\"Kerem\", \"tr\"]]}"));
+        for (int i = 0; i < 8; i++) {
+            assertTrue(text, text.contains("\n              [\"Name " + i + "\", \"de\"]" + (i < 7 ? ",\n" : "\n")));
+        }
     }
 
     @Test
@@ -173,8 +206,6 @@ public class JsonTest {
         m.put("s002", s2);
         Golden g = GoldenCodec.encode("demo", m);
         Path gf = tmp.getRoot().toPath().resolve("greet.golden.json");
-        Json.writeGolden(gf, g);
-        assertEquals(Json.toString(g), Json.toString(Json.read(gf, Golden.class)));
         Json.write(gf, g);
         assertEquals(Json.toString(g), Json.toString(Json.read(gf, Golden.class)));
     }

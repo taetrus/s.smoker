@@ -2,7 +2,6 @@ package smoker.core.io;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 
@@ -54,23 +53,13 @@ public final class Json {
     }
 
     /**
-     * Compact layout for scenario files, run results and all other files: an object or array is written on one
-     * line when its one-line form has at most {@value #ONE_LINE_MAX} characters, else one member per line.
+     * Compact layout for all files (scenario, golden, run result): an object or array is written on one line when
+     * its one-line form has at most {@value #ONE_LINE_MAX} characters, else one member per line. One changed value
+     * gives one changed line, and a one-line golden entry shows the path and the value together.
      */
     public static void write(Path file, Object value) throws IOException {
         StringBuilder out = new StringBuilder();
         compact(GSON.toJsonTree(value), "", out);
-        writeText(file, out);
-    }
-
-    /**
-     * Layout of the golden file (spec 4.1): each member of an object on its own line, so that one changed
-     * attribute gives one changed line. An array of primitives is on one line. An array of arrays (table cells)
-     * has one row per line.
-     */
-    public static void writeGolden(Path file, Object value) throws IOException {
-        StringBuilder out = new StringBuilder();
-        golden(GSON.toJsonTree(value), "", out);
         writeText(file, out);
     }
 
@@ -90,20 +79,12 @@ public final class Json {
         if (line.length() <= ONE_LINE_MAX || !(e.isJsonObject() || e.isJsonArray())) {
             out.append(line);
         } else {
-            block(e, indent, out, false);
-        }
-    }
-
-    private static void golden(JsonElement e, String indent, StringBuilder out) {
-        if (e.isJsonObject() || (e.isJsonArray() && !primitives(e.getAsJsonArray()))) {
-            block(e, indent, out, true);
-        } else {
-            out.append(oneLine(e));
+            block(e, indent, out);
         }
     }
 
     /** One member per line, two spaces of indent per depth, as Gson pretty printing. Empty gives {} or []. */
-    private static void block(JsonElement e, String indent, StringBuilder out, boolean golden) {
+    private static void block(JsonElement e, String indent, StringBuilder out) {
         String inner = indent + "  ";
         boolean first = true;
         if (e.isJsonObject()) {
@@ -111,7 +92,7 @@ public final class Json {
             for (Map.Entry<String, JsonElement> m : e.getAsJsonObject().entrySet()) {
                 if (m.getValue().isJsonNull()) continue; // as Gson without serializeNulls
                 out.append(first ? "\n" : ",\n").append(inner).append(PLAIN.toJson(m.getKey())).append(": ");
-                member(m.getValue(), inner, out, golden);
+                compact(m.getValue(), inner, out);
                 first = false;
             }
             out.append(first ? "}" : "\n" + indent + "}");
@@ -119,16 +100,11 @@ public final class Json {
             out.append('[');
             for (JsonElement x : e.getAsJsonArray()) {
                 out.append(first ? "\n" : ",\n").append(inner);
-                member(x, inner, out, golden);
+                compact(x, inner, out);
                 first = false;
             }
             out.append(first ? "]" : "\n" + indent + "]");
         }
-    }
-
-    private static void member(JsonElement e, String indent, StringBuilder out, boolean golden) {
-        if (golden) golden(e, indent, out);
-        else compact(e, indent, out);
     }
 
     /** {@code {"a": 1, "b": [1, 2]}}: the separators of Gson pretty printing, without line breaks. */
@@ -153,11 +129,6 @@ public final class Json {
             first = false;
         }
         return out.append(']').toString();
-    }
-
-    private static boolean primitives(JsonArray a) {
-        for (JsonElement x : a) if (x.isJsonObject() || x.isJsonArray()) return false;
-        return true;
     }
 
     public static String toString(Object value) {

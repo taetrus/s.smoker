@@ -115,8 +115,9 @@ number of changed components. `run` does not read `*.golden.json` as a scenario.
 
 Each change entry has the `path` of one component and an `op`. `add` gives the new component in full in `node`.
 `set` gives in `node` only the attributes with a new value. `set` lists in `unset` the attributes that have no value now.
-`remove` has no `node`. The entries are sorted by path. Each attribute is on its own line, so one changed value
-gives one changed line in the diff. s.smoker refuses an entry with an unknown `op`.
+`remove` has no `node`. The entries are sorted by path. s.smoker refuses an entry with an unknown `op`.
+s.smoker writes all JSON files with one layout: an object or array is on one line when that line has at most
+100 characters. A longer one has one member per line. A short change entry is one line with the path and the value.
 
 Title rules: a window title can change while the application runs. `windowKeys` maps a title to a fixed key.
 The first `pattern` (Java regex, matches the whole title) gives the `key`. The key replaces the title in paths and in
