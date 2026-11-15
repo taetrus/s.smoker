@@ -209,14 +209,17 @@ public class SelfTestIT {
         assertEquals(approve.output, 0, approve.exit);
         // Plan criterion: a golden file for 10 steps has fewer than 150 lines.
         Path golden = ScenarioFiles.goldenPath(scenario);
-        System.out.println("table.json lines: " + lines(scenario) + ", table.golden.json lines: " + lines(golden));
         assertTrue("table.golden.json lines: " + lines(golden), lines(golden) < 150);
 
         Cli base = run(scenario, dir.resolve("run-base"), log);
         assertEquals(base.output, 0, base.exit);
 
         // R-30a: a new unnamed panel causes no difference (mode all).
-        Cli panel = run(scenario, dir.resolve("run-panel"), log, "-Ddemo.extraPanel=true");
+        // The application logs "extra panel" when it builds the wrapper panel: the PASS is not vacuous.
+        Path panelLog = dir.resolve("panel.log");
+        Cli panel = run(scenario, dir.resolve("run-panel"), panelLog, "-Ddemo.extraPanel=true");
+        assertTrue("option extraPanel had no effect", read(panelLog).contains("extra panel"));
+        assertFalse("base run built the extra panel", read(log).contains("extra panel"));
         assertEquals(panel.output, 0, panel.exit);
         assertEquals(panel.output, RunResult.Status.PASS, result(dir.resolve("run-panel/table")).status);
         // R-30a: the same in mode named.
@@ -229,7 +232,9 @@ public class SelfTestIT {
         assertEquals(namedBase.output, 0, namedBase.exit);
         Cli namedApprove = cli("approve", "--run", dir.resolve("run-named-base/table").toString(), "--scenario", named.toString());
         assertEquals(namedApprove.output, 0, namedApprove.exit);
-        Cli namedPanel = run(named, dir.resolve("run-named"), log, "-Ddemo.extraPanel=true");
+        Path namedLog = dir.resolve("named.log");
+        Cli namedPanel = run(named, dir.resolve("run-named"), namedLog, "-Ddemo.extraPanel=true");
+        assertTrue("option extraPanel had no effect", read(namedLog).contains("extra panel"));
         assertEquals(namedPanel.output, 0, namedPanel.exit);
         assertEquals(namedPanel.output, RunResult.Status.PASS, result(dir.resolve("run-named/table")).status);
 

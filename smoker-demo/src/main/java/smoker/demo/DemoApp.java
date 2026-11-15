@@ -34,6 +34,7 @@ public class DemoApp {
     private static final Logger LOG = Logger.getLogger("demo");
 
     private static final boolean BAD_CELL = Boolean.getBoolean("demo.badCell");
+    private static final boolean EXTRA_PANEL = Boolean.getBoolean("demo.extraPanel");
 
     public static void main(String[] args) throws IOException {
         FileHandler fh = new FileHandler(System.getProperty("demo.log", "demo.log"), true);
@@ -131,7 +132,8 @@ public class DemoApp {
         f.getContentPane().setLayout(new BorderLayout());
         // -Ddemo.extraPanel=true: one more unnamed panel around the top row (test of anchored paths).
         JPanel topRow = top;
-        if (Boolean.getBoolean("demo.extraPanel")) {
+        if (EXTRA_PANEL) {
+            LOG.info("extra panel");
             topRow = new JPanel(new BorderLayout());
             topRow.add(top, BorderLayout.CENTER);
         }

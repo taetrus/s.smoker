@@ -99,6 +99,9 @@ The goldens are now in a golden file beside each scenario. The pilot has no gold
 
 ## 6. Open points
 
+- Watch for an intermittent failure of `SelfTestIT` (2026-11-15, macOS, JDK 27, `-Plocale-tr`, under load: 2 of 3 methods failed).
+  It did not recur in 3 clean runs. If it recurs on Windows, keep `smoker-it/target/failsafe-reports` and `smoker-it/target/it-work`.
+
 | Point | Effect | Work package |
 |---|---|---|
 | The player stops at the first step that does not pass. | Each `approve` corrects one step (F-21). Step `s002` of `empty-name.json` never runs. | WP-02, WP-04 |

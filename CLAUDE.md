@@ -49,6 +49,10 @@ after every change to `smoker-agent` or `smoker-core`.
 - Tests: 56 in `smoker-core`, 60 in `smoker-agent`, 3 IT. They pass on macOS (JDK 27 default locale and tr_TR, tr_TR with JRE 8 as test JVM).
 - WP-02: golden file apart from the scenario (`schemaVersion: 2`), anchored paths, table cells, `compare` (`all` | `named`),
   `maxRows`, `windowKeys`, lint for names that are not unique, player continues after FAIL.
+- Decision 6 (2026-11-15): test reports go into `docs/` on GitHub, not Confluence.
+- Open findings: F-22 (WP-04), F-02 confirmed (WP-03).
+- 2026-11-15: one SelfTestIT run failed 2 of 3 methods under load. It did not recur in 3 clean runs.
+  If it recurs, keep `smoker-it/target/failsafe-reports` and `smoker-it/target/it-work`.
 - Open: re-approve the pilot goldens on Windows (`docs/wp-01-handoff.md` section 5).
 - Next work package in plan order: WP-03 or WP-04.
 - Not verified: JRE 11 and JRE 17 at run time on a target application, a product with the hardware simulator.
