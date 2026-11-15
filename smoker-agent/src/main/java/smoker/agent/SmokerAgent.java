@@ -71,6 +71,7 @@ public final class SmokerAgent {
         if (sc.name == null) sc.name = stripExt(cfg.scenario.getFileName().toString());
         LinkedHashMap<String, Snapshot> golden = ScenarioFiles.readGolden(cfg.scenario);
         Locators.useWindowKeys(new WindowKeys(sc.windowKeys));
+        AutoNames.enable(sc.autoNames);
         Files.createDirectories(cfg.out);
         new Player(cfg, sc, golden, obs, watchdog).run();
     }
@@ -86,6 +87,7 @@ public final class SmokerAgent {
             sc.name = stripExt(cfg.scenario.getFileName().toString());
         }
         Locators.useWindowKeys(new WindowKeys(sc.windowKeys));
+        AutoNames.enable(sc.autoNames);
         // show the toolbar once the app's first frame is up, so it floats above it
         long deadline = System.currentTimeMillis() + sc.startupTimeoutMs;
         while (System.currentTimeMillis() < deadline && !anyFrameShowing()) Thread.sleep(200);

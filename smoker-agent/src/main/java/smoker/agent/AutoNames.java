@@ -1,5 +1,6 @@
 package smoker.agent;
 
+import javax.swing.SwingUtilities;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.Window;
@@ -65,9 +66,25 @@ final class AutoNames {
      * layout container, or when no application-class ancestor up to the window has a field that refers to it.
      */
     static Hit of(Component c) {
+        assert SwingUtilities.isEventDispatchThread() : "AutoNames must run on the EDT";
         if (!enabled || c == null) return null;
-        String n = c.getName();
-        if (n != null && !n.isEmpty() && !Locators.isAutoName(n)) return null;
+        if (Locators.realName(c) != null) return null;
+        return fieldWalk(c);
+    }
+
+    /**
+     * The automatic name of {@code c} as if it had no real name, or null. Null also when disabled.
+     * {@link Locators#find} uses it, so that a locator recorded before the real name still finds the component.
+     */
+    static String nameIgnoringRealName(Component c) {
+        assert SwingUtilities.isEventDispatchThread() : "AutoNames must run on the EDT";
+        if (!enabled || c == null) return null;
+        Hit h = fieldWalk(c);
+        return h == null ? null : h.name;
+    }
+
+    /** The field walk of {@link #of}, without the real-name check. */
+    private static Hit fieldWalk(Component c) {
         if (SnapshotTaker.isLayoutContainer(c)) return null;
         if (c instanceof Window) return null;
         for (Container a = c.getParent(); a != null; a = a.getParent()) {
@@ -139,7 +156,10 @@ final class AutoNames {
             if (!s.isEmpty()) return s;
         } catch (InternalError e) {
             // Java 8: malformed class name of some non-Java compilers.
+        } catch (LinkageError e) {
+            // OSGi: the enclosing class is not visible to the bundle.
         }
+        // Fallback: the part of the binary name after the last '.' or '$'.
         String n = c.getName();
         return n.substring(Math.max(n.lastIndexOf('.'), n.lastIndexOf('$')) + 1);
     }

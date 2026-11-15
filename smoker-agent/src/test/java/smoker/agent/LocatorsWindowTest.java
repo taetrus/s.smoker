@@ -4,6 +4,7 @@ import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
+import nametest.OrdersPanel;
 import smoker.core.model.Locator;
 import smoker.core.model.WindowKey;
 import java.util.Arrays;
@@ -74,6 +75,7 @@ public class LocatorsWindowTest {
     @After
     public void disposeFrame() throws Exception {
         Locators.useWindowKeys(null);
+        AutoNames.enable(true);
         if (frame == null) return;
         onEdt(new Callable<Void>() {
             public Void call() {
@@ -190,6 +192,55 @@ public class LocatorsWindowTest {
             }
         });
         assertSame(ok1, find(l));
+    }
+
+    @Test
+    public void resolveUsesTheAutomaticName() throws Exception {
+        final OrdersPanel orders = addOrdersPanel();
+        Locator l = onEdt(new Callable<Locator>() {
+            public Locator call() {
+                return Locators.resolve(orders.saveButton());
+            }
+        });
+        assertEquals("@OrdersPanel.saveButton", l.name);
+        assertEquals("#@OrdersPanel.saveButton", l.toString());
+        assertSame(orders.saveButton(), find(l));
+    }
+
+    /** Spec goal 5. */
+    @Test
+    public void oldAutomaticLocatorFindsTheComponentAfterARealName() throws Exception {
+        final OrdersPanel orders = addOrdersPanel();
+        Locator l = onEdt(new Callable<Locator>() {
+            public Locator call() {
+                Locator r = Locators.resolve(orders.saveButton());
+                orders.saveButton().setName("orders.btn.save");
+                return r;
+            }
+        });
+        assertEquals("@OrdersPanel.saveButton", l.name);
+        assertSame(orders.saveButton(), find(l));
+    }
+
+    @Test
+    public void automaticLocatorIsNotFoundWhenAutoNamesAreOff() throws Exception {
+        addOrdersPanel();
+        AutoNames.enable(false);
+        Locator l = new Locator();
+        l.name = "@OrdersPanel.saveButton";
+        assertNull(find(l));
+    }
+
+    /** Adds an application panel with an unnamed button in a field to the frame. */
+    private OrdersPanel addOrdersPanel() throws Exception {
+        return onEdt(new Callable<OrdersPanel>() {
+            public OrdersPanel call() {
+                OrdersPanel o = new OrdersPanel();
+                frame.getContentPane().add(o, java.awt.BorderLayout.SOUTH);
+                frame.pack();
+                return o;
+            }
+        });
     }
 
     private static Component find(final Locator l) throws Exception {

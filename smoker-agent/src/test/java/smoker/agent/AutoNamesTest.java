@@ -2,9 +2,12 @@ package smoker.agent;
 
 import nametest.AnonFactory;
 import nametest.FormHolder;
+import nametest.OrdersFrame;
 import nametest.OrdersPanel;
 import nametest.OrdersPanel2;
 import nametest.OrdersView;
+import nametest.OwnerFrame;
+import nametest.ShadowPanel;
 import nametest.SpinnerPanel;
 import nametest.StaticHolder;
 import nametest.Twice;
@@ -36,6 +39,7 @@ import static org.junit.Assert.assertTrue;
 public class AutoNamesTest {
 
     private JFrame frame;
+    private JFrame otherFrame;
 
     @Before
     public void needsDisplay() {
@@ -45,10 +49,10 @@ public class AutoNamesTest {
     @After
     public void dispose() throws Exception {
         AutoNames.enable(true);
-        if (frame == null) return;
         onEdt(new Callable<Void>() {
             public Void call() {
-                frame.dispose();
+                if (frame != null) frame.dispose();
+                if (otherFrame != null) otherFrame.dispose();
                 return null;
             }
         });
@@ -175,8 +179,8 @@ public class AutoNamesTest {
         assertNull(of(new Callable<Component>() {
             public Component call() {
                 Component text = ((JSpinner.DefaultEditor) p.spinner().getEditor()).getTextField();
-                // Swing names it "Spinner.formattedTextField": clear it so that the real-name rule does not decide.
-                text.setName(null);
+                // Swing names it "Spinner.formattedTextField": a generated name, so the field walk decides.
+                assertEquals("Spinner.formattedTextField", text.getName());
                 return text;
             }
         }));
@@ -245,6 +249,90 @@ public class AutoNamesTest {
                 return p.saveButton();
             }
         }));
+    }
+
+    @Test
+    public void fieldOfAnApplicationWindowGivesTheName() throws Exception {
+        final OrdersFrame f = onEdt(new Callable<OrdersFrame>() {
+            public OrdersFrame call() {
+                OrdersFrame o = new OrdersFrame();
+                otherFrame = o;
+                o.pack();
+                o.setVisible(true);
+                return o;
+            }
+        });
+        AutoNames.Hit h = of(new Callable<Component>() {
+            public Component call() {
+                return f.okButton();
+            }
+        });
+        assertNotNull(h);
+        assertEquals("@OrdersFrame.okButton", h.name);
+    }
+
+    @Test
+    public void subclassFieldWinsOverSuperclassField() throws Exception {
+        final ShadowPanel p = show(new Callable<ShadowPanel>() {
+            public ShadowPanel call() {
+                return new ShadowPanel();
+            }
+        });
+        AutoNames.Hit h = of(new Callable<Component>() {
+            public Component call() {
+                return p.primary();
+            }
+        });
+        assertEquals("@ShadowPanel.primary", h.name);
+        assertEquals("nametest.ShadowPanel", h.declaringClass);
+    }
+
+    @Test
+    public void walkStopsAtTheDialogAndDoesNotUseTheOwner() throws Exception {
+        final OwnerFrame f = onEdt(new Callable<OwnerFrame>() {
+            public OwnerFrame call() {
+                OwnerFrame o = new OwnerFrame();
+                otherFrame = o;
+                o.pack();
+                o.setVisible(true);
+                o.dialog().pack();
+                o.dialog().setVisible(true);
+                return o;
+            }
+        });
+        assertNull(of(new Callable<Component>() {
+            public Component call() {
+                return f.dialogButton();
+            }
+        }));
+    }
+
+    @Test
+    public void nameIgnoringRealNameGivesTheAutomaticNameOfANamedComponent() throws Exception {
+        final OrdersPanel p = show(new Callable<OrdersPanel>() {
+            public OrdersPanel call() {
+                OrdersPanel o = new OrdersPanel();
+                o.saveButton().setName("orders.btn.save");
+                return o;
+            }
+        });
+        assertEquals("@OrdersPanel.saveButton", onEdt(new Callable<String>() {
+            public String call() {
+                return AutoNames.nameIgnoringRealName(p.saveButton());
+            }
+        }));
+        AutoNames.enable(false);
+        assertNull(onEdt(new Callable<String>() {
+            public String call() {
+                return AutoNames.nameIgnoringRealName(p.saveButton());
+            }
+        }));
+    }
+
+    /** Surefire runs with assertions on. The argument is null so that this test touches no Swing object off the EDT. */
+    @Test(expected = AssertionError.class)
+    public void ofOffTheEdtFailsTheAssertion() {
+        AutoNames.of(null);
     }
 
     /** Builds the panel on the EDT and shows it in a frame. */

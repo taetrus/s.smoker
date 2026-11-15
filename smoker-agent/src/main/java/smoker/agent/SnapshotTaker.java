@@ -64,10 +64,10 @@ final class SnapshotTaker {
             if (w.getName() != null && w.getName().startsWith(SMOKER_WINDOW_PREFIX)) continue;
             if (onlyToolTips(w)) continue;   // a tool tip across the frame edge has its own window
             String title = Locators.titleOf(w);
-            String name = applicationName(w);
+            String name = Locators.realName(w);   // a window has no automatic name
             String key = Locators.keyOf(w);
             String part = unique(taken, name != null ? "[#" + name + "]" : "[" + (key == null ? "" : key) + "]");
-            NodeSnapshot n = node(w, part);
+            NodeSnapshot n = node(w, part, name);
             n.title = title;
             s.nodes.add(n);
             Map<String, Integer> names = new HashMap<String, Integer>();
@@ -125,7 +125,8 @@ final class SnapshotTaker {
      * (its children are not visited).
      */
     static boolean isLayoutContainer(Component c) {
-        if (applicationName(c) != null) return false;
+        // A real name only: an automatically named component is never a layout container (AutoNames gives none).
+        if (Locators.realName(c) != null) return false;
         return c instanceof javax.swing.JPanel || c instanceof javax.swing.JScrollPane || c instanceof javax.swing.JViewport
                 || c instanceof javax.swing.JRootPane || c instanceof javax.swing.JLayeredPane || c instanceof javax.swing.Box
                 || c instanceof javax.swing.Box.Filler || c instanceof javax.swing.JSplitPane || c instanceof javax.swing.JToolBar
@@ -149,16 +150,10 @@ final class SnapshotTaker {
                 tips[0]++;
                 continue;
             }
-            if (applicationName(k) != null || !isLayoutContainer(k)) return true;
+            if (!isLayoutContainer(k)) return true;
             if (k instanceof Container && otherContent((Container) k, tips)) return true;
         }
         return false;
-    }
-
-    /** The name the application gave the component, or null when it has none (no name or a generated name). */
-    private static String applicationName(Component c) {
-        String n = c.getName();
-        return n != null && !Locators.isAutoName(n) ? n : null;
     }
 
     /**
@@ -187,7 +182,7 @@ final class SnapshotTaker {
      * does not change the paths of its unnamed siblings.
      *
      * @param counters next index of each (anchor, class) in this window
-     * @param names    the number of visible components per application name in this window
+     * @param names    the number of visible components per name (real or automatic) in this window
      * @param taken    the paths of this snapshot so far
      */
     private void walk(Container parent, String windowPart, String anchor, Map<String, Integer> counters,
@@ -195,14 +190,14 @@ final class SnapshotTaker {
         for (Component k : parent.getComponents()) {
             if (!k.isVisible() || lafInternal(k) || k instanceof JToolTip) continue;
             String childAnchor = anchor;
-            String name = applicationName(k);
+            String name = Locators.nameOf(k);
             // An unnamed holder of a tool tip (the panel of a medium-weight popup) gives no node either.
             if (name == null && !isLayoutContainer(k) && k instanceof Container && onlyToolTips((Container) k)) continue;
             if (name != null || !isLayoutContainer(k)) {
                 String cls = Locators.classNameOf(k);
                 int idx = next(counters, anchor + "/" + cls);
                 String path = unique(taken, name != null ? windowPart + "/#" + name : anchor + "/" + cls + "[" + idx + "]");
-                NodeSnapshot n = node(k, path);   // also collects the lint, in both modes
+                NodeSnapshot n = node(k, path, name);   // also collects the lint, in both modes
                 if (name != null) {
                     out.add(n);
                     childAnchor = path;
@@ -274,12 +269,15 @@ final class SnapshotTaker {
         return rows;
     }
 
-    /** One node with the attributes of {@code c}. Records an unnamed interactive component for the lint. */
-    private NodeSnapshot node(Component c, String path) {
+    /**
+     * One node with the attributes of {@code c}. {@code name} is {@link Locators#nameOf}.
+     * Records an interactive component without a real name for the lint, also when it has an automatic name (spec 5.2).
+     */
+    private NodeSnapshot node(Component c, String path, String name) {
         NodeSnapshot n = new NodeSnapshot();
         n.path = path;
         n.type = Locators.classNameOf(c);
-        n.name = applicationName(c);
+        n.name = name;
         n.visible = c.isVisible() ? null : Boolean.FALSE;   // visible is the default; only record the exception
         n.enabled = c.isEnabled() ? null : Boolean.FALSE;
 
@@ -317,7 +315,7 @@ final class SnapshotTaker {
             n.items = treeRows((JTree) c);
         }
 
-        if (Locators.isInteractive(c) && n.name == null && c.isShowing() && !lafInternal(c) && !generatedByOptionPane(c)) unnamed.add(path);
+        if (Locators.isInteractive(c) && Locators.realName(c) == null && c.isShowing() && !lafInternal(c) && !generatedByOptionPane(c)) unnamed.add(path);
 
         return n;
     }

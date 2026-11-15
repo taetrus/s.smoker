@@ -172,8 +172,13 @@ final class RecorderToolbar extends JFrame implements Recorder.Listener {
             highlightedBorder = highlighted.getBorder();
             highlighted.setBorder(BorderFactory.createLineBorder(Color.RED, 2));
         }
-        Locator l = Locators.resolve(deepest);
-        pickerLabel.setText((l.isNamed() ? "" : "⚠ unnamed  ") + l + "   [" + deepest.getClass().getSimpleName() + "]");
+        pickerLabel.setText(pickerText(Locators.resolve(deepest), deepest.getClass().getSimpleName()));
+    }
+
+    /** The picker text of a locator. An automatic name still needs a real name (WP-09, spec 5.2). */
+    static String pickerText(Locator l, String simpleClassName) {
+        String auto = l.isNamed() && l.name.startsWith("@") ? " (automatic name - needs a real name)" : "";
+        return (l.isNamed() ? "" : "⚠ unnamed  ") + l + auto + "   [" + simpleClassName + "]";
     }
 
     private void unhighlight() {

@@ -4,6 +4,7 @@ import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
+import nametest.OrdersPanel;
 import smoker.core.diff.SnapshotDiff;
 import smoker.core.model.IgnoreRules;
 import smoker.core.model.NodeSnapshot;
@@ -53,6 +54,7 @@ public class SnapshotTakerPathTest {
     @After
     public void disposeWindows() throws Exception {
         Locators.useWindowKeys(null);
+        AutoNames.enable(true);
         onEdt(new Callable<Void>() {
             public Void call() {
                 for (Window w : windows) w.dispose();
@@ -383,6 +385,90 @@ public class SnapshotTakerPathTest {
             }
         });
         assertEquals(new ArrayList<String>(), SnapshotDiff.diff(before, after, new IgnoreRules()));
+    }
+
+    @Test
+    public void automaticallyNamedComponentHasANamedPath() throws Exception {
+        Snapshot s = onEdt(new Callable<Snapshot>() {
+            public Snapshot call() {
+                JFrame f = frame("Orders");
+                f.getContentPane().add(new OrdersPanel());
+                return show(f);
+            }
+        });
+        assertEquals(Arrays.asList("[Orders]", "[Orders]/#@OrdersPanel.saveButton"), paths(s, "[Orders]"));
+        assertEquals("@OrdersPanel.saveButton", node(s, "[Orders]/#@OrdersPanel.saveButton").name);
+    }
+
+    /** Review Focus 3. */
+    @Test
+    public void twoPanelsOfOneClassGetAnIndex() throws Exception {
+        final SnapshotTaker taker = new SnapshotTaker(20);
+        Snapshot s = onEdt(new Callable<Snapshot>() {
+            public Snapshot call() {
+                JFrame f = frame("Orders");
+                f.getContentPane().add(new OrdersPanel(), java.awt.BorderLayout.NORTH);
+                f.getContentPane().add(new OrdersPanel(), java.awt.BorderLayout.SOUTH);
+                f.pack();
+                f.setVisible(true);
+                return taker.take();
+            }
+        });
+        assertEquals(Arrays.asList("[Orders]", "[Orders]/#@OrdersPanel.saveButton", "[Orders]/#@OrdersPanel.saveButton[1]"),
+                paths(s, "[Orders]"));
+        assertTrue(taker.duplicateNames().toString(),
+                taker.duplicateNames().contains("[Orders]: #@OrdersPanel.saveButton (2x)"));
+    }
+
+    @Test
+    public void namedModeComparesAutomaticallyNamedComponents() throws Exception {
+        Snapshot s = onEdt(new Callable<Snapshot>() {
+            public Snapshot call() {
+                JFrame f = frame("Orders");
+                f.getContentPane().add(new OrdersPanel());
+                f.getContentPane().add(new JTextField(10), java.awt.BorderLayout.SOUTH);
+                f.pack();
+                f.setVisible(true);
+                return new SnapshotTaker(20, true).take();
+            }
+        });
+        assertEquals(Arrays.asList("[Orders]", "[Orders]/#@OrdersPanel.saveButton"), paths(s, "[Orders]"));
+    }
+
+    @Test
+    public void autoNamesOffGivesTheWp02Path() throws Exception {
+        AutoNames.enable(false);
+        Snapshot s = onEdt(new Callable<Snapshot>() {
+            public Snapshot call() {
+                JFrame f = frame("Orders");
+                f.getContentPane().add(new OrdersPanel());
+                return show(f);
+            }
+        });
+        assertEquals(Arrays.asList("[Orders]", "[Orders]/JButton[0]"), paths(s, "[Orders]"));
+    }
+
+    /** Spec 5.2: an automatic name is not a real name, so the component stays in the lint, shown with its automatic name. */
+    @Test
+    public void automaticallyNamedComponentStaysInTheUnnamedLint() throws Exception {
+        final SnapshotTaker taker = new SnapshotTaker(20);
+        onEdt(new Callable<Snapshot>() {
+            public Snapshot call() {
+                JFrame f = frame("Orders");
+                f.getContentPane().add(new OrdersPanel());
+                f.pack();
+                f.setVisible(true);
+                return taker.take();
+            }
+        });
+        assertTrue(taker.unnamedInteractive().toString(),
+                taker.unnamedInteractive().contains("[Orders]/#@OrdersPanel.saveButton"));
+    }
+
+    /** The node with this path. */
+    private static NodeSnapshot node(Snapshot s, String path) {
+        for (NodeSnapshot n : s.nodes) if (n.path.equals(path)) return n;
+        throw new AssertionError("no node " + path);
     }
 
     private JFrame frame(String title) {
