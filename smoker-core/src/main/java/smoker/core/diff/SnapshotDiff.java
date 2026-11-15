@@ -40,6 +40,8 @@ public final class SnapshotDiff {
             compareAttr(out, path, "rowCount", e.getValue().rowCount, a.rowCount, rules);
             compareAttr(out, path, "itemCount", e.getValue().itemCount, a.itemCount, rules);
             compareAttr(out, path, "selectedIndex", e.getValue().selectedIndex, a.selectedIndex, rules);
+            compareItems(out, path, e.getValue().items, a.items, rules);
+            compareCells(out, path, e.getValue().cells, a.cells, rules);
         }
         for (String path : act.keySet()) {
             if (!exp.containsKey(path) && !rules.ignoresPath(path)) out.add("UNEXPECTED " + path);
@@ -53,6 +55,44 @@ public final class SnapshotDiff {
         if (e != null && e.equals(a)) return;
         if (e instanceof String && a instanceof String && rules.valuesEquivalent((String) e, (String) a)) return;
         out.add("CHANGED " + path + " ." + attr + ": expected=" + fmt(e) + " actual=" + fmt(a));
+    }
+
+    /** Null counts as absent: it equals an empty list. */
+    private static void compareItems(List<String> out, String path, List<String> e, List<String> a, IgnoreRules rules) {
+        if (rules.ignoresAttribute("items")) return;
+        int ne = e == null ? 0 : e.size();
+        int na = a == null ? 0 : a.size();
+        if (ne != na) out.add("CHANGED " + path + " .items: expected=" + ne + " rows actual=" + na + " rows");
+        for (int i = 0; i < Math.min(ne, na); i++) {
+            compareText(out, path + " .items[" + i + "]", e.get(i), a.get(i), rules);
+        }
+    }
+
+    private static void compareCells(List<String> out, String path, List<List<String>> e, List<List<String>> a, IgnoreRules rules) {
+        if (rules.ignoresAttribute("cells")) return;
+        int ne = e == null ? 0 : e.size();
+        int na = a == null ? 0 : a.size();
+        if (ne != na) out.add("CHANGED " + path + " .cells: expected=" + ne + " rows actual=" + na + " rows");
+        for (int r = 0; r < Math.min(ne, na); r++) {
+            List<String> er = e.get(r);
+            List<String> ar = a.get(r);
+            int ce = er == null ? 0 : er.size();
+            int ca = ar == null ? 0 : ar.size();
+            if (ce != ca) {
+                out.add("CHANGED " + path + " .cells[" + r + "]: expected=" + ce + " columns actual=" + ca + " columns");
+                continue;
+            }
+            for (int c = 0; c < ce; c++) {
+                compareText(out, path + " .cells[" + r + "][" + c + "]", er.get(c), ar.get(c), rules);
+            }
+        }
+    }
+
+    /** {@code where} is the path, a space and the attribute, as in the other CHANGED lines. */
+    private static void compareText(List<String> out, String where, String e, String a, IgnoreRules rules) {
+        if (e == null ? a == null : e.equals(a)) return;
+        if (rules.valuesEquivalent(e, a)) return;
+        out.add("CHANGED " + where + ": expected=" + fmt(e) + " actual=" + fmt(a));
     }
 
     private static String fmt(Object o) {

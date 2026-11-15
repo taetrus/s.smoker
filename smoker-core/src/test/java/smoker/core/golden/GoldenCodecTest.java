@@ -112,4 +112,24 @@ public class GoldenCodecTest {
         assertTrue(g.steps.isEmpty());
         assertTrue(GoldenCodec.decode(g).isEmpty());
     }
+
+    @Test
+    public void itemsAndCellsSurviveTheRoundTripAsCopies() {
+        NodeSnapshot n = node("[W]/#t", null);
+        n.items = new ArrayList<String>(java.util.Arrays.asList("a", "  b"));
+        n.cells = new ArrayList<List<String>>();
+        n.cells.add(new ArrayList<String>(java.util.Arrays.asList("x", "y")));
+        LinkedHashMap<String, Snapshot> in = new LinkedHashMap<String, Snapshot>();
+        in.put("s001", snap(n));
+        LinkedHashMap<String, Snapshot> out = GoldenCodec.decode(GoldenCodec.encode("demo", in));
+        NodeSnapshot back = out.get("s001").nodes.get(0);
+        assertEquals(n.items, back.items);
+        assertEquals(n.cells, back.cells);
+        assertEquals(flatJson(in.get("s001")), flatJson(out.get("s001")));
+        // later mutation of the input must not change the decoded copy
+        n.items.set(0, "changed");
+        n.cells.get(0).set(0, "changed");
+        assertEquals("a", back.items.get(0));
+        assertEquals("x", back.cells.get(0).get(0));
+    }
 }

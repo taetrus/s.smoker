@@ -13,6 +13,8 @@ public class Scenario {
     public long quietMs = 400;
     /** Upper bound for waiting for quiescence per step. */
     public long stepTimeoutMs = 15_000;
+    /** A snapshot takes the content of at most this many rows of a table, list or tree (F-07). */
+    public int maxRows = 20;
     public IgnoreRules ignore = new IgnoreRules();
     public List<Step> steps = new ArrayList<Step>();
 

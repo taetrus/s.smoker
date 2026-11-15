@@ -63,7 +63,7 @@ public class SnapshotTakerTest {
                     f.getContentPane().add(key);
                     f.pack();
                     f.setVisible(true);
-                    Snapshot s = new SnapshotTaker().take();
+                    Snapshot s = new SnapshotTaker(20).take();
                     return Json.toString(s);
                 }
             });

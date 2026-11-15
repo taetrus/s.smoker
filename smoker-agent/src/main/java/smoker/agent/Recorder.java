@@ -47,7 +47,7 @@ final class Recorder implements AWTEventListener {
 
     private final AgentConfig cfg;
     private final Scenario scenario;
-    private final SnapshotTaker taker = new SnapshotTaker();
+    private final SnapshotTaker taker;
     private final List<Step> pendingSnapshots = new LinkedList<Step>();
     private volatile boolean recording;
     private Listener listener;
@@ -60,6 +60,7 @@ final class Recorder implements AWTEventListener {
     Recorder(AgentConfig cfg, Scenario scenario) {
         this.cfg = cfg;
         this.scenario = scenario;
+        this.taker = new SnapshotTaker(scenario.maxRows);
         for (Step s : scenario.steps) counter = Math.max(counter, numberOf(s.id));
         Thread t = new Thread(new Runnable() {
             @Override

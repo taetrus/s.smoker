@@ -12,9 +12,11 @@ import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JTree;
 import javax.swing.text.JTextComponent;
+import javax.swing.tree.TreePath;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.Window;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -35,6 +37,12 @@ final class SnapshotTaker {
     static final String SMOKER_WINDOW_PREFIX = "smoker.";
 
     private final Set<String> unnamed = new TreeSet<String>();
+    private final int maxRows;
+
+    /** @param maxRows the content of at most this many rows of a table, list or tree is taken (F-07) */
+    SnapshotTaker(int maxRows) {
+        this.maxRows = maxRows;
+    }
 
     Snapshot take() {
         Snapshot s = new Snapshot();
@@ -157,6 +165,49 @@ final class SnapshotTaker {
         return javax.swing.SwingUtilities.getAncestorOfClass(javax.swing.JOptionPane.class, c) != null;
     }
 
+    /** The text of the first rows of a table as the user sees it: the renderer label text, else the value. */
+    private List<List<String>> tableCells(JTable t) {
+        List<List<String>> rows = new ArrayList<List<String>>();
+        int nr = Math.min(maxRows, t.getRowCount());
+        for (int r = 0; r < nr; r++) {
+            List<String> row = new ArrayList<String>();
+            for (int c = 0; c < t.getColumnCount(); c++) {
+                Component rc = t.prepareRenderer(t.getCellRenderer(r, c), r, c);
+                row.add(rc instanceof JLabel ? ((JLabel) rc).getText() : String.valueOf(t.getValueAt(r, c)));
+            }
+            rows.add(row);
+        }
+        return rows;
+    }
+
+    private <E> List<String> listItems(JList<E> l) {
+        List<String> items = new ArrayList<String>();
+        int n = Math.min(maxRows, l.getModel().getSize());
+        for (int i = 0; i < n; i++) {
+            E v = l.getModel().getElementAt(i);
+            Component rc = l.getCellRenderer().getListCellRendererComponent(l, v, i, l.isSelectedIndex(i), false);
+            items.add(rc instanceof JLabel ? ((JLabel) rc).getText() : String.valueOf(v));
+        }
+        return items;
+    }
+
+    /** The labels of the first visible rows, two spaces per depth. A hidden root does not count as a level. */
+    private List<String> treeRows(JTree t) {
+        List<String> rows = new ArrayList<String>();
+        int n = Math.min(maxRows, t.getRowCount());
+        int rootLevel = t.isRootVisible() ? 0 : 1;
+        for (int i = 0; i < n; i++) {
+            TreePath p = t.getPathForRow(i);
+            if (p == null) continue;
+            StringBuilder sb = new StringBuilder();
+            for (int d = p.getPathCount() - 1 - rootLevel; d > 0; d--) sb.append("  ");
+            Object last = p.getLastPathComponent();
+            sb.append(t.convertValueToText(last, t.isRowSelected(i), t.isExpanded(i), t.getModel().isLeaf(last), i, false));
+            rows.add(sb.toString());
+        }
+        return rows;
+    }
+
     /** One node with the attributes of {@code c}. Records an unnamed interactive component for the lint. */
     private NodeSnapshot node(Component c, String path) {
         NodeSnapshot n = new NodeSnapshot();
@@ -184,10 +235,12 @@ final class SnapshotTaker {
             JList<?> l = (JList<?>) c;
             n.itemCount = l.getModel().getSize();
             n.selectedIndex = l.getSelectedIndex();
+            n.items = listItems(l);
         } else if (c instanceof JTable) {
             JTable t = (JTable) c;
             n.rowCount = t.getRowCount();
             n.selectedIndex = t.getSelectedRow();
+            n.cells = tableCells(t);
         } else if (c instanceof JTabbedPane) {
             JTabbedPane tp = (JTabbedPane) c;
             n.itemCount = tp.getTabCount();
@@ -195,6 +248,7 @@ final class SnapshotTaker {
             n.text = tp.getSelectedIndex() >= 0 ? tp.getTitleAt(tp.getSelectedIndex()) : null;
         } else if (c instanceof JTree) {
             n.rowCount = ((JTree) c).getRowCount();
+            n.items = treeRows((JTree) c);
         }
 
         if (Locators.isInteractive(c) && n.name == null && c.isShowing() && !lafInternal(c) && !generatedByOptionPane(c)) unnamed.add(path);

@@ -109,4 +109,74 @@ public class SnapshotDiffTest {
         assertEquals(Arrays.asList("[A]", "[A]/#p", "[A]/#p/JLabel[0]", "[B]"), new ArrayList<String>(m.keySet()));
         assertTrue(SnapshotDiff.byPath(null).isEmpty());
     }
+
+    private static NodeSnapshot withCells(String path, String[]... rows) {
+        NodeSnapshot n = node(path, null);
+        n.cells = new ArrayList<List<String>>();
+        for (String[] r : rows) n.cells.add(new ArrayList<String>(Arrays.asList(r)));
+        return n;
+    }
+
+    private static NodeSnapshot withItems(String path, String... items) {
+        NodeSnapshot n = node(path, null);
+        n.items = new ArrayList<String>(Arrays.asList(items));
+        return n;
+    }
+
+    @Test
+    public void wrongCellInRowOneGivesOneLine() {
+        List<String> d = SnapshotDiff.diff(
+                snapshot(withCells("p", new String[] {"Kerem", "tr"}, new String[] {"Ana", "en"})),
+                snapshot(withCells("p", new String[] {"Kerem", "de"}, new String[] {"Ana", "en"})), new IgnoreRules());
+        assertEquals(Arrays.asList("CHANGED p .cells[0][1]: expected=\"tr\" actual=\"de\""), d);
+    }
+
+    @Test
+    public void fewerRowsGiveALengthLineAndLinesForTheCommonPart() {
+        List<String> d = SnapshotDiff.diff(
+                snapshot(withCells("p", new String[] {"a"}, new String[] {"b"})),
+                snapshot(withCells("p", new String[] {"x"})), new IgnoreRules());
+        assertEquals(Arrays.asList("CHANGED p .cells: expected=2 rows actual=1 rows",
+                "CHANGED p .cells[0][0]: expected=\"a\" actual=\"x\""), d);
+    }
+
+    @Test
+    public void differentColumnCountGivesOneLine() {
+        List<String> d = SnapshotDiff.diff(
+                snapshot(withCells("p", new String[] {"a", "b"})),
+                snapshot(withCells("p", new String[] {"a"})), new IgnoreRules());
+        assertEquals(Arrays.asList("CHANGED p .cells[0]: expected=2 columns actual=1 columns"), d);
+    }
+
+    @Test
+    public void shorterListGivesALengthLine() {
+        List<String> d = SnapshotDiff.diff(
+                snapshot(withItems("p", "a", "b", "c")),
+                snapshot(withItems("p", "a", "x")), new IgnoreRules());
+        assertEquals(Arrays.asList("CHANGED p .items: expected=3 rows actual=2 rows",
+                "CHANGED p .items[1]: expected=\"b\" actual=\"x\""), d);
+    }
+
+    @Test
+    public void nullItemsAgainstItemsGivesLengthLineWithZero() {
+        List<String> d = SnapshotDiff.diff(snapshot(node("p", null)), snapshot(withItems("p", "a")), new IgnoreRules());
+        assertEquals(Arrays.asList("CHANGED p .items: expected=0 rows actual=1 rows"), d);
+        assertEquals(new ArrayList<String>(), SnapshotDiff.diff(snapshot(node("p", null)), snapshot(node("p", null)), new IgnoreRules()));
+    }
+
+    @Test
+    public void ignoredAttributesAndValuePatternsApplyToItemsAndCells() {
+        IgnoreRules ignore = new IgnoreRules();
+        ignore.attributes.add("items");
+        ignore.attributes.add("cells");
+        assertEquals(new ArrayList<String>(), SnapshotDiff.diff(
+                snapshot(withItems("p", "a"), withCells("q", new String[] {"a"})),
+                snapshot(withItems("p", "b"), withCells("q", new String[] {"b"})), ignore));
+
+        IgnoreRules pat = new IgnoreRules();
+        pat.valuePatterns.add("\\d{2}:\\d{2}");
+        assertEquals(new ArrayList<String>(), SnapshotDiff.diff(
+                snapshot(withItems("p", "at 10:00"), withCells("q", new String[] {"at 10:00"})),
+                snapshot(withItems("p", "at 11:30"), withCells("q", new String[] {"at 11:30"})), pat));
+    }
 }

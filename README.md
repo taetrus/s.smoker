@@ -81,7 +81,7 @@ A path without spaces needs no quotes. This is the easier procedure.
 ```json
 {
   "name": "orders-create",
-  "startupTimeoutMs": 60000, "quietMs": 400, "stepTimeoutMs": 15000,
+  "startupTimeoutMs": 60000, "quietMs": 400, "stepTimeoutMs": 15000, "maxRows": 20,
   "ignore": { "paths": ["#statusbar\\.clock"], "attributes": [], "valuePatterns": ["\\d{2}:\\d{2}:\\d{2}"] },
   "steps": [
     { "id": "s001", "name": "open orders", "action": { "type": "CLICK",    "locator": { "name": "nav.orders" } } },
@@ -95,6 +95,9 @@ A path without spaces needs no quotes. This is the easier procedure.
 
 Actions: `CLICK`, `SET_TEXT`, `SELECT` (combo/list/tab by text or index, table by row), `KEY` (VK name, `modifiers` =
 `InputEvent.*_DOWN_MASK`), `WAIT` (ms), `CLOSE_WINDOW`. `expected` is filled by `approve` (or by the recorder).
+
+Tables, lists and trees: the snapshot holds the text of the first `maxRows` rows (default 20). A table gives `cells`.
+A list or a tree gives `items`. A tree row has two spaces of indent per level. The diff reports `.items[i]` and `.cells[row][col]`.
 
 Password fields (`JPasswordField`): the snapshot gives the text `***` when the field has a value, and `""` when it is empty.
 The recorder does not record typing in a password field. If a scenario must fill one, add the `SET_TEXT` step by hand.

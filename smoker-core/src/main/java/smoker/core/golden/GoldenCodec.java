@@ -102,6 +102,11 @@ public final class GoldenCodec {
         c.rowCount = n.rowCount;
         c.itemCount = n.itemCount;
         c.selectedIndex = n.selectedIndex;
+        if (n.items != null) c.items = new ArrayList<String>(n.items);
+        if (n.cells != null) {
+            c.cells = new ArrayList<List<String>>();
+            for (List<String> row : n.cells) c.cells.add(row == null ? null : new ArrayList<String>(row));
+        }
         return c;
     }
 }

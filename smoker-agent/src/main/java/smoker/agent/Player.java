@@ -25,13 +25,14 @@ final class Player implements Runnable {
     private final Scenario scenario;
     private final Observations obs;
     private final EdtWatchdog watchdog;
-    private final SnapshotTaker taker = new SnapshotTaker();
+    private final SnapshotTaker taker;
     private final Screenshots shots = new Screenshots();
     private final RunResult result = new RunResult();
 
     Player(AgentConfig cfg, Scenario scenario, Observations obs, EdtWatchdog watchdog) {
         this.cfg = cfg;
         this.scenario = scenario;
+        this.taker = new SnapshotTaker(scenario.maxRows);
         this.obs = obs;
         this.watchdog = watchdog;
     }

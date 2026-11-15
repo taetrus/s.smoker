@@ -96,7 +96,7 @@ public class SnapshotTakerPathTest {
                 wrapper.add(field.get());
                 panel.get().add(wrapper);
                 panel.get().revalidate();
-                return new SnapshotTaker().take();
+                return new SnapshotTaker(20).take();
             }
         });
         assertEquals(new ArrayList<String>(), SnapshotDiff.diff(before, after, new IgnoreRules()));
@@ -137,7 +137,7 @@ public class SnapshotTakerPathTest {
         Snapshot after = onEdt(new Callable<Snapshot>() {
             public Snapshot call() {
                 frame.get().setTitle("Orders - changed");
-                return new SnapshotTaker().take();
+                return new SnapshotTaker(20).take();
             }
         });
         assertEquals(Arrays.asList("CHANGED [#orders.frame] .title: expected=\"Orders\" actual=\"Orders - changed\""),
@@ -155,7 +155,7 @@ public class SnapshotTakerPathTest {
                     d.pack();
                     d.setVisible(true);
                 }
-                return new SnapshotTaker().take();
+                return new SnapshotTaker(20).take();
             }
         }), "[Error]");
         assertEquals(Arrays.asList("[Error]", "[Error]/JButton[0]", "[Error][1]", "[Error][1]/JButton[0]"), paths);
@@ -240,7 +240,7 @@ public class SnapshotTakerPathTest {
         Snapshot after = onEdt(new Callable<Snapshot>() {
             public Snapshot call() {
                 buttons.get(0).setName("orders.a");
-                return new SnapshotTaker().take();
+                return new SnapshotTaker(20).take();
             }
         });
         assertEquals(Arrays.asList("[Orders]", "[Orders]/#orders.a", "[Orders]/JButton[1]", "[Orders]/JButton[2]"),
@@ -271,7 +271,7 @@ public class SnapshotTakerPathTest {
 
     @Test
     public void unnamedInteractiveListsPathsInTheNewFormat() throws Exception {
-        final SnapshotTaker taker = new SnapshotTaker();
+        final SnapshotTaker taker = new SnapshotTaker(20);
         onEdt(new Callable<Snapshot>() {
             public Snapshot call() {
                 JFrame f = frame("Orders");
@@ -295,7 +295,7 @@ public class SnapshotTakerPathTest {
     private static Snapshot show(JFrame f) {
         f.pack();
         f.setVisible(true);
-        return new SnapshotTaker().take();
+        return new SnapshotTaker(20).take();
     }
 
     /** The paths of the nodes of one window part, in snapshot order. */
