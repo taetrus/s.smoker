@@ -192,6 +192,63 @@ public class SelfTestIT {
         assertJUnitXmlIsValid(dir.resolve("run4/junit.xml"));
     }
 
+    @Test
+    public void tableScenarioMeetsTheCompletionCriterion() throws Exception {
+        Path dir = Files.createDirectories(work.resolve("table"));
+        Path scenario = dir.resolve("table.json");
+        Files.copy(demoDir.resolve("scenarios/table.json"), scenario);
+        Path log = dir.resolve("demo.log");
+
+        // R-25a: a scenario file with 10 steps has fewer than 80 lines.
+        assertEquals(10, ScenarioFiles.readScenario(scenario).steps.size());
+        assertTrue("table.json lines: " + lines(scenario), lines(scenario) < 80);
+
+        Cli run1 = run(scenario, dir.resolve("run1"), log);
+        assertEquals(run1.output, 0, run1.exit);
+        Cli approve = cli("approve", "--run", dir.resolve("run1/table").toString(), "--scenario", scenario.toString());
+        assertEquals(approve.output, 0, approve.exit);
+        // Plan criterion: a golden file for 10 steps has fewer than 150 lines.
+        Path golden = ScenarioFiles.goldenPath(scenario);
+        System.out.println("table.json lines: " + lines(scenario) + ", table.golden.json lines: " + lines(golden));
+        assertTrue("table.golden.json lines: " + lines(golden), lines(golden) < 150);
+
+        Cli base = run(scenario, dir.resolve("run-base"), log);
+        assertEquals(base.output, 0, base.exit);
+
+        // R-30a: a new unnamed panel causes no difference (mode all).
+        Cli panel = run(scenario, dir.resolve("run-panel"), log, "-Ddemo.extraPanel=true");
+        assertEquals(panel.output, 0, panel.exit);
+        assertEquals(panel.output, RunResult.Status.PASS, result(dir.resolve("run-panel/table")).status);
+        // R-30a: the same in mode named.
+        Path named = dir.resolve("named").resolve("table.json");
+        Files.createDirectories(named.getParent());
+        Scenario sc = ScenarioFiles.readScenario(scenario);
+        sc.compare = "named";
+        Json.write(named, sc);
+        Cli namedBase = run(named, dir.resolve("run-named-base"), log);
+        assertEquals(namedBase.output, 0, namedBase.exit);
+        Cli namedApprove = cli("approve", "--run", dir.resolve("run-named-base/table").toString(), "--scenario", named.toString());
+        assertEquals(namedApprove.output, 0, namedApprove.exit);
+        Cli namedPanel = run(named, dir.resolve("run-named"), log, "-Ddemo.extraPanel=true");
+        assertEquals(namedPanel.output, 0, namedPanel.exit);
+        assertEquals(namedPanel.output, RunResult.Status.PASS, result(dir.resolve("run-named/table")).status);
+
+        // R-23b: an incorrect cell value in row 1 causes FAIL.
+        Cli bad = run(scenario, dir.resolve("run-bad"), log, "-Ddemo.badCell=true");
+        assertEquals(bad.output, 1, bad.exit);
+        RunResult rb = result(dir.resolve("run-bad/table"));
+        assertEquals(bad.output, RunResult.Status.FAIL, rb.status);
+        boolean found = false;
+        for (RunResult.StepResult st : rb.steps) {
+            for (String d : st.differences) if (d.startsWith("CHANGED [#demo.frame]/#demo.table .cells[0][1]: ")) found = true;
+        }
+        assertTrue(rb.steps.toString(), found);
+    }
+
+    private static long lines(Path f) throws IOException {
+        return Files.readAllLines(f, StandardCharsets.UTF_8).size();
+    }
+
     // ---- helpers -------------------------------------------------------------------------------
 
     private static final class Cli {
@@ -200,8 +257,10 @@ public class SelfTestIT {
     }
 
     /** Runs the CLI command {@code run} with the demo application. */
-    private static Cli run(Path scenarios, Path out, Path log) throws Exception {
-        String app = quote(java) + " " + localeArgs() + " -Ddemo.log=" + quote(log.toString()) + " -jar " + quote(demoJar.toString());
+    private static Cli run(Path scenarios, Path out, Path log, String... demoOptions) throws Exception {
+        StringBuilder extra = new StringBuilder();
+        for (String o : demoOptions) extra.append(o).append(' ');
+        String app = quote(java) + " " + localeArgs() + " " + extra + "-Ddemo.log=" + quote(log.toString()) + " -jar " + quote(demoJar.toString());
         return cli("run", "--agent", agentJar.toString(), "--app", app, "--scenarios", scenarios.toString(),
                 "--out", out.toString(), "--log", log.toString());
     }

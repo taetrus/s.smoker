@@ -19,6 +19,7 @@ import java.awt.FlowLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.IOException;
+import java.util.Locale;
 import java.util.logging.FileHandler;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -31,6 +32,8 @@ import java.util.logging.SimpleFormatter;
 public class DemoApp {
 
     private static final Logger LOG = Logger.getLogger("demo");
+
+    private static final boolean BAD_CELL = Boolean.getBoolean("demo.badCell");
 
     public static void main(String[] args) throws IOException {
         FileHandler fh = new FileHandler(System.getProperty("demo.log", "demo.log"), true);
@@ -95,7 +98,10 @@ public class DemoApp {
                 }
                 String greeting = "tr".equals(lang.getSelectedItem()) ? "Merhaba " : "de".equals(lang.getSelectedItem()) ? "Hallo " : "Hello ";
                 result.setText(greeting + n);
-                model.addRow(new Object[] {n, lang.getSelectedItem()});
+                String shown = String.valueOf(lang.getSelectedItem());
+                // -Ddemo.badCell=true: the language in the first row is upper case (test of cell comparison).
+                if (BAD_CELL && model.getRowCount() == 0) shown = shown.toUpperCase(Locale.ROOT);
+                model.addRow(new Object[] {n, shown});
                 LOG.info("greeted " + n);
             }
         });
@@ -123,7 +129,13 @@ public class DemoApp {
         bottom.add(unnamed);
 
         f.getContentPane().setLayout(new BorderLayout());
-        f.getContentPane().add(top, BorderLayout.NORTH);
+        // -Ddemo.extraPanel=true: one more unnamed panel around the top row (test of anchored paths).
+        JPanel topRow = top;
+        if (Boolean.getBoolean("demo.extraPanel")) {
+            topRow = new JPanel(new BorderLayout());
+            topRow.add(top, BorderLayout.CENTER);
+        }
+        f.getContentPane().add(topRow, BorderLayout.NORTH);
         f.getContentPane().add(new JScrollPane(table), BorderLayout.CENTER);
         f.getContentPane().add(bottom, BorderLayout.SOUTH);
         f.setSize(640, 400);
