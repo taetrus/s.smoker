@@ -41,6 +41,10 @@ public class RunResult {
 
     /** Names that more than one component has in one window, e.g. {@code [Orders]: #x (2x)} (F-17). */
     public List<String> duplicateNames = new ArrayList<String>();
+    /** Components that need a real name, with proposals (WP-09). */
+    public List<LintEntry> lint = new ArrayList<LintEntry>();
+    /** Sorted automatic names used in the run (WP-09). */
+    public List<String> autoNames = new ArrayList<String>();
     /** Compare mode of the scenario: {@code all} or {@code named}. */
     public String compare;
 
