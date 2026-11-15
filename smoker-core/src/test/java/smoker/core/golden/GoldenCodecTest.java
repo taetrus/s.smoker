@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -86,7 +87,7 @@ public class GoldenCodecTest {
         assertEquals("remove", ch.get(0).op);
         assertNull(ch.get(0).node);
         assertEquals("[W]/#b", ch.get(1).path);
-        assertEquals("set", ch.get(1).op);
+        assertEquals("add", ch.get(1).op);
         assertEquals("b", ch.get(1).node.text);
         LinkedHashMap<String, Snapshot> back = GoldenCodec.decode(g);
         assertEquals(flatJson(m.get("s002")), flatJson(back.get("s002")));
@@ -131,5 +132,69 @@ public class GoldenCodecTest {
         n.cells.get(0).set(0, "changed");
         assertEquals("a", back.items.get(0));
         assertEquals("x", back.cells.get(0).get(0));
+    }
+
+    private static LinkedHashMap<String, Snapshot> twoSteps(NodeSnapshot first, NodeSnapshot second) {
+        LinkedHashMap<String, Snapshot> m = new LinkedHashMap<String, Snapshot>();
+        m.put("s001", snap(first));
+        m.put("s002", snap(second));
+        return m;
+    }
+
+    @Test
+    public void setChangeHoldsOnlyChangedAttributes() {
+        LinkedHashMap<String, Snapshot> m = twoSteps(node("[W]/#a", "a"), node("[W]/#a", "b"));
+        Golden g = GoldenCodec.encode("demo", m);
+        List<Golden.Change> ch = g.steps.get(1).changes;
+        assertEquals(1, ch.size());
+        Golden.Change c = ch.get(0);
+        assertEquals("[W]/#a", c.path);
+        assertEquals("set", c.op);
+        assertEquals("b", c.node.text);
+        assertNull(c.node.type);
+        assertNull(c.node.enabled);
+        assertNull(c.node.path);
+        assertNull(c.unset);
+        assertEquals(flatJson(m.get("s002")), flatJson(GoldenCodec.decode(g).get("s002")));
+    }
+
+    @Test
+    public void attributeThatBecomesNullIsUnset() {
+        NodeSnapshot before = node("[W]/#a", "a");
+        before.enabled = Boolean.FALSE;
+        NodeSnapshot after = node("[W]/#a", "a");
+        after.enabled = null;
+        LinkedHashMap<String, Snapshot> m = twoSteps(before, after);
+        Golden g = GoldenCodec.encode("demo", m);
+        Golden.Change c = g.steps.get(1).changes.get(0);
+        assertEquals("set", c.op);
+        assertEquals(java.util.Arrays.asList("enabled"), c.unset);
+        LinkedHashMap<String, Snapshot> back = GoldenCodec.decode(g);
+        assertNull(back.get("s002").nodes.get(0).enabled);
+        assertEquals(Boolean.FALSE, back.get("s001").nodes.get(0).enabled);
+        assertEquals(flatJson(m.get("s002")), flatJson(back.get("s002")));
+    }
+
+    @Test
+    public void addedComponentIsAddWithFullNode() {
+        NodeSnapshot b = node("[W]/#b", "b");
+        b.items = new ArrayList<String>(java.util.Arrays.asList("x"));
+        LinkedHashMap<String, Snapshot> m = new LinkedHashMap<String, Snapshot>();
+        m.put("s001", snap(node("[W]/#a", "a")));
+        m.put("s002", snap(node("[W]/#a", "a"), b));
+        Golden g = GoldenCodec.encode("demo", m);
+        List<Golden.Change> ch = g.steps.get(1).changes;
+        assertEquals(1, ch.size());
+        Golden.Change c = ch.get(0);
+        assertEquals("[W]/#b", c.path);
+        assertEquals("add", c.op);
+        assertNotNull(c.node);
+        assertNull(c.node.path);
+        assertEquals("JLabel", c.node.type);
+        assertEquals("b", c.node.text);
+        assertEquals(Boolean.TRUE, c.node.enabled);
+        assertEquals(b.items, c.node.items);
+        assertNull(c.unset);
+        assertEquals(flatJson(m.get("s002")), flatJson(GoldenCodec.decode(g).get("s002")));
     }
 }

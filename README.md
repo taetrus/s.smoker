@@ -108,11 +108,15 @@ The report lists names that more than one component has in one window ("Names th
 
 Golden file: `approve` and the recorder write the golden snapshots to `<scenario>.golden.json` in the folder of the
 scenario (`orders-create.json` gives `orders-create.golden.json`). It has `schemaVersion` 2, the first step in full
-(`full`), and for each later step the changes against the step before it (`changes`). Each change has a `path`,
-an `op` (`set` or `remove`) and, for `set`, the new `node`. A step without a golden gives `NO_GOLDEN`.
-`approve --steps` replaces only those steps. The other steps keep their golden. A step that is not in the scenario
-leaves the golden file. `approve` prints the number of approved steps and, for each step, the number of changed
-components. `run` does not read `*.golden.json` as a scenario. Commit the golden file with the scenario.
+(`full`), and for each later step the changes against the step before it (`changes`). A step without a golden
+gives `NO_GOLDEN`. `approve --steps` replaces only those steps. The other steps keep their golden. A step that is
+not in the scenario leaves the golden file. `approve` prints the number of approved steps and, for each step, the
+number of changed components. `run` does not read `*.golden.json` as a scenario. Commit the golden file with the scenario.
+
+Each change entry has the `path` of one component and an `op`. `add` gives the new component in full in `node`.
+`set` gives in `node` only the attributes with a new value. `set` lists in `unset` the attributes that have no value now.
+`remove` has no `node`. The entries are sorted by path. Each attribute is on its own line, so one changed value
+gives one changed line in the diff. s.smoker refuses an entry with an unknown `op`.
 
 Title rules: a window title can change while the application runs. `windowKeys` maps a title to a fixed key.
 The first `pattern` (Java regex, matches the whole title) gives the `key`. The key replaces the title in paths and in

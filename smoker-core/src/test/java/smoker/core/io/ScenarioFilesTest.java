@@ -151,6 +151,30 @@ public class ScenarioFilesTest {
     }
 
     @Test
+    public void goldenWithAWrongChangeIsRefused() throws Exception {
+        Path f = tmp.getRoot().toPath().resolve("greet.json");
+        String head = "{'schemaVersion': 2, 'scenario': 'greet', 'steps': [{'id': 's001', 'full': []}, "
+                + "{'id': 's002', 'changes': [";
+        String[] wrong = {
+            "{'path': '[W]/#a', 'op': 'add'}",
+            "{'path': '[W]/#a', 'op': 'set'}",
+            "{'path': '[W]/#a', 'op': 'remove', 'node': {'text': 'a'}}",
+            "{'path': '[W]/#a', 'op': 'remove', 'unset': ['text']}",
+            "{'path': '[W]/#a', 'op': 'move'}",
+            "{'op': 'remove'}",
+        };
+        for (String c : wrong) {
+            Path g = file("greet.golden.json", head + c + "]}]}");
+            String m = refusal(f, true);
+            assertTrue(c + ": " + m, m.startsWith(g + ":") && m.contains("s002"));
+        }
+        file("greet.golden.json", head + "{'path': '[W]/#a', 'op': 'add', 'node': {'text': 'a'}}, "
+                + "{'path': '[W]/#a', 'op': 'set', 'unset': ['text']}, "
+                + "{'path': '[W]/#a', 'op': 'remove'}]}]}");
+        assertTrue(ScenarioFiles.readGolden(f).get("s002").nodes.isEmpty());
+    }
+
+    @Test
     public void compareOtherThanAllOrNamedIsRefused() throws Exception {
         Path f = file("c.json", "{'schemaVersion':2,'name':'c','compare':'some','steps':[]}");
         assertEquals(f + ": compare must be \"all\" or \"named\", not \"some\".", refusal(f, false));

@@ -19,10 +19,17 @@ public class Golden {
         public List<Change> changes;
     }
 
+    /** One component per change entry. {@code node.path} is not written: the path is {@link #path}. */
     public static class Change {
         public String path;
-        /** {@code "set"}: node is the full new state, also for an added component. {@code "remove"}: node is null. */
+        /**
+         * {@code "add"}: {@code node} is the full new component.
+         * {@code "set"}: {@code node} holds only the attributes that changed to a non-null value (null when there
+         * are none), {@code unset} the names of the attributes that changed to null (null when there are none).
+         * {@code "remove"}: no {@code node} and no {@code unset}.
+         */
         public String op;
         public NodeSnapshot node;
+        public List<String> unset;
     }
 }

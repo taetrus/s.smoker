@@ -2,6 +2,7 @@ package smoker.core.io;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 
@@ -13,6 +14,7 @@ import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
 
 /** Pretty, stable JSON so scenario files diff cleanly in Git (R-25). */
 public final class Json {
@@ -21,6 +23,10 @@ public final class Json {
             .setPrettyPrinting()
             .disableHtmlEscaping()
             .create();
+    /** Writes primitives (escaping as {@link #GSON}). */
+    private static final Gson PLAIN = new GsonBuilder().disableHtmlEscaping().create();
+    /** {@link #write}: an object or array whose one-line form is at most this long is written on one line. */
+    static final int ONE_LINE_MAX = 100;
 
     private Json() {}
 
@@ -47,15 +53,111 @@ public final class Json {
         return GSON.fromJson(tree, type);
     }
 
+    /**
+     * Compact layout for scenario files, run results and all other files: an object or array is written on one
+     * line when its one-line form has at most {@value #ONE_LINE_MAX} characters, else one member per line.
+     */
     public static void write(Path file, Object value) throws IOException {
+        StringBuilder out = new StringBuilder();
+        compact(GSON.toJsonTree(value), "", out);
+        writeText(file, out);
+    }
+
+    /**
+     * Layout of the golden file (spec 4.1): each member of an object on its own line, so that one changed
+     * attribute gives one changed line. An array of primitives is on one line. An array of arrays (table cells)
+     * has one row per line.
+     */
+    public static void writeGolden(Path file, Object value) throws IOException {
+        StringBuilder out = new StringBuilder();
+        golden(GSON.toJsonTree(value), "", out);
+        writeText(file, out);
+    }
+
+    private static void writeText(Path file, StringBuilder text) throws IOException {
         if (file.getParent() != null) Files.createDirectories(file.getParent());
         Writer w = new OutputStreamWriter(Files.newOutputStream(file), StandardCharsets.UTF_8);
         try {
-            GSON.toJson(value, w);
+            w.write(text.toString());
             w.write('\n');
         } finally {
             w.close();
         }
+    }
+
+    private static void compact(JsonElement e, String indent, StringBuilder out) {
+        String line = oneLine(e);
+        if (line.length() <= ONE_LINE_MAX || !(e.isJsonObject() || e.isJsonArray())) {
+            out.append(line);
+        } else {
+            block(e, indent, out, false);
+        }
+    }
+
+    private static void golden(JsonElement e, String indent, StringBuilder out) {
+        if (e.isJsonObject() || (e.isJsonArray() && !primitives(e.getAsJsonArray()))) {
+            block(e, indent, out, true);
+        } else {
+            out.append(oneLine(e));
+        }
+    }
+
+    /** One member per line, two spaces of indent per depth, as Gson pretty printing. Empty gives {} or []. */
+    private static void block(JsonElement e, String indent, StringBuilder out, boolean golden) {
+        String inner = indent + "  ";
+        boolean first = true;
+        if (e.isJsonObject()) {
+            out.append('{');
+            for (Map.Entry<String, JsonElement> m : e.getAsJsonObject().entrySet()) {
+                if (m.getValue().isJsonNull()) continue; // as Gson without serializeNulls
+                out.append(first ? "\n" : ",\n").append(inner).append(PLAIN.toJson(m.getKey())).append(": ");
+                member(m.getValue(), inner, out, golden);
+                first = false;
+            }
+            out.append(first ? "}" : "\n" + indent + "}");
+        } else {
+            out.append('[');
+            for (JsonElement x : e.getAsJsonArray()) {
+                out.append(first ? "\n" : ",\n").append(inner);
+                member(x, inner, out, golden);
+                first = false;
+            }
+            out.append(first ? "]" : "\n" + indent + "]");
+        }
+    }
+
+    private static void member(JsonElement e, String indent, StringBuilder out, boolean golden) {
+        if (golden) golden(e, indent, out);
+        else compact(e, indent, out);
+    }
+
+    /** {@code {"a": 1, "b": [1, 2]}}: the separators of Gson pretty printing, without line breaks. */
+    private static String oneLine(JsonElement e) {
+        if (!e.isJsonObject() && !e.isJsonArray()) return PLAIN.toJson(e);
+        StringBuilder out = new StringBuilder();
+        boolean first = true;
+        if (e.isJsonObject()) {
+            out.append('{');
+            for (Map.Entry<String, JsonElement> m : e.getAsJsonObject().entrySet()) {
+                if (m.getValue().isJsonNull()) continue;
+                if (!first) out.append(", ");
+                out.append(PLAIN.toJson(m.getKey())).append(": ").append(oneLine(m.getValue()));
+                first = false;
+            }
+            return out.append('}').toString();
+        }
+        out.append('[');
+        for (JsonElement x : e.getAsJsonArray()) {
+            if (!first) out.append(", ");
+            out.append(oneLine(x));
+            first = false;
+        }
+        return out.append(']').toString();
+    }
+
+    private static boolean primitives(JsonArray a) {
+        for (JsonElement x : a) if (x.isJsonObject() || x.isJsonArray()) return false;
+        return true;
     }
 
     public static String toString(Object value) {

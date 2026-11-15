@@ -68,13 +68,37 @@ public final class ScenarioFiles {
                 throw new IllegalArgumentException(file + ": step " + s.id
                         + (i == 0 ? " must have \"full\" and no \"changes\"." : " must have \"changes\" and no \"full\"."));
             }
+            if (s.changes != null) {
+                for (Golden.Change c : s.changes) checkChange(file, s.id, c);
+            }
         }
         return GoldenCodec.decode(g);
     }
 
+    /** {@code add} needs {@code node}; {@code set} needs {@code node} or {@code unset}; {@code remove} has neither. */
+    private static void checkChange(Path file, String stepId, Golden.Change c) {
+        String where = file + ": step " + stepId + ", change " + c.path;
+        if (c.path == null) throw new IllegalArgumentException(file + ": step " + stepId + ": a change has no \"path\".");
+        boolean hasUnset = c.unset != null && !c.unset.isEmpty();
+        if (GoldenCodec.ADD.equals(c.op)) {
+            if (c.node == null) throw new IllegalArgumentException(where + ": \"add\" must have \"node\".");
+        } else if (GoldenCodec.SET.equals(c.op)) {
+            if (c.node == null && !hasUnset) {
+                throw new IllegalArgumentException(where + ": \"set\" must have \"node\" or \"unset\".");
+            }
+        } else if (GoldenCodec.REMOVE.equals(c.op)) {
+            if (c.node != null || c.unset != null) {
+                throw new IllegalArgumentException(where + ": \"remove\" must have no \"node\" and no \"unset\".");
+            }
+        } else {
+            throw new IllegalArgumentException(where + ": unknown op \"" + c.op
+                    + "\" (use \"add\", \"set\" or \"remove\").");
+        }
+    }
+
     /** Writes the golden file beside the scenario. The order of {@code byStep} is the order in the file. */
     public static void writeGolden(Path scenario, String name, LinkedHashMap<String, Snapshot> byStep) throws IOException {
-        Json.write(goldenPath(scenario), GoldenCodec.encode(name, byStep));
+        Json.writeGolden(goldenPath(scenario), GoldenCodec.encode(name, byStep));
     }
 
     private static JsonObject checkedRoot(Path file) throws IOException {
