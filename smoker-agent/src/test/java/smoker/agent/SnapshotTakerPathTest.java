@@ -313,6 +313,78 @@ public class SnapshotTakerPathTest {
         assertTrue(String.valueOf(taker.unnamedInteractive()), taker.unnamedInteractive().contains("[Orders]/JButton[0]"));
     }
 
+    @Test
+    public void twoComponentsNamedXGiveOneLintResult() throws Exception {
+        final SnapshotTaker taker = new SnapshotTaker(20);
+        onEdt(new Callable<Snapshot>() {
+            public Snapshot call() {
+                JFrame f = frame("Orders");
+                JPanel p = new JPanel();
+                for (String t : Arrays.asList("A", "B")) {
+                    JButton b = new JButton(t);
+                    b.setName("x");
+                    p.add(b);
+                }
+                f.getContentPane().add(p);
+                f.pack();
+                f.setVisible(true);
+                return taker.take();
+            }
+        });
+        assertEquals(new java.util.TreeSet<String>(Arrays.asList("[Orders]: #x (2x)")), taker.duplicateNames());
+    }
+
+    @Test
+    public void namedModeComparesWindowsAndNamedOnly() throws Exception {
+        final SnapshotTaker taker = new SnapshotTaker(20, true);
+        Snapshot s = onEdt(new Callable<Snapshot>() {
+            public Snapshot call() {
+                JFrame f = frame("Orders");
+                JPanel p = new JPanel();
+                JTextField a = new JTextField(5);
+                a.setName("a");
+                p.add(a);
+                p.add(new JButton("OK"));
+                f.getContentPane().add(p);
+                f.pack();
+                f.setVisible(true);
+                return taker.take();
+            }
+        });
+        assertEquals(Arrays.asList("[Orders]", "[Orders]/#a"), paths(s, "[Orders]"));
+        assertTrue(taker.unnamedInteractive().contains("[Orders]/JButton[0]"));
+    }
+
+    @Test
+    public void newUnnamedPanelGivesNoDifferenceInNamedMode() throws Exception {
+        final AtomicReference<JPanel> panel = new AtomicReference<JPanel>();
+        final AtomicReference<JTextField> field = new AtomicReference<JTextField>();
+        Snapshot before = onEdt(new Callable<Snapshot>() {
+            public Snapshot call() {
+                JFrame f = frame("Orders");
+                panel.set(new JPanel());
+                field.set(new JTextField("abc", 10));
+                field.get().setName("a");
+                panel.get().add(field.get());
+                f.getContentPane().add(panel.get());
+                f.pack();
+                f.setVisible(true);
+                return new SnapshotTaker(20, true).take();
+            }
+        });
+        Snapshot after = onEdt(new Callable<Snapshot>() {
+            public Snapshot call() {
+                panel.get().remove(field.get());
+                JPanel wrapper = new JPanel();
+                wrapper.add(field.get());
+                panel.get().add(wrapper);
+                panel.get().revalidate();
+                return new SnapshotTaker(20, true).take();
+            }
+        });
+        assertEquals(new ArrayList<String>(), SnapshotDiff.diff(before, after, new IgnoreRules()));
+    }
+
     private JFrame frame(String title) {
         JFrame f = new JFrame(title);
         windows.add(f);

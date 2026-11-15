@@ -36,7 +36,7 @@ final class Player implements Runnable {
         this.cfg = cfg;
         this.scenario = scenario;
         this.golden = golden;
-        this.taker = new SnapshotTaker(scenario.maxRows);
+        this.taker = new SnapshotTaker(scenario.maxRows, "named".equals(scenario.compare));
         this.obs = obs;
         this.watchdog = watchdog;
     }
@@ -44,6 +44,7 @@ final class Player implements Runnable {
     @Override
     public void run() {
         result.scenarioName = scenario.name;
+        result.compare = scenario.compare;
         result.scenarioFile = cfg.scenario.toString();
         result.startedAt = System.currentTimeMillis();
         result.javaVersion = System.getProperty("java.version");
@@ -64,6 +65,7 @@ final class Player implements Runnable {
         } finally {
             result.finishedAt = System.currentTimeMillis();
             result.unnamedComponents.addAll(taker.unnamedInteractive());
+            result.duplicateNames.addAll(taker.duplicateNames());
             try {
                 Json.write(cfg.out.resolve("run-result.json"), result);
             } catch (Exception e) {

@@ -71,7 +71,7 @@ final class Recorder implements AWTEventListener {
         this.cfg = cfg;
         this.scenario = scenario;
         this.snapshots.putAll(golden);
-        this.taker = new SnapshotTaker(scenario.maxRows);
+        this.taker = new SnapshotTaker(scenario.maxRows, "named".equals(scenario.compare));
         for (Step s : scenario.steps) counter = Math.max(counter, numberOf(s.id));
         Thread t = new Thread(new Runnable() {
             @Override

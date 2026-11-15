@@ -103,6 +103,8 @@ Actions: `CLICK`, `SET_TEXT`, `SELECT` (combo/list/tab by text or index, table b
 with `schemaVersion` 1, or with an `expected` block in a step: that is the old format. To convert an old file,
 add `"schemaVersion": 2` as the first field, remove each `expected` block, then run and `approve` again.
 `compare` selects the compared components. Use `all` (the default): the snapshot diff compares all components.
+Use `named`: the diff compares only windows and components with a name from `setName()`. Any other value is refused.
+The report lists names that more than one component has in one window ("Names that are not unique").
 
 Golden file: `approve` and the recorder write the golden snapshots to `<scenario>.golden.json` in the folder of the
 scenario (`orders-create.json` gives `orders-create.golden.json`). It has `schemaVersion` 2, the first step in full

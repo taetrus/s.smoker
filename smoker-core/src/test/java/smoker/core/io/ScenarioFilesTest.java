@@ -149,4 +149,11 @@ public class ScenarioFilesTest {
         m = refusal(f, true);
         assertTrue(m, m.startsWith(g + ":") && m.contains("s002"));
     }
+
+    @Test
+    public void compareOtherThanAllOrNamedIsRefused() throws Exception {
+        Path f = file("c.json", "{'schemaVersion':2,'name':'c','compare':'some','steps':[]}");
+        assertEquals(f + ": compare must be \"all\" or \"named\", not \"some\".", refusal(f, false));
+        assertEquals("named", ScenarioFiles.readScenario(file("d.json", "{'schemaVersion':2,'name':'d','compare':'named','steps':[]}")).compare);
+    }
 }

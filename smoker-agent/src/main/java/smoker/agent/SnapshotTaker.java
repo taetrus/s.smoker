@@ -37,11 +37,22 @@ final class SnapshotTaker {
     static final String SMOKER_WINDOW_PREFIX = "smoker.";
 
     private final Set<String> unnamed = new TreeSet<String>();
+    private final Set<String> duplicates = new TreeSet<String>();
     private final int maxRows;
+    private final boolean namedOnly;
 
     /** @param maxRows the content of at most this many rows of a table, list or tree is taken (F-07) */
     SnapshotTaker(int maxRows) {
+        this(maxRows, false);
+    }
+
+    /**
+     * @param maxRows   the content of at most this many rows of a table, list or tree is taken (F-07)
+     * @param namedOnly compare mode {@code named}: only windows and named components become nodes (R-30a)
+     */
+    SnapshotTaker(int maxRows, boolean namedOnly) {
         this.maxRows = maxRows;
+        this.namedOnly = namedOnly;
     }
 
     Snapshot take() {
@@ -57,7 +68,11 @@ final class SnapshotTaker {
             NodeSnapshot n = node(w, part);
             n.title = title;
             s.nodes.add(n);
-            walk(w, part, part, new HashMap<String, Integer>(), taken, s.nodes);
+            Map<String, Integer> names = new HashMap<String, Integer>();
+            walk(w, part, part, new HashMap<String, Integer>(), names, taken, s.nodes);
+            for (Map.Entry<String, Integer> e : names.entrySet()) {
+                if (e.getValue() > 1) duplicates.add(part + ": #" + e.getKey() + " (" + e.getValue() + "x)");
+            }
         }
         Collections.sort(s.nodes, new Comparator<NodeSnapshot>() {
             public int compare(NodeSnapshot a, NodeSnapshot b) {
@@ -69,6 +84,11 @@ final class SnapshotTaker {
 
     Set<String> unnamedInteractive() {
         return unnamed;
+    }
+
+    /** One entry per window and name that more than one visible component has: {@code "[Orders]: #x (2x)"} (F-17). */
+    Set<String> duplicateNames() {
+        return duplicates;
     }
 
     /** The snapshot text of a password field that is not empty. */
@@ -142,10 +162,11 @@ final class SnapshotTaker {
      * does not change the paths of its unnamed siblings.
      *
      * @param counters next index of each (anchor, class) in this window
+     * @param names    the number of visible components per application name in this window
      * @param taken    the paths of this snapshot so far
      */
     private void walk(Container parent, String windowPart, String anchor, Map<String, Integer> counters,
-                      Set<String> taken, List<NodeSnapshot> out) {
+                      Map<String, Integer> names, Set<String> taken, List<NodeSnapshot> out) {
         for (Component k : parent.getComponents()) {
             if (!k.isVisible() || lafInternal(k)) continue;
             String childAnchor = anchor;
@@ -154,10 +175,17 @@ final class SnapshotTaker {
                 String cls = Locators.classNameOf(k);
                 int idx = next(counters, anchor + "/" + cls);
                 String path = unique(taken, name != null ? windowPart + "/#" + name : anchor + "/" + cls + "[" + idx + "]");
-                out.add(node(k, path));
-                if (name != null) childAnchor = path;
+                NodeSnapshot n = node(k, path);   // also collects the lint, in both modes
+                if (name != null) {
+                    out.add(n);
+                    childAnchor = path;
+                    Integer c = names.get(name);
+                    names.put(name, c == null ? 1 : c + 1);
+                } else if (!namedOnly) {
+                    out.add(n);
+                }
             }
-            if (k instanceof Container) walk((Container) k, windowPart, childAnchor, counters, taken, out);
+            if (k instanceof Container) walk((Container) k, windowPart, childAnchor, counters, names, taken, out);
         }
     }
 

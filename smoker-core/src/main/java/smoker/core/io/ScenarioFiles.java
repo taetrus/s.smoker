@@ -34,7 +34,11 @@ public final class ScenarioFiles {
                 if (step.isJsonObject() && step.getAsJsonObject().has("expected")) throw oldFormat(file);
             }
         }
-        return Json.fromTree(root, Scenario.class);
+        Scenario sc = Json.fromTree(root, Scenario.class);
+        if (!"all".equals(sc.compare) && !"named".equals(sc.compare)) {
+            throw new IllegalArgumentException(file + ": compare must be \"all\" or \"named\", not \"" + sc.compare + "\".");
+        }
+        return sc;
     }
 
     /** {@code dir/greet.json} gives {@code dir/greet.golden.json}. */

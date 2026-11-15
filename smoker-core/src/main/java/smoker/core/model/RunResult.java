@@ -39,6 +39,11 @@ public class RunResult {
     /** Components without setName() seen during the run (R-22). */
     public List<String> unnamedComponents = new ArrayList<String>();
 
+    /** Names that more than one component has in one window, e.g. {@code [Orders]: #x (2x)} (F-17). */
+    public List<String> duplicateNames = new ArrayList<String>();
+    /** Compare mode of the scenario: {@code all} or {@code named}. */
+    public String compare;
+
     public boolean passed() {
         return status == Status.PASS;
     }
