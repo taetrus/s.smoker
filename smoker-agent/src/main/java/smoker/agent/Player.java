@@ -14,6 +14,7 @@ import java.nio.file.Path;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -132,11 +133,31 @@ final class Player implements Runnable {
     }
 
     private boolean mainWindowShowing() {
-        for (Window w : Window.getWindows()) {
-            if (w instanceof Frame && w.isShowing()
-                    && (w.getName() == null || !w.getName().startsWith(SnapshotTaker.SMOKER_WINDOW_PREFIX))) return true;
+        return mainWindowShown(1000);
+    }
+
+    /** A frame that is shown and displayable (not half built) and is not the tool's own window. */
+    static boolean isMainWindow(Window w) {
+        return w instanceof Frame && w.isShowing() && w.isDisplayable()
+                && (w.getName() == null || !w.getName().startsWith(SnapshotTaker.SMOKER_WINDOW_PREFIX));
+    }
+
+    /** Scans the windows on the EDT. An EDT that does not answer within maxWaitMs counts as "no main window". */
+    static boolean mainWindowShown(long maxWaitMs) {
+        FutureTask<Boolean> task = new FutureTask<Boolean>(new Callable<Boolean>() {
+            @Override
+            public Boolean call() {
+                for (Window w : Window.getWindows()) if (isMainWindow(w)) return true;
+                return false;
+            }
+        });
+        SwingUtilities.invokeLater(task);
+        try {
+            return task.get(maxWaitMs, TimeUnit.MILLISECONDS);
+        } catch (Exception e) { // timeout, interrupt or failure
+            task.cancel(false);
+            return false;
         }
-        return false;
     }
 
     private RunResult.StepResult runStep(final Step step) {

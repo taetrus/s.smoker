@@ -5,8 +5,6 @@ import smoker.core.model.Scenario;
 import smoker.core.model.Snapshot;
 
 import javax.swing.SwingUtilities;
-import java.awt.Frame;
-import java.awt.Window;
 import java.lang.instrument.Instrumentation;
 import java.nio.file.Files;
 import java.util.LinkedHashMap;
@@ -90,7 +88,7 @@ public final class SmokerAgent {
         AutoNames.enable(sc.autoNames);
         // show the toolbar once the app's first frame is up, so it floats above it
         long deadline = System.currentTimeMillis() + sc.startupTimeoutMs;
-        while (System.currentTimeMillis() < deadline && !anyFrameShowing()) Thread.sleep(200);
+        while (System.currentTimeMillis() < deadline && !Player.mainWindowShown(1000)) Thread.sleep(200);
         final Recorder rec = new Recorder(cfg, sc, golden);
         SwingUtilities.invokeLater(new Runnable() {
             @Override
@@ -98,11 +96,6 @@ public final class SmokerAgent {
                 new RecorderToolbar(rec).setVisible(true);
             }
         });
-    }
-
-    private static boolean anyFrameShowing() {
-        for (Window w : Window.getWindows()) if (w instanceof Frame && w.isShowing()) return true;
-        return false;
     }
 
     private static String stripExt(String n) {
