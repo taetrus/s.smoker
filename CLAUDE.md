@@ -51,6 +51,9 @@ after every change to `smoker-agent` or `smoker-core`.
   `maxRows`, `windowKeys`, lint for names that are not unique, player continues after FAIL.
 - Decision 6 (2026-11-15): test reports go into `docs/` on GitHub, not Confluence.
 - Open findings: F-22 (WP-04), F-02 confirmed (WP-03).
+- WP-09 implemented on branch `wp-09-naming-assistant` (not pushed): automatic names `@<Class>.<field>`, lint entries, `lint --emit-patch`, demo case `notes.json`.
+  Tests on macOS: 61 in `smoker-core`, 111 in `smoker-agent`, 17 in `smoker-cli`, 4 IT.
+  Open: the Windows run of a scenario with automatic names; approve the pilot goldens after WP-09 is merged.
 - 2026-11-15: one SelfTestIT run failed 2 of 3 methods under load. It did not recur in 3 clean runs.
   If it recurs, keep `smoker-it/target/failsafe-reports` and `smoker-it/target/it-work`.
 - Open: re-approve the pilot goldens on Windows (`docs/wp-01-handoff.md` section 5).

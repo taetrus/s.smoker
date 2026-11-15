@@ -223,15 +223,15 @@ Do each item only when a team needs it.
 
 Purpose: decrease the work to give names to the components of an existing application.
 
-1. For each unnamed component, find the nearest parent that is an instance of an application class.
-2. Use reflection to find the field of that parent that refers to the component.
-3. Write the lint result with these columns: window, application class, field, component type, visible text, proposed name.
-4. Make the proposed name from the view name and the field name. Example: field `saveButton` in `OrdersPanel` gives `orders.btn.save`.
-5. Add the command `lint --emit-patch`. It writes one line of Java for each result, for example `saveButton.setName("orders.btn.save");`, with the class where the developer must add it.
-6. Add the option `autoNames=true`. The agent then uses the name `@<Class>.<field>` at run time for a component without a name. The source code does not change.
-7. Mark each automatic name in the report. An automatic name changes when a developer renames the field.
+1. DONE: For each unnamed component, find the nearest parent that is an instance of an application class.
+2. DONE: Use reflection to find the field of that parent that refers to the component.
+3. DONE: Write the lint result with these columns: window, application class, field, component type, visible text, proposed name.
+4. DONE: Make the proposed name from the view name and the field name. Example: field `saveButton` in `OrdersPanel` gives `orders.btn.save`.
+5. DONE: Add the command `lint --emit-patch`. It writes one line of Java for each result, for example `saveButton.setName("orders.btn.save");`, with the class where the developer must add it.
+6. DONE: Add the option `autoNames=true`. The agent then uses the name `@<Class>.<field>` at run time for a component without a name. The source code does not change.
+7. DONE: Mark each automatic name in the report. An automatic name changes when a developer renames the field.
 
-Completion criterion: on the pilot application, the tool proposes a name for a minimum of 80 % of the unnamed interactive components. A scenario that uses automatic names passes on Windows.
+Completion criterion: on the pilot application, the tool proposes a name for a minimum of 80 % of the unnamed interactive components. A scenario that uses automatic names passes on Windows. Status: the demo scenario `notes.json` passes on macOS (SelfTestIT). The Windows part is open.
 Sequence: do WP-09 immediately after WP-01. The lint result from WP-01 is its input.
 
 ## 5. Risks
@@ -239,7 +239,7 @@ Sequence: do WP-09 immediately after WP-01. The lint result from WP-01 is its in
 | Risk | Probability | Effect | Mitigation |
 |---|---|---|---|
 | The product launcher prevents the agent option. | Low | The tool cannot be used. | WP-01 finds this in the first week. Alternative: environment variable `JAVA_TOOL_OPTIONS`. |
-| Many components have no name. | High | Locators use text and position. Scenarios fail after layout or language changes. | Use the lint result from WP-01 to estimate the work. Add a naming rule to the code review checklist. |
+| Many components have no name. | High | Locators use text and position. Scenarios fail after layout or language changes. | Use the lint result from WP-01 to estimate the work. Use automatic names (WP-09) and `lint --emit-patch` to add real names. Add a naming rule to the code review checklist. |
 | Important state is in components that paint their own content. | Medium | The snapshot does not show the state. | Count these components in WP-01. Move the hints API from WP-08 to version 1.0 if the count is high. |
 | The simulator gives different answers in each run. | Medium | Golden snapshots fail without a software defect. | Use `ignore` rules and `WAIT_FOR`. Use simulator scenarios that do not change. |
 | The Windows runner operates as a service. All smoke tests use Windows runners (decision 5). | Medium | Screenshots fail. Replay and snapshots continue to operate. | Set `screenshots=off` for these runners, or run the runner in a user session. |
@@ -259,5 +259,5 @@ Sequence: do WP-09 immediately after WP-01. The lint result from WP-01 is its in
 7. DECIDED 2026-11-15: the default comparison is `all`. It compares all components that show state, unnamed components included.
    Paths start at the nearest named ancestor or at the window. `named` is an option for each scenario. This changes R-30a.
 2. Select the number of developers who build s.smoker (not the developers of the application). With three developers, version 1.0 needs approximately three to four calendar weeks. With one developer, it needs approximately seven weeks.
-3. DECIDED 2026-11-12: the naming rule `<view>.<widget>` applies to all teams. The lint uses a baseline file. Only new lint results fail the pipeline.
+3. DECIDED 2026-11-12: the naming rule `<view>.<widget>` applies to all teams. WP-09 refines it: the proposed names are `<view>.<type>.<field>`, for example `orders.btn.save`. The lint uses a baseline file. Only new lint results fail the pipeline.
 4. DECIDED 2026-11-12: lint results fail the pipeline from version 1.1.

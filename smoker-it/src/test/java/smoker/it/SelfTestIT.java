@@ -26,6 +26,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import static org.junit.Assert.assertEquals;
@@ -255,6 +256,58 @@ public class SelfTestIT {
             for (String d : st.differences) if (d.startsWith("CHANGED [#demo.frame]/#demo.table .cells[0][1]: ")) found = true;
         }
         assertTrue(rb.steps.toString(), found);
+    }
+
+    @Test
+    public void automaticNamesSurviveARealName() throws Exception {
+        Path dir = Files.createDirectories(work.resolve("notes"));
+        Path scenario = dir.resolve("notes.json");
+        Files.copy(demoDir.resolve("scenarios/notes.json"), scenario);
+        Path log = dir.resolve("demo.log");
+
+        // The fields of NotesPanel have no name: the locators use the automatic names.
+        Cli run1 = run(scenario, dir.resolve("run1"), log);
+        assertEquals(run1.output, 0, run1.exit);
+        RunResult r1 = result(dir.resolve("run1/notes"));
+        assertEquals(run1.output, RunResult.Status.NO_GOLDEN, r1.status);
+        assertStepStatus(r1, "s001", RunResult.Status.NO_GOLDEN);
+        assertStepStatus(r1, "s002", RunResult.Status.NO_GOLDEN);
+        Cli approve = cli("approve", "--run", dir.resolve("run1/notes").toString(), "--scenario", scenario.toString());
+        assertEquals(approve.output, 0, approve.exit);
+        assertTrue(read(ScenarioFiles.goldenPath(scenario)).contains("#@NotesPanel.saveButton"));
+        Cli run2 = run(scenario, dir.resolve("run2"), log);
+        assertEquals(run2.output, 0, run2.exit);
+        assertEquals(run2.output, RunResult.Status.PASS, result(dir.resolve("run2/notes")).status);
+
+        // The application adds real names. The locators still find the components.
+        // The paths change: each difference is a MISSING or UNEXPECTED path with an automatic or a real name.
+        Cli real = run(scenario, dir.resolve("run-real"), log, "-Ddemo.realNames=true");
+        assertEquals(real.output, 1, real.exit);
+        RunResult rr = result(dir.resolve("run-real/notes"));
+        assertEquals(real.output, RunResult.Status.FAIL, rr.status);
+        boolean differences = false;
+        for (RunResult.StepResult st : rr.steps) {
+            assertFalse(real.output + st.error, st.status == RunResult.Status.ERROR);
+            for (String d : st.differences) {
+                differences = true;
+                assertTrue(d, d.startsWith("MISSING ") || d.startsWith("UNEXPECTED "));
+                assertTrue(d, d.contains("@NotesPanel.") || d.contains("notes."));
+            }
+        }
+        assertTrue("no difference", differences);
+        Cli approveReal = cli("approve", "--run", dir.resolve("run-real/notes").toString(), "--scenario", scenario.toString());
+        assertEquals(approveReal.output, 0, approveReal.exit);
+        Cli real2 = run(scenario, dir.resolve("run-real2"), log, "-Ddemo.realNames=true");
+        assertEquals(real2.output, 0, real2.exit);
+        assertEquals(real2.output, RunResult.Status.PASS, result(dir.resolve("run-real2/notes")).status);
+
+        // The lint of the first run proposes the real name that the application uses.
+        Path patch = dir.resolve("notes.patch");
+        Cli lint = cli("lint", "--run", dir.resolve("run1").toString(), "--emit-patch", patch.toString());
+        assertEquals(lint.output, 0, lint.exit);
+        assertTrue(lint.output, lint.output.contains("notes.btn.save"));
+        assertTrue(lint.output, Pattern.compile("(?m)^\\d+ unnamed interactive component\\(s\\)").matcher(lint.output).find());
+        assertTrue(read(patch), read(patch).contains("saveButton.setName(\"notes.btn.save\");"));
     }
 
     private static long lines(Path f) throws IOException {

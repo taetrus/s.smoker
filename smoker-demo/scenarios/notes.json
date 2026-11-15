@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 2,
+  "name": "notes",
+  "description": "Type a note and save it. The components have no name: the locators use automatic names.",
+  "startupTimeoutMs": 30000,
+  "quietMs": 300,
+  "stepTimeoutMs": 10000,
+  "ignore": {
+    "paths": [],
+    "attributes": [],
+    "valuePatterns": []
+  },
+  "steps": [
+    {
+      "id": "s001",
+      "name": "enter note",
+      "action": {
+        "type": "SET_TEXT",
+        "locator": {
+          "name": "@NotesPanel.noteField"
+        },
+        "value": "hello"
+      }
+    },
+    {
+      "id": "s002",
+      "name": "save",
+      "action": {
+        "type": "CLICK",
+        "locator": {
+          "name": "@NotesPanel.saveButton"
+        }
+      }
+    }
+  ]
+}

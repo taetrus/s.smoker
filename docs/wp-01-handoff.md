@@ -90,12 +90,18 @@ On JRE 8, 14 bundles of spike.master do not resolve (4 platform bundles need Jav
 The WP-02 format change (`schemaVersion` 2) removed the goldens from `docs/wp-01-pilot/pilot.json`, `hang.json` and `crash.json`.
 The goldens are now in a golden file beside each scenario. The pilot has no golden files yet.
 
+Approve the pilot goldens after WP-09 is merged. Automatic names (`@<Class>.<field>`) change the paths of unnamed components again.
+Goldens approved before WP-09 fail after the merge.
+A golden taken during a JTable cell edit can change once. Swing's `Table.editor` name is no longer treated as a real name.
+
 1. Copy `pilot.json`, `hang.json` and `crash.json` to `C:\smoke` (`hang.json` and `crash.json` are for spike.master).
 2. Run each scenario. Expect `NO_GOLDEN`.
 3. Run `approve` for each run. This writes `<scenario>.golden.json`.
 4. Run each scenario again. Expect PASS for `pilot.json`.
    `hang.json` and `crash.json` give HANG and ERROR (report section 4). Their steps have no snapshot, so their golden files have no steps.
 5. Copy the golden files to `docs/wp-01-pilot/` and commit them.
+   WP-09 Windows check: record or run a scenario that uses automatic names on p.osgi.ds. It must pass.
+   - [ ] Run the scenario. Expect `NO_GOLDEN`. Approve it. Run it again. Expect PASS.
 6. In the WP-06 recording session, make a test for focus changes. The recorder takes the pending snapshot of a step at `FOCUS_GAINED`.
    - [ ] Record a step whose action opens a dialog. Make sure that the golden of the step shows the dialog.
    - [ ] Record a step after which the application moves the focus by code. Make sure that the golden of the step is not taken too early.

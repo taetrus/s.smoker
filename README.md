@@ -84,7 +84,7 @@ A path without spaces needs no quotes. This is the easier procedure.
 {
   "schemaVersion": 2,
   "name": "orders-create",
-  "startupTimeoutMs": 60000, "quietMs": 400, "stepTimeoutMs": 15000, "compare": "all", "maxRows": 20,
+  "startupTimeoutMs": 60000, "quietMs": 400, "stepTimeoutMs": 15000, "compare": "all", "maxRows": 20, "autoNames": true,
   "windowKeys": [ { "pattern": "Editor - .*", "key": "Editor" } ],
   "ignore": { "paths": ["#statusbar\\.clock"], "attributes": [], "valuePatterns": ["\\d{2}:\\d{2}:\\d{2}"] },
   "steps": [
@@ -138,6 +138,36 @@ Do not put a real password in a scenario file.
 `{"name": "orders.save"}` — from `component.setName("orders.save")`, the only stable key. Fallback
 `{"windowTitle": "Orders", "className": "JButton", "text": "Save", "index": 0}`. Unnamed interactive components are
 listed in the report ("locator lint"). Convention: `<view>.<widget>`.
+
+### Automatic names
+
+An unnamed component can have an automatic name. The name is `@<Class>.<field>`. Example: `@OrdersPanel.saveButton`.
+The agent finds the field with reflection. The component must be in a field of an application class.
+Classes in `java.`, `javax.`, `sun.`, `com.sun.`, `jdk.`, `com.apple.`, `apple.` and `smoker.` are not application classes.
+The source code does not change.
+
+- Automatic names are on by default. Set `"autoNames": false` in the scenario to turn them off.
+- A real name from `setName()` always wins. A component with a real name has no automatic name.
+- A locator can use an automatic name: `{"name": "@OrdersPanel.saveButton"}`. The agent uses it only when it is unique in the window.
+- A locator with an automatic name still finds the component after the application adds the real name.
+- Paths in the golden file use automatic names. After the application adds a real name, the paths change. Run `approve` again.
+- The report marks the automatic names that the run used.
+- An automatic name changes when a developer renames the field or the class.
+- A component in a local variable has no field. It keeps the path rule and the locator fallback.
+
+### Lint
+
+```bash
+java -jar smoker-cli.jar lint --run out/ [--emit-patch names.patch]
+```
+
+`lint` reads the `run-result.json` files below the `--run` folder. It prints a table with these columns: window,
+class, field, type, text, automatic name, proposed name and source. The proposed name is `<view>.<type>.<field>`.
+Example: field `saveButton` in `OrdersPanel` gives `orders.btn.save`.
+The last line is a summary: the number of unnamed interactive components, the number with a proposed name,
+and the number with an automatic name. `lint` exits with 0. It exits with 2 if it finds no `run-result.json` or cannot write the file.
+`--emit-patch` writes one Java line for each proposed name, for example `saveButton.setName("orders.btn.save");`,
+with the class where the developer must add it.
 
 ### Statuses
 
