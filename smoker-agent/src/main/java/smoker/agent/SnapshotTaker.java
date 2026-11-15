@@ -18,6 +18,7 @@ import java.awt.Window;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -37,17 +38,17 @@ final class SnapshotTaker {
 
     Snapshot take() {
         Snapshot s = new Snapshot();
-        Map<String, Integer> windowParts = new HashMap<String, Integer>();
+        Set<String> taken = new HashSet<String>();
         for (Window w : Window.getWindows()) {
             if (!w.isShowing()) continue;
             if (w.getName() != null && w.getName().startsWith(SMOKER_WINDOW_PREFIX)) continue;
             String title = Locators.titleOf(w);
             String name = applicationName(w);
-            String part = indexed(windowParts, name != null ? "[#" + name + "]" : "[" + (title == null ? "" : title) + "]");
+            String part = unique(taken, name != null ? "[#" + name + "]" : "[" + (title == null ? "" : title) + "]");
             NodeSnapshot n = node(w, part);
             n.title = title;
             s.nodes.add(n);
-            walk(w, part, part, new HashMap<String, Integer>(), new HashMap<String, Integer>(), s.nodes);
+            walk(w, part, part, new HashMap<String, Integer>(), taken, s.nodes);
         }
         Collections.sort(s.nodes, new Comparator<NodeSnapshot>() {
             public int compare(NodeSnapshot a, NodeSnapshot b) {
@@ -89,12 +90,15 @@ final class SnapshotTaker {
     /**
      * An unnamed layout container shows no state the user can see: it gives no node and no path segment,
      * but its children are visited. A named container is compared and is an anchor.
+     * A {@link #lafInternal} component also gives true, but the walk skips it together with its subtree
+     * (its children are not visited).
      */
     static boolean isLayoutContainer(Component c) {
         if (applicationName(c) != null) return false;
         return c instanceof javax.swing.JPanel || c instanceof javax.swing.JScrollPane || c instanceof javax.swing.JViewport
                 || c instanceof javax.swing.JRootPane || c instanceof javax.swing.JLayeredPane || c instanceof javax.swing.Box
-                || c instanceof javax.swing.JSplitPane || c instanceof javax.swing.JToolBar || lafInternal(c);
+                || c instanceof javax.swing.Box.Filler || c instanceof javax.swing.JSplitPane || c instanceof javax.swing.JToolBar
+                || c instanceof javax.swing.JScrollBar || c instanceof javax.swing.CellRendererPane || lafInternal(c);
     }
 
     /** The name the application gave the component, or null when it has none (no name or a generated name). */
@@ -103,11 +107,16 @@ final class SnapshotTaker {
         return n != null && !Locators.isAutoName(n) ? n : null;
     }
 
-    /** {@code key} on first use, then {@code key[1]}, {@code key[2]}, ... */
-    private static String indexed(Map<String, Integer> seen, String key) {
-        Integer i = seen.get(key);
-        seen.put(key, i == null ? 1 : i + 1);
-        return i == null ? key : key + "[" + i + "]";
+    /**
+     * {@code path} when no node of this snapshot has it yet, else the first free {@code path[1]}, {@code path[2]}, ...
+     * This gives a repeated window part or name its index, and keeps every path unique (spec 4.2).
+     */
+    private static String unique(Set<String> taken, String path) {
+        if (taken.add(path)) return path;
+        for (int i = 1; ; i++) {
+            String p = path + "[" + i + "]";
+            if (taken.add(p)) return p;
+        }
     }
 
     /** {@code 0} on first use of the key, then 1, 2, ... */
@@ -120,24 +129,26 @@ final class SnapshotTaker {
 
     /**
      * Adds a node for each compared descendant of {@code parent}, in tree order.
+     * A named component also takes an index of its class below its anchor, so naming one component
+     * does not change the paths of its unnamed siblings.
      *
-     * @param names    occurrences of each application name in this window
      * @param counters next index of each (anchor, class) in this window
+     * @param taken    the paths of this snapshot so far
      */
-    private void walk(Container parent, String windowPart, String anchor, Map<String, Integer> names,
-                      Map<String, Integer> counters, List<NodeSnapshot> out) {
+    private void walk(Container parent, String windowPart, String anchor, Map<String, Integer> counters,
+                      Set<String> taken, List<NodeSnapshot> out) {
         for (Component k : parent.getComponents()) {
             if (!k.isVisible() || lafInternal(k)) continue;
             String childAnchor = anchor;
             String name = applicationName(k);
-            if (name != null) {
-                childAnchor = windowPart + "/" + indexed(names, "#" + name);
-                out.add(node(k, childAnchor));
-            } else if (!isLayoutContainer(k)) {
+            if (name != null || !isLayoutContainer(k)) {
                 String cls = Locators.classNameOf(k);
-                out.add(node(k, anchor + "/" + cls + "[" + next(counters, anchor + "/" + cls) + "]"));
+                int idx = next(counters, anchor + "/" + cls);
+                String path = unique(taken, name != null ? windowPart + "/#" + name : anchor + "/" + cls + "[" + idx + "]");
+                out.add(node(k, path));
+                if (name != null) childAnchor = path;
             }
-            if (k instanceof Container) walk((Container) k, windowPart, childAnchor, names, counters, out);
+            if (k instanceof Container) walk((Container) k, windowPart, childAnchor, counters, taken, out);
         }
     }
 

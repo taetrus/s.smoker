@@ -9,16 +9,21 @@ import smoker.core.model.IgnoreRules;
 import smoker.core.model.NodeSnapshot;
 import smoker.core.model.Snapshot;
 
+import javax.swing.Box;
+import javax.swing.CellRendererPane;
 import javax.swing.JButton;
 import javax.swing.JDialog;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
+import javax.swing.JScrollBar;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
+import java.awt.Dimension;
 import java.awt.GraphicsEnvironment;
 import java.awt.Window;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicReference;
@@ -191,6 +196,94 @@ public class SnapshotTakerPathTest {
         JPanel named = new JPanel();
         named.setName("orders.form");
         assertFalse(SnapshotTaker.isLayoutContainer(named));
+        Dimension d = new Dimension(1, 1);
+        assertTrue(SnapshotTaker.isLayoutContainer(new JScrollBar()));
+        assertTrue(SnapshotTaker.isLayoutContainer(new CellRendererPane()));
+        assertTrue(SnapshotTaker.isLayoutContainer(new Box.Filler(d, d, d)));
+        assertFalse(SnapshotTaker.isLayoutContainer(new JButton()));
+    }
+
+    @Test
+    public void scrollBarAndFillerAreNotInPaths() throws Exception {
+        List<String> paths = paths(onEdt(new Callable<Snapshot>() {
+            public Snapshot call() {
+                JFrame f = frame("Orders");
+                JPanel p = new JPanel();
+                p.add(new JScrollBar());
+                p.add(Box.createHorizontalStrut(5));
+                p.add(new JButton("OK"));
+                f.getContentPane().add(p);
+                return show(f);
+            }
+        }), "[Orders]");
+        assertEquals(Arrays.asList("[Orders]", "[Orders]/JButton[0]"), paths);
+    }
+
+    @Test
+    public void namingAComponentLeavesSiblingPathsUnchanged() throws Exception {
+        final List<JButton> buttons = new ArrayList<JButton>();
+        Snapshot before = onEdt(new Callable<Snapshot>() {
+            public Snapshot call() {
+                JFrame f = frame("Orders");
+                JPanel p = new JPanel();
+                for (int i = 0; i < 3; i++) {
+                    JButton b = new JButton("B" + i);
+                    buttons.add(b);
+                    p.add(b);
+                }
+                f.getContentPane().add(p);
+                return show(f);
+            }
+        });
+        assertEquals(Arrays.asList("[Orders]", "[Orders]/JButton[0]", "[Orders]/JButton[1]", "[Orders]/JButton[2]"),
+                paths(before, "[Orders]"));
+        Snapshot after = onEdt(new Callable<Snapshot>() {
+            public Snapshot call() {
+                buttons.get(0).setName("orders.a");
+                return new SnapshotTaker().take();
+            }
+        });
+        assertEquals(Arrays.asList("[Orders]", "[Orders]/#orders.a", "[Orders]/JButton[1]", "[Orders]/JButton[2]"),
+                paths(after, "[Orders]"));
+    }
+
+    @Test
+    public void everyPathIsUniqueEvenWhenANameLooksLikeAnIndex() throws Exception {
+        Snapshot s = onEdt(new Callable<Snapshot>() {
+            public Snapshot call() {
+                JFrame f = frame("Orders");
+                JPanel p = new JPanel();
+                for (String n : Arrays.asList("x", "x", "x[1]")) {
+                    JButton b = new JButton(n);
+                    b.setName(n);
+                    p.add(b);
+                }
+                f.getContentPane().add(p);
+                return show(f);
+            }
+        });
+        List<String> paths = paths(s, "[Orders]");
+        assertEquals(Arrays.asList("[Orders]", "[Orders]/#x", "[Orders]/#x[1]", "[Orders]/#x[1][1]"), paths);
+        List<String> all = new ArrayList<String>();
+        for (NodeSnapshot n : s.nodes) all.add(n.path);
+        assertEquals(all.size(), new HashSet<String>(all).size());
+    }
+
+    @Test
+    public void unnamedInteractiveListsPathsInTheNewFormat() throws Exception {
+        final SnapshotTaker taker = new SnapshotTaker();
+        onEdt(new Callable<Snapshot>() {
+            public Snapshot call() {
+                JFrame f = frame("Orders");
+                JPanel p = new JPanel();
+                p.add(new JButton("OK"));
+                f.getContentPane().add(p);
+                f.pack();
+                f.setVisible(true);
+                return taker.take();
+            }
+        });
+        assertTrue(String.valueOf(taker.unnamedInteractive()), taker.unnamedInteractive().contains("[Orders]/JButton[0]"));
     }
 
     private JFrame frame(String title) {
