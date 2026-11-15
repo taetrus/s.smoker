@@ -56,8 +56,13 @@ final class Locators {
         Window w = logicalWindowOf(c);
         l.windowTitle = keyOf(w);
         l.className = classNameOf(c);
-        if (c.getName() != null && !c.getName().isEmpty() && !isAutoName(c.getName())) {
-            l.name = c.getName();
+        l.name = realName(c);
+        if (l.name != null) return l;
+        // An automatic name is a locator only when it is unique in the window. Two panels of one class give
+        // the same name, and find would give the first one: such a component gets the locator of an unnamed one.
+        AutoNames.Hit auto = AutoNames.of(c);
+        if (auto != null && uniqueIn(w, c, auto.name)) {
+            l.name = auto.name;
             return l;
         }
         l.text = textOf(c);
@@ -79,10 +84,52 @@ final class Locators {
         return l;
     }
 
-    /** Swing generates names like "null.contentPane", "OptionPane.button", "frame0" — not user-chosen, so not stable. */
+    /** True when no other component of {@code w} has the name {@code name} ({@link #nameOf}). */
+    private static boolean uniqueIn(Window w, Component c, String name) {
+        if (w == null) return true;
+        for (Component o : allComponents(w)) {
+            if (o != c && name.equals(nameOf(o))) return false;
+        }
+        return true;
+    }
+
+    /**
+     * Name prefixes that Swing UI delegates give to the parts they make, such as "Spinner.formattedTextField".
+     * The check is case-sensitive. An application name that starts with one of these prefixes, such as
+     * "Table.orders", also counts as a generated name. This is accepted: application names follow the
+     * lower-case {@code <view>.<widget>} rule.
+     */
+    private static final String[] UI_DELEGATE_PREFIXES = {
+            "Spinner.", "ComboBox.", "Table.", "Tree.", "List.", "FileChooser.", "ColorChooser."};
+
+    /**
+     * Swing generates names like "null.contentPane", "OptionPane.button", "frame0", "Spinner.formattedTextField"
+     * — not user-chosen, so not stable.
+     */
     static boolean isAutoName(String n) {
-        return n.startsWith("null.") || n.startsWith("OptionPane") || n.matches("(frame|dialog|window)\\d+")
-                || n.endsWith(".glassPane") || n.endsWith(".layeredPane") || n.endsWith(".contentPane");
+        if (n.startsWith("null.") || n.startsWith("OptionPane") || n.matches("(frame|dialog|window)\\d+")
+                || n.endsWith(".glassPane") || n.endsWith(".layeredPane") || n.endsWith(".contentPane")) return true;
+        for (String p : UI_DELEGATE_PREFIXES) {
+            if (n.startsWith(p)) return true;
+        }
+        return false;
+    }
+
+    /** The name the application gave the component, or null when it has none (no name, empty or generated). */
+    static String realName(Component c) {
+        String n = c.getName();
+        return n != null && !n.isEmpty() && !isAutoName(n) ? n : null;
+    }
+
+    /**
+     * The name of a component for locators and snapshot paths: the real name, else the automatic name
+     * ({@link AutoNames}), else null. Must run on the EDT.
+     */
+    static String nameOf(Component c) {
+        String n = realName(c);
+        if (n != null) return n;
+        AutoNames.Hit h = AutoNames.of(c);
+        return h == null ? null : h.name;
     }
 
     /**
@@ -95,14 +142,20 @@ final class Locators {
         return n.isEmpty() ? c.getClass().getSuperclass().getSimpleName() : n;
     }
 
+    /** The component of the locator, or null. Must run on the EDT. */
     static Component find(Locator l) {
         List<Component> matches = new ArrayList<Component>();
+        boolean automatic = l.isNamed() && l.name.startsWith("@");
         for (Window w : Window.getWindows()) {
             if (!w.isShowing()) continue;
             if (l.windowTitle != null && !l.isNamed() && !eq(keyOf(w), l.windowTitle)) continue;
             for (Component c : allComponents(w)) {
                 if (l.isNamed()) {
-                    if (l.name.equals(c.getName())) matches.add(c);
+                    // An automatic name also matches after the component got a real name (WP-09, spec goal 5).
+                    // Only an automatic locator pays for the field walk: find visits every component.
+                    if (l.name.equals(c.getName()) || (automatic && l.name.equals(AutoNames.nameIgnoringRealName(c)))) {
+                        matches.add(c);
+                    }
                 } else {
                     if (!classNameOf(c).equals(l.className)) continue;
                     if (!eq(textOf(c), l.text)) continue;

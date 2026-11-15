@@ -1,5 +1,6 @@
 package smoker.demo;
 
+import demo.notes.NotesPanel;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JFrame;
@@ -139,7 +140,11 @@ public class DemoApp {
         }
         f.getContentPane().add(topRow, BorderLayout.NORTH);
         f.getContentPane().add(new JScrollPane(table), BorderLayout.CENTER);
-        f.getContentPane().add(bottom, BorderLayout.SOUTH);
+        // The notes row is below the bottom row: the paths of the named components stay as they are.
+        JPanel south = new JPanel(new BorderLayout());
+        south.add(bottom, BorderLayout.CENTER);
+        south.add(new NotesPanel(), BorderLayout.SOUTH);
+        f.getContentPane().add(south, BorderLayout.SOUTH);
         f.setSize(640, 400);
         f.setLocation(100, 100);
         f.setVisible(true);

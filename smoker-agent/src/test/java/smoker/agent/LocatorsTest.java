@@ -11,6 +11,7 @@ import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JTable;
 import javax.swing.JTextField;
+import javax.swing.SwingUtilities;
 import java.awt.Component;
 import java.util.List;
 
@@ -21,9 +22,20 @@ import static org.junit.Assert.assertTrue;
 
 /**
  * Locator logic that needs no window. {@link LocatorsWindowTest} examines the parts that need a display.
- * The components are not shown, so access from the test thread is permitted.
+ * The components are not shown, so access from the test thread is permitted, except for
+ * {@link Locators#resolve} of a component without a real name: automatic names run on the EDT only.
  */
 public class LocatorsTest {
+
+    private static Locator resolveOnEdt(final Component c) throws Exception {
+        final Locator[] out = new Locator[1];
+        SwingUtilities.invokeAndWait(new Runnable() {
+            public void run() {
+                out[0] = Locators.resolve(c);
+            }
+        });
+        return out[0];
+    }
 
     @Test
     public void swingGeneratedNamesAreAutoNames() {
@@ -33,6 +45,19 @@ public class LocatorsTest {
         assertTrue(Locators.isAutoName("dialog12"));
         assertTrue(Locators.isAutoName("win1.glassPane"));
         assertTrue(Locators.isAutoName("x.layeredPane"));
+    }
+
+    @Test
+    public void uiDelegateNamesAreAutoNames() {
+        assertTrue(Locators.isAutoName("Spinner.formattedTextField"));
+        assertTrue(Locators.isAutoName("ComboBox.textField"));
+        assertTrue(Locators.isAutoName("Table.editor"));
+        assertTrue(Locators.isAutoName("Tree.cellEditor"));
+        assertTrue(Locators.isAutoName("List.cellRenderer"));
+        assertTrue(Locators.isAutoName("FileChooser.fileNameTextField"));
+        assertTrue(Locators.isAutoName("ColorChooser.swatches"));
+        assertFalse(Locators.isAutoName("orders.save"));
+        assertFalse(Locators.isAutoName("Spinner"));
     }
 
     @Test
@@ -65,10 +90,10 @@ public class LocatorsTest {
     }
 
     @Test
-    public void autoNamedComponentResolvesToItsText() {
+    public void autoNamedComponentResolvesToItsText() throws Exception {
         JButton b = new JButton("OK");
         b.setName("OptionPane.button");
-        Locator l = Locators.resolve(b);
+        Locator l = resolveOnEdt(b);
         assertNull(l.name);
         assertEquals("OK", l.text);
         assertNull("no window: no index", l.index);
@@ -76,10 +101,10 @@ public class LocatorsTest {
     }
 
     @Test
-    public void anonymousSubclassResolvesToItsSuperclass() {
+    public void anonymousSubclassResolvesToItsSuperclass() throws Exception {
         JButton b = new JButton("Go") {
         };
-        assertEquals("JButton", Locators.resolve(b).className);
+        assertEquals("JButton", resolveOnEdt(b).className);
     }
 
     @Test

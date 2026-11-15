@@ -1,5 +1,6 @@
 package smoker.agent;
 
+import smoker.core.model.LintEntry;
 import smoker.core.model.NodeSnapshot;
 import smoker.core.model.Snapshot;
 
@@ -22,6 +23,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -39,6 +41,13 @@ final class SnapshotTaker {
 
     private final Set<String> unnamed = new TreeSet<String>();
     private final Set<String> duplicates = new TreeSet<String>();
+    /** Lint entries by window part + path; the last snapshot wins (WP-09). */
+    private final Map<String, LintEntry> lint = new LinkedHashMap<String, LintEntry>();
+    private final Set<String> autoNames = new TreeSet<String>();
+    /** Entries of the snapshot in progress, in walk order. */
+    private List<String> pendingKeys;
+    private List<LintEntry> pending;
+    private String windowPart;
     private final int maxRows;
     private final boolean namedOnly;
 
@@ -58,23 +67,34 @@ final class SnapshotTaker {
 
     Snapshot take() {
         Snapshot s = new Snapshot();
+        pendingKeys = new ArrayList<String>();
+        pending = new ArrayList<LintEntry>();
         Set<String> taken = new HashSet<String>();
         for (Window w : Window.getWindows()) {
             if (!w.isShowing()) continue;
             if (w.getName() != null && w.getName().startsWith(SMOKER_WINDOW_PREFIX)) continue;
             if (onlyToolTips(w)) continue;   // a tool tip across the frame edge has its own window
             String title = Locators.titleOf(w);
-            String name = applicationName(w);
+            String name = Locators.realName(w);   // a window has no automatic name
             String key = Locators.keyOf(w);
             String part = unique(taken, name != null ? "[#" + name + "]" : "[" + (key == null ? "" : key) + "]");
-            NodeSnapshot n = node(w, part);
+            windowPart = part;
+            NodeSnapshot n = node(w, part, name);
             n.title = title;
             s.nodes.add(n);
             Map<String, Integer> names = new HashMap<String, Integer>();
             walk(w, part, part, new HashMap<String, Integer>(), names, taken, s.nodes);
             for (Map.Entry<String, Integer> e : names.entrySet()) {
-                if (e.getValue() > 1) duplicates.add(part + ": #" + e.getKey() + " (" + e.getValue() + "x)");
+                if (e.getValue() > 1) {
+                    synchronized (this) {
+                        duplicates.add(part + ": #" + e.getKey() + " (" + e.getValue() + "x)");
+                    }
+                }
             }
+        }
+        suffixDuplicateProposals(pending);
+        synchronized (this) {
+            for (int i = 0; i < pending.size(); i++) lint.put(pendingKeys.get(i), pending.get(i));
         }
         Collections.sort(s.nodes, new Comparator<NodeSnapshot>() {
             public int compare(NodeSnapshot a, NodeSnapshot b) {
@@ -84,13 +104,47 @@ final class SnapshotTaker {
         return s;
     }
 
-    Set<String> unnamedInteractive() {
-        return unnamed;
+    /** The accumulated collections are written on the EDT and read on the player thread: all access holds the lock. */
+    synchronized Set<String> unnamedInteractive() {
+        return new TreeSet<String>(unnamed);
+    }
+
+    /** The components without a real name, with proposals. Accumulated over all snapshots (WP-09). */
+    synchronized List<LintEntry> lintEntries() {
+        return new ArrayList<LintEntry>(lint.values());
+    }
+
+    /** Every automatic name that a snapshot node had, sorted. */
+    synchronized Set<String> autoNamesUsed() {
+        return new TreeSet<String>(autoNames);
+    }
+
+    /**
+     * In one window, the second equal proposal gets suffix 2, the third 3, in walk order (spec 5.3).
+     * One field is one line of code: all entries of one field (also in other windows or other instances)
+     * get the proposal of its first entry.
+     */
+    private static void suffixDuplicateProposals(List<LintEntry> entries) {
+        Set<String> taken = new HashSet<String>();
+        Map<String, String> byField = new HashMap<String, String>();
+        for (LintEntry e : entries) {
+            if (e.proposedName == null) continue;
+            String field = e.field == null ? null : e.runtimeClass + "|" + e.declaringClass + "|" + e.field;
+            String known = field == null ? null : byField.get(field);
+            if (known != null) {
+                e.proposedName = known;
+                taken.add(e.window + "|" + known);
+                continue;
+            }
+            String base = e.proposedName;
+            for (int i = 2; !taken.add(e.window + "|" + e.proposedName); i++) e.proposedName = base + i;
+            if (field != null) byField.put(field, e.proposedName);
+        }
     }
 
     /** One entry per window and name that more than one visible component has: {@code "[Orders]: #x (2x)"} (F-17). */
-    Set<String> duplicateNames() {
-        return duplicates;
+    synchronized Set<String> duplicateNames() {
+        return new TreeSet<String>(duplicates);
     }
 
     /** The snapshot text of a password field that is not empty. */
@@ -125,7 +179,8 @@ final class SnapshotTaker {
      * (its children are not visited).
      */
     static boolean isLayoutContainer(Component c) {
-        if (applicationName(c) != null) return false;
+        // A real name only: an automatically named component is never a layout container (AutoNames gives none).
+        if (Locators.realName(c) != null) return false;
         return c instanceof javax.swing.JPanel || c instanceof javax.swing.JScrollPane || c instanceof javax.swing.JViewport
                 || c instanceof javax.swing.JRootPane || c instanceof javax.swing.JLayeredPane || c instanceof javax.swing.Box
                 || c instanceof javax.swing.Box.Filler || c instanceof javax.swing.JSplitPane || c instanceof javax.swing.JToolBar
@@ -149,16 +204,10 @@ final class SnapshotTaker {
                 tips[0]++;
                 continue;
             }
-            if (applicationName(k) != null || !isLayoutContainer(k)) return true;
+            if (!isLayoutContainer(k)) return true;
             if (k instanceof Container && otherContent((Container) k, tips)) return true;
         }
         return false;
-    }
-
-    /** The name the application gave the component, or null when it has none (no name or a generated name). */
-    private static String applicationName(Component c) {
-        String n = c.getName();
-        return n != null && !Locators.isAutoName(n) ? n : null;
     }
 
     /**
@@ -187,7 +236,7 @@ final class SnapshotTaker {
      * does not change the paths of its unnamed siblings.
      *
      * @param counters next index of each (anchor, class) in this window
-     * @param names    the number of visible components per application name in this window
+     * @param names    the number of visible components per name (real or automatic) in this window
      * @param taken    the paths of this snapshot so far
      */
     private void walk(Container parent, String windowPart, String anchor, Map<String, Integer> counters,
@@ -195,17 +244,22 @@ final class SnapshotTaker {
         for (Component k : parent.getComponents()) {
             if (!k.isVisible() || lafInternal(k) || k instanceof JToolTip) continue;
             String childAnchor = anchor;
-            String name = applicationName(k);
+            String name = Locators.nameOf(k);
             // An unnamed holder of a tool tip (the panel of a medium-weight popup) gives no node either.
             if (name == null && !isLayoutContainer(k) && k instanceof Container && onlyToolTips((Container) k)) continue;
             if (name != null || !isLayoutContainer(k)) {
                 String cls = Locators.classNameOf(k);
                 int idx = next(counters, anchor + "/" + cls);
                 String path = unique(taken, name != null ? windowPart + "/#" + name : anchor + "/" + cls + "[" + idx + "]");
-                NodeSnapshot n = node(k, path);   // also collects the lint, in both modes
+                NodeSnapshot n = node(k, path, name);   // also collects the lint, in both modes
                 if (name != null) {
                     out.add(n);
                     childAnchor = path;
+                    if (name.startsWith("@")) {
+                        synchronized (this) {
+                            autoNames.add(name);
+                        }
+                    }
                     Integer c = names.get(name);
                     names.put(name, c == null ? 1 : c + 1);
                 } else if (!namedOnly) {
@@ -274,12 +328,15 @@ final class SnapshotTaker {
         return rows;
     }
 
-    /** One node with the attributes of {@code c}. Records an unnamed interactive component for the lint. */
-    private NodeSnapshot node(Component c, String path) {
+    /**
+     * One node with the attributes of {@code c}. {@code name} is {@link Locators#nameOf}.
+     * Records an interactive component without a real name for the lint, also when it has an automatic name (spec 5.2).
+     */
+    private NodeSnapshot node(Component c, String path, String name) {
         NodeSnapshot n = new NodeSnapshot();
         n.path = path;
         n.type = Locators.classNameOf(c);
-        n.name = applicationName(c);
+        n.name = name;
         n.visible = c.isVisible() ? null : Boolean.FALSE;   // visible is the default; only record the exception
         n.enabled = c.isEnabled() ? null : Boolean.FALSE;
 
@@ -317,8 +374,51 @@ final class SnapshotTaker {
             n.items = treeRows((JTree) c);
         }
 
-        if (Locators.isInteractive(c) && n.name == null && c.isShowing() && !lafInternal(c) && !generatedByOptionPane(c)) unnamed.add(path);
+        if (Locators.isInteractive(c) && Locators.realName(c) == null && c.isShowing() && !lafInternal(c) && !generatedByOptionPane(c)) {
+            synchronized (this) {
+                unnamed.add(path);
+            }
+            pendingKeys.add(windowPart + "|" + path);
+            pending.add(lintEntry(c));
+        }
 
         return n;
+    }
+
+    /** The lint entry of an unnamed interactive component, with its proposal (spec 5.3). Must run on the EDT. */
+    private LintEntry lintEntry(Component c) {
+        LintEntry e = new LintEntry();
+        e.window = windowPart;
+        e.type = Locators.classNameOf(c);
+        e.text = Locators.textOf(c);
+        AutoNames.Hit hit = AutoNames.of(c);
+        String viewClass;
+        if (hit != null) {
+            e.runtimeClass = hit.runtimeClass;
+            e.declaringClass = hit.declaringClass;
+            e.field = hit.field;
+            e.autoName = hit.name;
+            viewClass = hit.name.substring(1, hit.name.length() - hit.field.length() - 1);
+        } else {
+            Class<?> app = applicationAncestor(c);
+            if (app == null) return e;
+            e.runtimeClass = app.getName();
+            viewClass = AutoNames.simpleName(app);
+        }
+        e.source = NameProposer.source(e.field, e.text);
+        e.proposedName = NameProposer.propose(viewClass, c, e.field, e.text);
+        return e;
+    }
+
+    /**
+     * The class of the nearest application-class ancestor, up to and including the window, or null.
+     * The walk goes from a popup menu to its invoker ({@link AutoNames#logicalParent}).
+     */
+    private static Class<?> applicationAncestor(Component c) {
+        for (Component a = c.getParent(); a != null; a = AutoNames.logicalParent(a)) {
+            if (AutoNames.isApplicationClass(a.getClass())) return a.getClass();
+            if (a instanceof Window) break;
+        }
+        return null;
     }
 }

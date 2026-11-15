@@ -205,7 +205,8 @@ final class Recorder implements AWTEventListener {
             flushText();               // text first, then the key (e.g. ENTER in a field)
             takePendingSnapshots();    // the field has not processed the key yet: this is the state after typing
         }
-        Locator target = src.getName() != null && !Locators.isAutoName(src.getName()) ? Locators.resolve(src) : null;
+        // Only a named component (real or automatic name) is a KEY target; else the key goes to the focus owner.
+        Locator target = Locators.nameOf(src) != null ? Locators.resolve(src) : null;
         String vk = vkName(code);
         if (vk == null) return;
         Action a = Action.key(vk, e.getModifiersEx());

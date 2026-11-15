@@ -14,6 +14,7 @@ import java.nio.file.Path;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -64,8 +65,15 @@ final class Player implements Runnable {
             result.error = String.valueOf(t);
         } finally {
             result.finishedAt = System.currentTimeMillis();
-            result.unnamedComponents.addAll(taker.unnamedInteractive());
-            result.duplicateNames.addAll(taker.duplicateNames());
+            try {
+                result.unnamedComponents.addAll(taker.unnamedInteractive());
+                result.duplicateNames.addAll(taker.duplicateNames());
+                result.lint.addAll(taker.lintEntries());
+                result.autoNames.addAll(taker.autoNamesUsed());
+            } catch (RuntimeException e) {
+                // The lint is optional: the result file must still be written.
+                SmokerAgent.log("cannot collect the lint: " + e);
+            }
             try {
                 Json.write(cfg.out.resolve("run-result.json"), result);
             } catch (Exception e) {
@@ -125,11 +133,35 @@ final class Player implements Runnable {
     }
 
     private boolean mainWindowShowing() {
-        for (Window w : Window.getWindows()) {
-            if (w instanceof Frame && w.isShowing()
-                    && (w.getName() == null || !w.getName().startsWith(SnapshotTaker.SMOKER_WINDOW_PREFIX))) return true;
+        return mainWindowShown(1000);
+    }
+
+    /** A frame that is shown and displayable (not half built) and is not the tool's own window. */
+    static boolean isMainWindow(Window w) {
+        return w instanceof Frame && w.isShowing() && w.isDisplayable()
+                && (w.getName() == null || !w.getName().startsWith(SnapshotTaker.SMOKER_WINDOW_PREFIX));
+    }
+
+    /** Scans the windows on the EDT. An EDT that does not answer within maxWaitMs counts as "no main window". */
+    static boolean mainWindowShown(long maxWaitMs) {
+        FutureTask<Boolean> task = new FutureTask<Boolean>(new Callable<Boolean>() {
+            @Override
+            public Boolean call() {
+                for (Window w : Window.getWindows()) if (isMainWindow(w)) return true;
+                return false;
+            }
+        });
+        SwingUtilities.invokeLater(task);
+        try {
+            return task.get(maxWaitMs, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            task.cancel(false);
+            Thread.currentThread().interrupt();
+            return false;
+        } catch (Exception e) { // timeout or failure
+            task.cancel(false);
+            return false;
         }
-        return false;
     }
 
     private RunResult.StepResult runStep(final Step step) {

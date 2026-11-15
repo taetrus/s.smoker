@@ -4,6 +4,8 @@ import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
+import nametest.MenuFrame;
+import nametest.OrdersPanel;
 import smoker.core.model.Locator;
 import smoker.core.model.WindowKey;
 import java.util.Arrays;
@@ -74,6 +76,7 @@ public class LocatorsWindowTest {
     @After
     public void disposeFrame() throws Exception {
         Locators.useWindowKeys(null);
+        AutoNames.enable(true);
         if (frame == null) return;
         onEdt(new Callable<Void>() {
             public Void call() {
@@ -190,6 +193,102 @@ public class LocatorsWindowTest {
             }
         });
         assertSame(ok1, find(l));
+    }
+
+    @Test
+    public void resolveUsesTheAutomaticName() throws Exception {
+        final OrdersPanel orders = addOrdersPanel();
+        Locator l = onEdt(new Callable<Locator>() {
+            public Locator call() {
+                return Locators.resolve(orders.saveButton());
+            }
+        });
+        assertEquals("@OrdersPanel.saveButton", l.name);
+        assertEquals("#@OrdersPanel.saveButton", l.toString());
+        assertSame(orders.saveButton(), find(l));
+    }
+
+    /** Spec goal 5. */
+    @Test
+    public void oldAutomaticLocatorFindsTheComponentAfterARealName() throws Exception {
+        final OrdersPanel orders = addOrdersPanel();
+        Locator l = onEdt(new Callable<Locator>() {
+            public Locator call() {
+                Locator r = Locators.resolve(orders.saveButton());
+                orders.saveButton().setName("orders.btn.save");
+                return r;
+            }
+        });
+        assertEquals("@OrdersPanel.saveButton", l.name);
+        assertSame(orders.saveButton(), find(l));
+    }
+
+    @Test
+    public void automaticLocatorIsNotFoundWhenAutoNamesAreOff() throws Exception {
+        addOrdersPanel();
+        AutoNames.enable(false);
+        Locator l = new Locator();
+        l.name = "@OrdersPanel.saveButton";
+        assertNull(find(l));
+    }
+
+    /** Two panels of one class: the automatic name is not unique, so the locator is the WP-02 one. */
+    @Test
+    public void repeatedAutomaticNameGivesTheUnnamedLocator() throws Exception {
+        addOrdersPanel();
+        final OrdersPanel second = addOrdersPanel();
+        Locator l = onEdt(new Callable<Locator>() {
+            public Locator call() {
+                return Locators.resolve(second.saveButton());
+            }
+        });
+        assertNull(l.toString(), l.name);
+        assertEquals("Save", l.text);
+        assertSame(second.saveButton(), find(l));
+    }
+
+    /** {@code Locators.allComponents} includes the items of a closed menu, and the walk reaches the frame. */
+    @Test
+    public void automaticLocatorFindsTheItemOfAClosedMenu() throws Exception {
+        final MenuFrame mf = onEdt(new Callable<MenuFrame>() {
+            public MenuFrame call() {
+                MenuFrame o = new MenuFrame();
+                o.pack();
+                o.setVisible(true);
+                return o;
+            }
+        });
+        try {
+            Locator l = onEdt(new Callable<Locator>() {
+                public Locator call() {
+                    return Locators.resolve(mf.exitItem());
+                }
+            });
+            assertEquals("@MenuFrame.exitItem", l.name);
+            Locator byName = new Locator();
+            byName.name = "@MenuFrame.exitItem";
+            assertSame(mf.exitItem(), find(byName));
+        } finally {
+            onEdt(new Callable<Void>() {
+                public Void call() {
+                    mf.dispose();
+                    return null;
+                }
+            });
+        }
+    }
+
+    /** Adds an application panel with an unnamed button in a field to the frame. */
+    private OrdersPanel addOrdersPanel() throws Exception {
+        return onEdt(new Callable<OrdersPanel>() {
+            public OrdersPanel call() {
+                OrdersPanel o = new OrdersPanel();
+                frame.getContentPane().add(o, frame.getContentPane().getComponentCount() == 1
+                        ? java.awt.BorderLayout.SOUTH : java.awt.BorderLayout.NORTH);
+                frame.pack();
+                return o;
+            }
+        });
     }
 
     private static Component find(final Locator l) throws Exception {

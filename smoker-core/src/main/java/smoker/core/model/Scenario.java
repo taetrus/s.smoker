@@ -21,6 +21,8 @@ public class Scenario {
     public int maxRows = 20;
     /** Title rules: a changing window title gets a fixed key in paths and locators. */
     public List<WindowKey> windowKeys = new ArrayList<WindowKey>();
+    /** Components without setName() get an automatic name from the field of an application class (WP-09). */
+    public boolean autoNames = true;
     public IgnoreRules ignore = new IgnoreRules();
     public List<Step> steps = new ArrayList<Step>();
 

@@ -1,5 +1,6 @@
 package smoker.core.report;
 
+import smoker.core.model.LintEntry;
 import smoker.core.model.RunResult;
 
 import java.io.IOException;
@@ -49,6 +50,23 @@ public final class HtmlReportWriter {
                     for (String d : r.duplicateNames) w.write(e(d) + "\n");
                     w.write("</pre></details>");
                 }
+                if (!r.lint.isEmpty()) {
+                    w.write("<details><summary>Components without a real name: " + r.lint.size() + "</summary>"
+                            + "<table><tr><th>Window</th><th>Application class</th><th>Field</th><th>Type</th><th>Text</th>"
+                            + "<th>Automatic name</th><th>Proposed name</th><th>Source</th></tr>");
+                    for (LintEntry l : r.lint) {
+                        w.write("<tr><td>" + e(l.window) + "</td><td>" + e(simple(l.runtimeClass)) + "</td><td>" + e(l.field)
+                                + "</td><td>" + e(l.type) + "</td><td>" + e(l.text) + "</td><td>" + e(l.autoName)
+                                + "</td><td>" + e(l.proposedName) + "</td><td>" + e(l.source) + "</td></tr>");
+                    }
+                    w.write("</table></details>");
+                }
+                if (!r.autoNames.isEmpty()) {
+                    w.write("<details><summary>Automatic names used in this run: " + r.autoNames.size() + "</summary>"
+                            + "<p>An automatic name changes when a developer renames the field.</p><pre>");
+                    for (String a : r.autoNames) w.write(e(a) + "\n");
+                    w.write("</pre></details>");
+                }
                 w.write("<table><tr><th style='width:160px'>Step</th><th style='width:90px'>Status</th><th>Details</th><th>Screenshot</th></tr>");
                 for (RunResult.StepResult s : r.steps) {
                     w.write("<tr class='" + s.status + "'><td>" + e(s.stepId) + "<br><small>" + e(s.stepName) + "</small></td><td>" + s.status
@@ -79,6 +97,10 @@ public final class HtmlReportWriter {
 
     private static String id(String s) {
         return s == null ? "x" : s.replaceAll("[^A-Za-z0-9_-]", "_");
+    }
+
+    private static String simple(String className) {
+        return className == null ? null : className.substring(className.lastIndexOf('.') + 1);
     }
 
     private static String e(String s) {

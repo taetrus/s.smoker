@@ -4,6 +4,7 @@ import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
+import nametest.SearchPanel;
 import smoker.core.model.Action;
 import smoker.core.model.NodeSnapshot;
 import smoker.core.model.Scenario;
@@ -208,6 +209,29 @@ public class RecorderWindowTest {
         typeIntoField();
         dispatch(new KeyEvent(field, KeyEvent.KEY_PRESSED, System.currentTimeMillis(), 0, KeyEvent.VK_ENTER, '\n'));
         assertTextStepThen(Action.Type.KEY, "entered");
+    }
+
+    /** WP-09, spec 5.2: a KEY action on an automatically named field gets the locator with the automatic name. */
+    @Test
+    public void keyInAnAutomaticallyNamedFieldHasItsLocator() throws Exception {
+        SearchPanel search = addSearchPanel();
+        dispatch(new KeyEvent(search.queryField(), KeyEvent.KEY_PRESSED, System.currentTimeMillis(), 0, KeyEvent.VK_ENTER, '\n'));
+        List<Step> steps = recorder.scenario().steps;
+        assertEquals(describe(steps), 1, steps.size());
+        assertEquals(describe(steps), Action.Type.KEY, steps.get(0).action.type);
+        assertEquals(describe(steps), "@SearchPanel.queryField", steps.get(0).action.locator.name);
+    }
+
+    private SearchPanel addSearchPanel() throws Exception {
+        final SearchPanel[] out = new SearchPanel[1];
+        onEdt(new Runnable() {
+            public void run() {
+                out[0] = new SearchPanel();
+                frame.getContentPane().add(out[0], java.awt.BorderLayout.SOUTH);
+                frame.pack();
+            }
+        });
+        return out[0];
     }
 
     private void typeIntoField() throws Exception {

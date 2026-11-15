@@ -32,6 +32,7 @@ import java.util.concurrent.TimeUnit;
  * java -jar smoker-cli.jar run     --agent smoker-agent.jar --app "java -jar app.jar" --scenarios scenarios/ --out out/ [--log app.log] [--screenshots off] [--strict]
  * java -jar smoker-cli.jar record  --agent smoker-agent.jar --app "java -jar app.jar" --scenario scenarios/new.json [--log app.log]
  * java -jar smoker-cli.jar approve --run out/greet --scenario scenarios/greet.json [--steps s001,s002]
+ * java -jar smoker-cli.jar lint    --run out/ [--emit-patch names.patch]
  * </pre>
  * {@code --app} is the full command line; the token {@code {agent}} marks where the -javaagent option goes.
  * Without the token it is inserted right after the first argument (the java executable).
@@ -47,6 +48,7 @@ public final class Main {
         if ("run".equals(cmd)) code = run(o);
         else if ("record".equals(cmd)) code = record(o);
         else if ("approve".equals(cmd)) code = approve(o);
+        else if ("lint".equals(cmd)) code = lint(o);
         else { usage(1); return; }
         System.exit(code);
     }
@@ -218,6 +220,39 @@ public final class Main {
         return n;
     }
 
+    // ---- lint ----------------------------------------------------------------------------------
+
+    static int lint(Map<String, String> o) throws Exception {
+        Path dir = Paths.get(req(o, "run"));
+        Lint.Loaded loaded;
+        try {
+            loaded = Files.isDirectory(dir) ? Lint.load(dir) : new Lint.Loaded();
+        } catch (IOException | java.io.UncheckedIOException e) {
+            System.err.println("lint: cannot read " + dir + ": " + e.getMessage());
+            return 2;
+        }
+        if (loaded.files == 0) {
+            System.err.println("lint: no run-result.json below " + dir);
+            return 2;
+        }
+        List<smoker.core.model.LintEntry> entries = loaded.entries;
+        System.out.print(Lint.table(entries));
+        System.out.println();
+        System.out.println(Lint.summary(entries));
+        if (o.containsKey("emit-patch")) {
+            Path f = Paths.get(o.get("emit-patch"));
+            try {
+                if (f.toAbsolutePath().getParent() != null) Files.createDirectories(f.toAbsolutePath().getParent());
+                Files.write(f, Lint.patch(entries).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            } catch (IOException e) {
+                System.err.println("lint: cannot write " + f + ": " + e.getMessage());
+                return 2;
+            }
+            System.out.println("patch written to " + f);
+        }
+        return 0;
+    }
+
     // ---- helpers -------------------------------------------------------------------------------
 
     /**
@@ -320,6 +355,7 @@ public final class Main {
                 + "  run     --agent smoker-agent.jar --app \"<cmd>\" --scenarios <dir|file> --out <dir> [--log <file>] [--screenshots off] [--strict] [--timeout <s>]\n"
                 + "  record  --agent smoker-agent.jar --app \"<cmd>\" --scenario <file> [--log <file>]\n"
                 + "  approve --run <out/scenario-dir> --scenario <file> [--steps s001,s002]\n"
+                + "  lint    --run <out dir> [--emit-patch <file>]\n"
                 + "  <cmd> may contain the token {agent} where -javaagent:... must be placed (default: after the first word).");
         System.exit(code);
     }
