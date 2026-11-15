@@ -2,6 +2,8 @@ package smoker.core.io;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
 
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -29,6 +31,20 @@ public final class Json {
         } finally {
             r.close();
         }
+    }
+
+    /** Reads the file as a JSON tree, to check it before it is mapped to a class. */
+    public static JsonElement readTree(Path file) throws IOException {
+        Reader r = new InputStreamReader(Files.newInputStream(file), StandardCharsets.UTF_8);
+        try {
+            return JsonParser.parseReader(r);
+        } finally {
+            r.close();
+        }
+    }
+
+    public static <T> T fromTree(JsonElement tree, Class<T> type) {
+        return GSON.fromJson(tree, type);
     }
 
     public static void write(Path file, Object value) throws IOException {

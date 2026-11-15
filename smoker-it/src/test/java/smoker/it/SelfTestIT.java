@@ -3,8 +3,11 @@ package smoker.it;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import smoker.core.io.Json;
+import smoker.core.io.ScenarioFiles;
+import smoker.core.model.Action;
 import smoker.core.model.RunResult;
 import smoker.core.model.Scenario;
+import smoker.core.model.Snapshot;
 import smoker.core.model.Step;
 
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -19,6 +22,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
@@ -80,12 +84,15 @@ public class SelfTestIT {
         assertStepStatus(r1, "s005", RunResult.Status.NO_GOLDEN);
         assertJUnitXmlIsValid(dir.resolve("run1/junit.xml"));
 
-        // approve: the observed state of each step becomes the golden snapshot.
+        // approve: the observed state of each step becomes the golden snapshot in greet.golden.json.
         Cli approve = cli("approve", "--run", dir.resolve("run1/greet").toString(), "--scenario", scenario.toString());
         assertEquals(approve.output, 0, approve.exit);
-        Scenario approved = Json.read(scenario, Scenario.class);
-        assertEquals(5, approved.steps.size());
-        for (Step s : approved.steps) assertNotNull("golden for " + s.id, s.expected);
+        Path golden = dir.resolve("greet.golden.json");
+        assertEquals(golden, ScenarioFiles.goldenPath(scenario));
+        assertTrue(approve.output, approve.output.contains("approved 5 step(s) into " + golden));
+        assertTrue("missing " + golden, Files.isRegularFile(golden));
+        assertFalse("scenario contains expected", read(scenario).contains("\"expected\""));
+        assertEquals(Arrays.asList("s001", "s002", "s003", "s004", "s005"), keys(ScenarioFiles.readGolden(scenario)));
 
         // run2: the same application state gives PASS.
         Cli run2 = run(scenario, dir.resolve("run2"), log);
@@ -94,12 +101,31 @@ public class SelfTestIT {
         assertJUnitXmlIsValid(dir.resolve("run2/junit.xml"));
         assertTrue(Files.isRegularFile(dir.resolve("run2/report.html")));
 
+        // A new step has no golden. The steps before it keep their golden and pass.
+        Scenario sc = ScenarioFiles.readScenario(scenario);
+        sc.steps.add(new Step("s006", "press ESCAPE", Action.key("ESCAPE", 0)));
+        Json.write(scenario, sc);
+        Cli added = run(scenario, dir.resolve("run-added"), log);
+        assertEquals(added.output, 0, added.exit);
+        RunResult ra = result(dir.resolve("run-added/greet"));
+        for (String id : Arrays.asList("s001", "s002", "s003", "s004", "s005")) assertStepStatus(ra, id, RunResult.Status.PASS);
+        assertStepStatus(ra, "s006", RunResult.Status.NO_GOLDEN);
+
+        // A step removed from the scenario leaves the golden file at the next approve.
+        sc.steps.remove(sc.findStep("s005"));
+        Json.write(scenario, sc);
+        Cli approve2 = cli("approve", "--run", dir.resolve("run-added/greet").toString(), "--scenario", scenario.toString());
+        assertEquals(approve2.output, 0, approve2.exit);
+        LinkedHashMap<String, Snapshot> before = ScenarioFiles.readGolden(scenario);
+        assertEquals(Arrays.asList("s001", "s002", "s003", "s004", "s006"), keys(before));
+
         // run3: select "de" in place of "tr". The golden snapshot for s002 no longer agrees.
-        String text = new String(Files.readAllBytes(scenario), StandardCharsets.UTF_8);
+        String text = read(scenario);
         String changed = text.replace("\"value\": \"tr\"", "\"value\": \"de\"");
         assertFalse("scenario contains the value tr", changed.equals(text));
         Path regressed = dir.resolve("greet-regressed.json");
         Files.write(regressed, changed.getBytes(StandardCharsets.UTF_8));
+        Files.copy(golden, ScenarioFiles.goldenPath(regressed));
         Cli run3 = run(regressed, dir.resolve("run3"), log);
         assertEquals(run3.output, 1, run3.exit);
         RunResult r3 = result(dir.resolve("run3/greet-regressed"));
@@ -108,6 +134,20 @@ public class SelfTestIT {
         assertTrue(String.valueOf(s002.differences),
                 contains(s002.differences, "CHANGED [#demo.frame]/#demo.lang ", ".text: expected=\"tr\" actual=\"de\""));
         assertJUnitXmlIsValid(dir.resolve("run3/junit.xml"));
+
+        // approve --steps s002: only the golden of s002 changes.
+        Cli approve3 = cli("approve", "--run", dir.resolve("run3/greet-regressed").toString(),
+                "--scenario", regressed.toString(), "--steps", "s002");
+        assertEquals(approve3.output, 0, approve3.exit);
+        assertTrue(approve3.output, approve3.output.contains("approved 1 step(s) into " + ScenarioFiles.goldenPath(regressed)));
+        assertTrue(approve3.output, approve3.output.contains("  s002: "));
+        assertFalse(approve3.output, approve3.output.contains("  s001: "));
+        LinkedHashMap<String, Snapshot> after = ScenarioFiles.readGolden(regressed);
+        assertEquals(keys(before), keys(after));
+        for (String id : before.keySet()) {
+            boolean same = Json.toString(before.get(id)).equals(Json.toString(after.get(id)));
+            assertEquals("golden of " + id + " unchanged", !"s002".equals(id), same);
+        }
     }
 
     @Test
@@ -209,6 +249,14 @@ public class SelfTestIT {
         // Trailing backslashes stay as they are. The arguments of this test do not end with a backslash.
         for (int i = 0; i < backslashes; i++) sb.append('\\');
         return sb.toString();
+    }
+
+    private static String read(Path f) throws IOException {
+        return new String(Files.readAllBytes(f), StandardCharsets.UTF_8);
+    }
+
+    private static List<String> keys(LinkedHashMap<String, Snapshot> m) {
+        return new ArrayList<String>(m.keySet());
     }
 
     private static RunResult result(Path runDir) throws IOException {

@@ -112,8 +112,8 @@ sub-second attribution and MDC fields if needed.
 | picks a combo item, list row, table row, tab | `SELECT #name = value/index` (read back after Swing processed the click) |
 | ENTER / ESC / TAB / DELETE / F-keys / Ctrl+… | `KEY value` (VK name, modifiers) |
 
-After each recorded action, a background thread waits for quiescence and stores the golden snapshot into the step
-(the recording run defines v1 of the golden). `RecorderToolbar` (named `smoker.toolbar`, always-on-top) offers
+After each recorded action, a background thread waits for quiescence and stores the golden snapshot of the step.
+Save writes the scenario and the golden file `<scenario>.golden.json` (the recording run defines v1 of the golden). `RecorderToolbar` (named `smoker.toolbar`, always-on-top) offers
 Record/Pause, Pick (hover → red border + locator + "unnamed" warning), Rename, Delete, Save. Everything named
 `smoker.*` is excluded from recording and snapshots.
 

@@ -85,7 +85,19 @@ Add this appender to `configuration/logback.xml` of each product folder, and add
 Scenarios in `docs/wp-01-pilot/` (`hang.json` with `stepTimeoutMs` 3000, `crash.json`). Results: report section 4.
 On JRE 8, 14 bundles of spike.master do not resolve (4 platform bundles need JavaSE-17). The Freeze and Crash buttons operate.
 
-## 5. Open points
+## 5. Next Windows session: new goldens for the pilot
+
+The WP-02 format change (`schemaVersion` 2) removed the goldens from `docs/wp-01-pilot/pilot.json`, `hang.json` and `crash.json`.
+The goldens are now in a golden file beside each scenario. The pilot has no golden files yet.
+
+1. Copy `pilot.json`, `hang.json` and `crash.json` to `C:\smoke` (`hang.json` and `crash.json` are for spike.master).
+2. Run each scenario. Expect `NO_GOLDEN`.
+3. Run `approve` for each run. This writes `<scenario>.golden.json`.
+4. Run each scenario again. Expect PASS for `pilot.json`.
+   `hang.json` and `crash.json` give HANG and ERROR (report section 4). Their steps have no snapshot, so their golden files have no steps.
+5. Copy the golden files to `docs/wp-01-pilot/` and commit them.
+
+## 6. Open points
 
 | Point | Effect | Work package |
 |---|---|---|

@@ -11,6 +11,7 @@ import javax.swing.SwingUtilities;
 import java.awt.Frame;
 import java.awt.Window;
 import java.nio.file.Path;
+import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -23,15 +24,18 @@ final class Player implements Runnable {
 
     private final AgentConfig cfg;
     private final Scenario scenario;
+    private final Map<String, Snapshot> golden;
     private final Observations obs;
     private final EdtWatchdog watchdog;
     private final SnapshotTaker taker;
     private final Screenshots shots = new Screenshots();
     private final RunResult result = new RunResult();
 
-    Player(AgentConfig cfg, Scenario scenario, Observations obs, EdtWatchdog watchdog) {
+    /** @param golden golden snapshot per step id, from the golden file; a step without an entry gives NO_GOLDEN */
+    Player(AgentConfig cfg, Scenario scenario, Map<String, Snapshot> golden, Observations obs, EdtWatchdog watchdog) {
         this.cfg = cfg;
         this.scenario = scenario;
+        this.golden = golden;
         this.taker = new SnapshotTaker(scenario.maxRows);
         this.obs = obs;
         this.watchdog = watchdog;
@@ -164,10 +168,11 @@ final class Player implements Runnable {
             if (cfg.screenshots) sr.screenshot = shots.capture(cfg.out, step.id);
 
             // 4. compare
-            if (step.expected == null) {
+            Snapshot expected = golden.get(step.id);
+            if (expected == null) {
                 sr.status = RunResult.Status.NO_GOLDEN;
             } else {
-                sr.differences.addAll(SnapshotDiff.diff(step.expected, sr.actual, scenario.ignore));
+                sr.differences.addAll(SnapshotDiff.diff(expected, sr.actual, scenario.ignore));
                 if (!sr.differences.isEmpty()) sr.status = RunResult.Status.FAIL;
             }
             finish(sr, t0);

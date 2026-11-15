@@ -6,9 +6,7 @@ import org.junit.rules.TemporaryFolder;
 import smoker.core.model.Action;
 import smoker.core.model.IgnoreRules;
 import smoker.core.model.Locator;
-import smoker.core.model.NodeSnapshot;
 import smoker.core.model.Scenario;
-import smoker.core.model.Snapshot;
 import smoker.core.model.Step;
 
 import java.nio.charset.StandardCharsets;
@@ -33,12 +31,6 @@ public class JsonTest {
         l.name = "demo.name";
         sc.steps.add(new Step("s001", "enter name", Action.setText(l, "İsmail ğüşçö")));
         sc.steps.add(new Step("s002", "press enter", Action.key("ENTER", 0)));
-        NodeSnapshot n = new NodeSnapshot();
-        n.path = "[Demo]/#demo.name";
-        n.text = "İsmail ğüşçö";
-        n.enabled = Boolean.TRUE;
-        sc.steps.get(0).expected = new Snapshot();
-        sc.steps.get(0).expected.nodes.add(n);
         return sc;
     }
 
@@ -54,12 +46,8 @@ public class JsonTest {
         assertEquals(Action.Type.SET_TEXT, s1.action.type);
         assertEquals("demo.name", s1.action.locator.name);
         assertEquals("İsmail ğüşçö", s1.action.value);
-        assertEquals("İsmail ğüşçö", s1.expected.nodes.get(0).text);
-        assertEquals(Boolean.TRUE, s1.expected.nodes.get(0).enabled);
-        assertNull(s1.expected.nodes.get(0).visible);
         assertEquals(Action.Type.KEY, back.steps.get(1).action.type);
         assertNull("modifier 0 is not written", back.steps.get(1).action.modifiers);
-        assertNull(back.steps.get(1).expected);
         assertEquals("a<b&c=d", back.ignore.valuePatterns.get(0));
     }
 

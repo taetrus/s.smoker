@@ -1,4 +1,5 @@
 {
+  "schemaVersion": 2,
   "name": "empty-name",
   "description": "Greet with an empty name: the app logs SEVERE to demo.log — smoker must FAIL the step on the log hit. Then 'Throw on EDT' — uncaught exception must be caught.",
   "startupTimeoutMs": 30000,

@@ -6,6 +6,7 @@ import org.junit.Before;
 import org.junit.Test;
 import smoker.core.model.Action;
 import smoker.core.model.Scenario;
+import smoker.core.model.Snapshot;
 import smoker.core.model.Step;
 
 import javax.swing.JButton;
@@ -19,6 +20,7 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -68,7 +70,8 @@ public class RecorderWindowTest {
                 frame.setVisible(true);
             }
         });
-        recorder = new Recorder(AgentConfig.parse("mode=record;scenario=target/recorder-window-test.json"), new Scenario());
+        recorder = new Recorder(AgentConfig.parse("mode=record;scenario=target/recorder-window-test.json"), new Scenario(),
+                new HashMap<String, Snapshot>());
         recorder.start();
     }
 

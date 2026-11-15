@@ -116,7 +116,7 @@ final class RecorderToolbar extends JFrame implements Recorder.Listener {
             @Override
             public Component getListCellRendererComponent(JList<?> l, Object v, int i, boolean sel, boolean foc) {
                 Step s = (Step) v;
-                String txt = s.id + "  " + s.name + (s.expected == null ? "  (snapshot pending…)" : "");
+                String txt = s.id + "  " + s.name + (recorder.hasSnapshot(s) ? "" : "  (snapshot pending…)");
                 return super.getListCellRendererComponent(l, txt, i, sel, foc);
             }
         });
