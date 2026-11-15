@@ -82,6 +82,7 @@ A path without spaces needs no quotes. This is the easier procedure.
 {
   "name": "orders-create",
   "startupTimeoutMs": 60000, "quietMs": 400, "stepTimeoutMs": 15000, "maxRows": 20,
+  "windowKeys": [ { "pattern": "Editor - .*", "key": "Editor" } ],
   "ignore": { "paths": ["#statusbar\\.clock"], "attributes": [], "valuePatterns": ["\\d{2}:\\d{2}:\\d{2}"] },
   "steps": [
     { "id": "s001", "name": "open orders", "action": { "type": "CLICK",    "locator": { "name": "nav.orders" } } },
@@ -95,6 +96,10 @@ A path without spaces needs no quotes. This is the easier procedure.
 
 Actions: `CLICK`, `SET_TEXT`, `SELECT` (combo/list/tab by text or index, table by row), `KEY` (VK name, `modifiers` =
 `InputEvent.*_DOWN_MASK`), `WAIT` (ms), `CLOSE_WINDOW`. `expected` is filled by `approve` (or by the recorder).
+
+Title rules: a window title can change while the application runs. `windowKeys` maps a title to a fixed key.
+The first `pattern` (Java regex, matches the whole title) gives the `key`. The key replaces the title in paths and in
+`windowTitle` locators. A named window keeps its name. The `title` attribute stays the real title.
 
 Tables, lists and trees: the snapshot holds the text of the first `maxRows` rows (default 20). A table gives `cells`.
 A list or a tree gives `items`. A tree row has two spaces of indent per level. The diff reports `.items[i]` and `.cells[row][col]`.

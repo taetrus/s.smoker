@@ -15,6 +15,8 @@ public class Scenario {
     public long stepTimeoutMs = 15_000;
     /** A snapshot takes the content of at most this many rows of a table, list or tree (F-07). */
     public int maxRows = 20;
+    /** Title rules: a changing window title gets a fixed key in paths and locators. */
+    public List<WindowKey> windowKeys = new ArrayList<WindowKey>();
     public IgnoreRules ignore = new IgnoreRules();
     public List<Step> steps = new ArrayList<Step>();
 

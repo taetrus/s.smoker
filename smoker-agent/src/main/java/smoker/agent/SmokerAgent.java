@@ -67,6 +67,7 @@ public final class SmokerAgent {
     private static void play(AgentConfig cfg, Observations obs, EdtWatchdog watchdog) throws Exception {
         Scenario sc = Json.read(cfg.scenario, Scenario.class);
         if (sc.name == null) sc.name = stripExt(cfg.scenario.getFileName().toString());
+        Locators.useWindowKeys(new WindowKeys(sc.windowKeys));
         Files.createDirectories(cfg.out);
         new Player(cfg, sc, obs, watchdog).run();
     }
@@ -79,6 +80,7 @@ public final class SmokerAgent {
             sc = new Scenario();
             sc.name = stripExt(cfg.scenario.getFileName().toString());
         }
+        Locators.useWindowKeys(new WindowKeys(sc.windowKeys));
         // show the toolbar once the app's first frame is up, so it floats above it
         long deadline = System.currentTimeMillis() + sc.startupTimeoutMs;
         while (System.currentTimeMillis() < deadline && !anyFrameShowing()) Thread.sleep(200);

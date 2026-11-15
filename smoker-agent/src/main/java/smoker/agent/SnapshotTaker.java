@@ -52,7 +52,8 @@ final class SnapshotTaker {
             if (w.getName() != null && w.getName().startsWith(SMOKER_WINDOW_PREFIX)) continue;
             String title = Locators.titleOf(w);
             String name = applicationName(w);
-            String part = unique(taken, name != null ? "[#" + name + "]" : "[" + (title == null ? "" : title) + "]");
+            String key = Locators.keyOf(w);
+            String part = unique(taken, name != null ? "[#" + name + "]" : "[" + (key == null ? "" : key) + "]");
             NodeSnapshot n = node(w, part);
             n.title = title;
             s.nodes.add(n);

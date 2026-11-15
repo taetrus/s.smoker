@@ -5,6 +5,8 @@ import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
 import smoker.core.model.Locator;
+import smoker.core.model.WindowKey;
+import java.util.Arrays;
 
 import javax.swing.JButton;
 import javax.swing.JFrame;
@@ -71,6 +73,7 @@ public class LocatorsWindowTest {
 
     @After
     public void disposeFrame() throws Exception {
+        Locators.useWindowKeys(null);
         if (frame == null) return;
         onEdt(new Callable<Void>() {
             public Void call() {
@@ -163,6 +166,30 @@ public class LocatorsWindowTest {
             }
         });
         assertSame(frame, w);
+    }
+
+    @Test
+    public void unnamedLocatorFindsTheWindowAfterATitleChange() throws Exception {
+        Locators.useWindowKeys(new WindowKeys(Arrays.asList(new WindowKey("Editor - .*", "Editor"))));
+        onEdt(new Callable<Void>() {
+            public Void call() {
+                frame.setTitle("Editor - a.txt");
+                return null;
+            }
+        });
+        Locator l = onEdt(new Callable<Locator>() {
+            public Locator call() {
+                return Locators.resolve(ok1);
+            }
+        });
+        assertEquals("Editor", l.windowTitle);
+        onEdt(new Callable<Void>() {
+            public Void call() {
+                frame.setTitle("Editor - b.txt");
+                return null;
+            }
+        });
+        assertSame(ok1, find(l));
     }
 
     private static Component find(final Locator l) throws Exception {

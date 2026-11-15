@@ -8,6 +8,7 @@ import smoker.core.diff.SnapshotDiff;
 import smoker.core.model.IgnoreRules;
 import smoker.core.model.NodeSnapshot;
 import smoker.core.model.Snapshot;
+import smoker.core.model.WindowKey;
 
 import javax.swing.Box;
 import javax.swing.CellRendererPane;
@@ -51,6 +52,7 @@ public class SnapshotTakerPathTest {
 
     @After
     public void disposeWindows() throws Exception {
+        Locators.useWindowKeys(null);
         onEdt(new Callable<Void>() {
             public Void call() {
                 for (Window w : windows) w.dispose();
@@ -141,6 +143,31 @@ public class SnapshotTakerPathTest {
             }
         });
         assertEquals(Arrays.asList("CHANGED [#orders.frame] .title: expected=\"Orders\" actual=\"Orders - changed\""),
+                SnapshotDiff.diff(before, after, new IgnoreRules()));
+    }
+
+    @Test
+    public void changingTitleWithARuleKeepsThePaths() throws Exception {
+        Locators.useWindowKeys(new WindowKeys(Arrays.asList(new WindowKey("Editor - .*", "Editor"))));
+        final AtomicReference<JFrame> frame = new AtomicReference<JFrame>();
+        Snapshot before = onEdt(new Callable<Snapshot>() {
+            public Snapshot call() {
+                JFrame f = frame("Editor - a.txt");
+                frame.set(f);
+                JPanel p = new JPanel();
+                p.add(new JButton("OK"));
+                f.getContentPane().add(p);
+                return show(f);
+            }
+        });
+        assertEquals(Arrays.asList("[Editor]", "[Editor]/JButton[0]"), paths(before, "[Editor]"));
+        Snapshot after = onEdt(new Callable<Snapshot>() {
+            public Snapshot call() {
+                frame.get().setTitle("Editor - b.txt");
+                return new SnapshotTaker(20).take();
+            }
+        });
+        assertEquals(Arrays.asList("CHANGED [Editor] .title: expected=\"Editor - a.txt\" actual=\"Editor - b.txt\""),
                 SnapshotDiff.diff(before, after, new IgnoreRules()));
     }
 
