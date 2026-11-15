@@ -57,4 +57,24 @@ public class HtmlReportWriterTest {
         assertTrue(html, html.contains("@OrdersPanel.saveButton"));
         assertTrue(html, html.contains("An automatic name changes when a developer renames the field."));
     }
+
+    @Test
+    public void reportShowsATextProposalWithoutFieldOrAutomaticName() throws Exception {
+        RunResult r = new RunResult();
+        r.scenarioName = "settings";
+        smoker.core.model.LintEntry l = new smoker.core.model.LintEntry();
+        l.window = "[Settings]";
+        l.runtimeClass = "app.SettingsDialog";
+        l.type = "JButton";
+        l.text = "Cancel";
+        l.proposedName = "settings.btn.cancel";
+        l.source = "text";
+        r.lint.add(l);
+        Path f = tmp.getRoot().toPath().resolve("report.html");
+        HtmlReportWriter.write(f, Collections.singletonList(r));
+        String html = new String(Files.readAllBytes(f), StandardCharsets.UTF_8);
+        assertTrue(html, html.contains("settings.btn.cancel"));
+        assertTrue(html, html.contains("<td>SettingsDialog</td>"));
+        assertTrue(!html.contains("null"));
+    }
 }

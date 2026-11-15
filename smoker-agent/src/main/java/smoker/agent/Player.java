@@ -64,10 +64,15 @@ final class Player implements Runnable {
             result.error = String.valueOf(t);
         } finally {
             result.finishedAt = System.currentTimeMillis();
-            result.unnamedComponents.addAll(taker.unnamedInteractive());
-            result.duplicateNames.addAll(taker.duplicateNames());
-            result.lint.addAll(taker.lintEntries());
-            result.autoNames.addAll(taker.autoNamesUsed());
+            try {
+                result.unnamedComponents.addAll(taker.unnamedInteractive());
+                result.duplicateNames.addAll(taker.duplicateNames());
+                result.lint.addAll(taker.lintEntries());
+                result.autoNames.addAll(taker.autoNamesUsed());
+            } catch (RuntimeException e) {
+                // The lint is optional: the result file must still be written.
+                SmokerAgent.log("cannot collect the lint: " + e);
+            }
             try {
                 Json.write(cfg.out.resolve("run-result.json"), result);
             } catch (Exception e) {

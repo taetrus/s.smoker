@@ -85,11 +85,17 @@ final class SnapshotTaker {
             Map<String, Integer> names = new HashMap<String, Integer>();
             walk(w, part, part, new HashMap<String, Integer>(), names, taken, s.nodes);
             for (Map.Entry<String, Integer> e : names.entrySet()) {
-                if (e.getValue() > 1) duplicates.add(part + ": #" + e.getKey() + " (" + e.getValue() + "x)");
+                if (e.getValue() > 1) {
+                    synchronized (this) {
+                        duplicates.add(part + ": #" + e.getKey() + " (" + e.getValue() + "x)");
+                    }
+                }
             }
         }
         suffixDuplicateProposals(pending);
-        for (int i = 0; i < pending.size(); i++) lint.put(pendingKeys.get(i), pending.get(i));
+        synchronized (this) {
+            for (int i = 0; i < pending.size(); i++) lint.put(pendingKeys.get(i), pending.get(i));
+        }
         Collections.sort(s.nodes, new Comparator<NodeSnapshot>() {
             public int compare(NodeSnapshot a, NodeSnapshot b) {
                 return a.path.compareTo(b.path);
@@ -98,18 +104,19 @@ final class SnapshotTaker {
         return s;
     }
 
-    Set<String> unnamedInteractive() {
-        return unnamed;
+    /** The accumulated collections are written on the EDT and read on the player thread: all access holds the lock. */
+    synchronized Set<String> unnamedInteractive() {
+        return new TreeSet<String>(unnamed);
     }
 
     /** The components without a real name, with proposals. Accumulated over all snapshots (WP-09). */
-    List<LintEntry> lintEntries() {
+    synchronized List<LintEntry> lintEntries() {
         return new ArrayList<LintEntry>(lint.values());
     }
 
     /** Every automatic name that a snapshot node had, sorted. */
-    Set<String> autoNamesUsed() {
-        return autoNames;
+    synchronized Set<String> autoNamesUsed() {
+        return new TreeSet<String>(autoNames);
     }
 
     /** In one view, the second equal proposal gets suffix 2, the third 3, in walk order (spec 5.3). */
@@ -126,8 +133,8 @@ final class SnapshotTaker {
     }
 
     /** One entry per window and name that more than one visible component has: {@code "[Orders]: #x (2x)"} (F-17). */
-    Set<String> duplicateNames() {
-        return duplicates;
+    synchronized Set<String> duplicateNames() {
+        return new TreeSet<String>(duplicates);
     }
 
     /** The snapshot text of a password field that is not empty. */
@@ -238,7 +245,11 @@ final class SnapshotTaker {
                 if (name != null) {
                     out.add(n);
                     childAnchor = path;
-                    if (name.startsWith("@")) autoNames.add(name);
+                    if (name.startsWith("@")) {
+                        synchronized (this) {
+                            autoNames.add(name);
+                        }
+                    }
                     Integer c = names.get(name);
                     names.put(name, c == null ? 1 : c + 1);
                 } else if (!namedOnly) {
@@ -354,7 +365,9 @@ final class SnapshotTaker {
         }
 
         if (Locators.isInteractive(c) && Locators.realName(c) == null && c.isShowing() && !lafInternal(c) && !generatedByOptionPane(c)) {
-            unnamed.add(path);
+            synchronized (this) {
+                unnamed.add(path);
+            }
             pendingKeys.add(windowPart + "|" + path);
             pending.add(lintEntry(c));
         }

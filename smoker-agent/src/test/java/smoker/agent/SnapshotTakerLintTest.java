@@ -57,7 +57,6 @@ public class SnapshotTakerLintTest {
 
     private SnapshotTaker lintOf(final JPanel panel) throws Exception {
         final SnapshotTaker taker = new SnapshotTaker(20);
-        final AtomicReference<Throwable> err = new AtomicReference<Throwable>();
         SwingUtilities.invokeAndWait(new Runnable() {
             public void run() {
                 JFrame f = new JFrame("Orders");
@@ -178,5 +177,40 @@ public class SnapshotTakerLintTest {
             }
         }));
         assertEquals("[@OrdersPanel.saveButton]", taker.autoNamesUsed().toString());
+    }
+
+    @Test
+    public void secondSnapshotKeepsTheSuffixes() throws Exception {
+        final SnapshotTaker taker = lintOf(onEdt(new Callable<JPanel>() {
+            public JPanel call() {
+                return new SettingsDialogPanel("OK", "OK", "OK");
+            }
+        }));
+        SwingUtilities.invokeAndWait(new Runnable() {
+            public void run() {
+                taker.take();
+            }
+        });
+        List<LintEntry> lint = taker.lintEntries();
+        assertEquals(3, lint.size());
+        assertEquals("settingsDialog.btn.ok", lint.get(0).proposedName);
+        assertEquals("settingsDialog.btn.ok2", lint.get(1).proposedName);
+        assertEquals("settingsDialog.btn.ok3", lint.get(2).proposedName);
+    }
+
+    @Test
+    public void accessorsReturnIndependentCopies() throws Exception {
+        final SnapshotTaker taker = lintOf(onEdt(new Callable<JPanel>() {
+            public JPanel call() {
+                return new OrdersPanel();
+            }
+        }));
+        taker.autoNamesUsed().clear();
+        taker.unnamedInteractive().clear();
+        taker.duplicateNames().clear();
+        taker.lintEntries().clear();
+        assertEquals(1, taker.autoNamesUsed().size());
+        assertEquals(1, taker.unnamedInteractive().size());
+        assertEquals(1, taker.lintEntries().size());
     }
 }
