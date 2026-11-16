@@ -40,14 +40,18 @@ For the CLI, write each inner quote of `--app` as `\"` and enclose the value in 
 `SelfTestIT` expects run1 NO_GOLDEN, run2 PASS, run3 FAIL with `CHANGED [#demo.frame]/#demo.lang`,
 run4 `empty-name` ERROR (s001 FAIL on the log hit, s002 ERROR on the exception thrown by the action) and `hang` HANG.
 It also checks the WP-02 criterion on `table.json`: scenario under 80 lines, golden under 150 lines, an extra unnamed
-panel gives PASS (modes `all` and `named`), a wrong cell gives FAIL. Run `mvn -B verify` and `mvn -B verify -Plocale-tr`
+panel gives PASS (modes `all` and `named`), a wrong cell gives FAIL.
+It checks the WP-03 criterion on `wait.json`: run1 s001 PASS without a snapshot, s002 NO_GOLDEN; after `approve` PASS.
+`wait-timeout`: s002 FAIL with the last value `waiting…`.
+Run `mvn -B verify` and `mvn -B verify -Plocale-tr`
 after every change to `smoker-agent` or `smoker-core`.
 
 ## State on 2026-11-16
 
 - `master` holds WP-01, WP-02 and WP-09. All three work packages are complete; their completion criteria passed.
-- Tests: 61 in `smoker-core`, 120 in `smoker-agent`, 21 in `smoker-cli`, 4 IT. They pass on macOS (JDK 27 default
-  locale and tr_TR, tr_TR with JRE 8 as test JVM) and on Windows 11 (JDK 25, the same three builds).
+- WP-03 (`WAIT_FOR`, F-02, R-23a) is on branch `wp-03-wait-conditions`. It is not merged. R-23a passes on the demo (`wait.json`, SelfTestIT).
+- Tests on the WP-03 branch: 64 in `smoker-core`, 151 in `smoker-agent`, 22 in `smoker-cli`, 5 IT. They pass on macOS
+  (JDK 27 default locale and `-Plocale-tr`). The Windows run of the three builds is from before WP-03.
 - WP-02: golden file apart from the scenario (`schemaVersion: 2`), anchored paths, table cells, `compare` (`all` | `named`),
   `maxRows`, `windowKeys`, lint for names that are not unique, player continues after FAIL.
 - WP-09: automatic names `@<Class>.<field>` (on by default, scenario field `autoNames`), lint entries with proposed
@@ -55,15 +59,16 @@ after every change to `smoker-agent` or `smoker-core`.
   The scenario with automatic names `docs/wp-01-pilot/pilot-autonames.json` passes on Windows.
 - Pilot goldens approved again on Windows on 2026-11-16 (`docs/wp-01-handoff.md` section 5).
 - Decision 6 (2026-11-15): test reports go into `docs/` on GitHub, not Confluence.
-- Open findings: F-02 confirmed (WP-03); F-08, F-09, F-22, F-24 (WP-04).
+- Open findings: F-02 fixed in the tool, untested on a product with the simulator; F-08, F-09, F-22, F-24 (WP-04).
 - SelfTestIT startup failure of 2026-11-15: root cause fixed in 7c7458c (the startup check read `Window.isShowing()`
   off the EDT and could see a frame inside its constructor). 2 of 100 demo starts failed before, 0 of 100 after.
   If a failure recurs, keep `smoker-it/target/failsafe-reports` and `smoker-it/target/it-work`.
 - Do not type into the demo windows while SelfTestIT runs on a desktop: they take the focus, and a key press changes a text field.
 - Test isolation: a test must not leave a window that reports "showing". `Window.getWindows()` keeps it for later test classes.
 - Process: specs in `docs/superpowers/specs/`, plans in `docs/superpowers/plans/` (one per work package).
-- Next work package in plan order: WP-03 or WP-04 (independent of each other).
-- Not verified: JRE 11 and JRE 17 at run time on a target application, a product with the hardware simulator.
+- Next work package in plan order: WP-04.
+- Not verified: JRE 11 and JRE 17 at run time on a target application, a product with the hardware simulator,
+  the manual walkthrough of the recorder button `Wait for…`, the Windows run of `wait.json`.
 
 ## Decisions already made
 

@@ -28,7 +28,7 @@ The audit found 18 defects or gaps. Severity A stops the use on a real applicati
 | ID | Sev. | Finding | Correction | Work package |
 |---|---|---|---|---|
 | F-01 | A | No test on a real Equinox application exists. No test on JRE 8, JRE 11, JRE 17 or Windows exists. The skeleton operated only on JDK 21 with Xvfb. | Do a verification test on one real application before all other work. | WP-01 |
-| F-02 | A | The agent waits only for an empty event queue. The application gets answers from the simulator after an unknown delay. The agent will record the state too early. | Add the action `WAIT_FOR`. It waits until a component attribute agrees with a value, or until a timeout occurs. | WP-03 |
+| F-02 | A | The agent waits only for an empty event queue. The application gets answers from the simulator after an unknown delay. The agent will record the state too early. | Add the action `WAIT_FOR`. It waits until a component attribute agrees with a value, or until a timeout occurs. WP-03 is implemented on the branch (2026-11-16). F-02 is fixed in the tool. It is not tested on a product with the hardware simulator: no such product is available. | WP-03 |
 | F-03 | A | Each scenario starts a new JVM. An Equinox application can use 20 s to 60 s to start. 50 scenarios can use 50 minutes for startup only. | Add a suite mode. One JVM runs many scenarios. Start a new JVM only after FAIL, HANG or ERROR. | WP-05 |
 | F-04 | A | No procedure starts or resets the simulator and the test data. | Add `before` and `after` commands to the suite file. Add a reset action between scenarios. | WP-05 |
 | F-05 | B | A path contains position indexes, for example `JPanel[0]`. One new panel in the layout changes all paths below it. All golden snapshots then fail. | Start each path at the nearest named component. Compare all components that show state by default (decision 7) and give the option `named`. Done in WP-02. | WP-02 |
@@ -156,6 +156,8 @@ Completion criterion: R-25a, R-30a and R-23b pass. A golden file for 10 steps on
 5. Add a delayed answer to the demo application. Add a scenario that uses `WAIT_FOR`.
 
 Completion criterion: R-23a passes. No scenario for the pilot application uses the action `WAIT`.
+
+State on 2026-11-16: WP-03 is implemented on the branch `wp-03-wait-conditions`. R-23a passes on the demo (`wait.json`, SelfTestIT). No pilot scenario uses `WAIT`. F-02 is not tested on a product with the hardware simulator.
 
 **WP-04 Log analysis (4 pd)**
 

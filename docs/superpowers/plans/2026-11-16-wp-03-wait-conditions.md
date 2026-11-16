@@ -88,8 +88,8 @@
   - `readGivesNotFoundForAMissingName`.
   - `awaitMatchesWhenTheLabelChanges`: frame with `JLabel` named `t.answer` text `waiting…`; a `javax.swing.Timer` sets `ready 42` after 500 ms; `await(waitFor(name t.answer, text, "ready \\d+", 3000L), …, () -> false)` (anonymous class) → MATCHED within 2000 ms.
   - `awaitTimesOutWithTheLastValue`: label stays `waiting…`, timeout 300 → TIMEOUT, `lastValue` `waiting…`; `timeoutMessage` contains `last value: "waiting…"` and `within 300 ms`.
-- [ ] **Step 2: Run** `mvn -B -pl smoker-core,smoker-agent -am test -Dtest='WaitCondition*' -DfailIfNoTests=false` — expect compile failure.
-- [ ] **Step 3: Split** `SnapshotTaker.node` into `attributes` + lint part. Run `mvn -B -pl smoker-agent -am test -Dtest='SnapshotTaker*' -DfailIfNoTests=false` — all existing snapshot tests still pass.
+- [ ] **Step 2: Run** `mvn -B -pl smoker-core,smoker-agent -am test -Dtest='WaitCondition*' -Dsurefire.failIfNoSpecifiedTests=false` — expect compile failure.
+- [ ] **Step 3: Split** `SnapshotTaker.node` into `attributes` + lint part. Run `mvn -B -pl smoker-agent -am test -Dtest='SnapshotTaker*' -Dsurefire.failIfNoSpecifiedTests=false` — all existing snapshot tests still pass.
 - [ ] **Step 4: Implement** `WaitCondition` per the Interfaces.
 - [ ] **Step 5: Run** the Step 2 command — PASS.
 - [ ] **Step 6: Commit** `WP-03, F-02: WaitCondition reads and polls one attribute`.
@@ -115,7 +115,7 @@ Behaviour of `runStep` for `WAIT_FOR` (spec 6.3): `validate` (IAE → ERROR, `sr
   - `PlayerTest.skipsSnapshotOnlyBeforeWaitFor`: steps `CLICK, WAIT_FOR, CLICK, WAIT_FOR, WAIT_FOR, CLICK` (indexes 0–5) → `skipsSnapshot` true at 0, 2 and 3; false at 1, 4 and 5.
   - `PlayerWaitForTest.matchedContinues`, `timeoutGivesFailWithLastValue` (`sr.status == FAIL`, `sr.differences` contains `last value: "waiting…"`), `invalidRegexGivesError`, `blockedEdtGivesHang` (block the EDT with `invokeLater(sleep 3000)`, timeout 2000, hang supplier true → returns false, status HANG), `waitsForAComponentInAModalDialog` (a non-blocking `invokeLater` opens a modal `JDialog` with label `t.dlg` that a `Timer` changes; MATCHED).
   - `MainTest.budgetAddsWaitForTimeouts`: scenario with defaults and one `WAIT_FOR` of 20000 ms → `budgetMs` = old formula + 20000.
-- [ ] **Step 2: Run** `mvn -B test -Dtest='PlayerTest,PlayerWaitForTest,MainTest' -DfailIfNoTests=false` — expect compile failures.
+- [ ] **Step 2: Run** `mvn -B test -Dtest='PlayerTest,PlayerWaitForTest,MainTest' -Dsurefire.failIfNoSpecifiedTests=false` — expect compile failures.
 - [ ] **Step 3: Implement** the Interfaces and behaviour above. In `run()` use an index loop and pass `!skipsSnapshot(scenario, i)`.
 - [ ] **Step 4: Run** the Step 2 command — PASS. Then `mvn -B package` — all unit tests pass.
 - [ ] **Step 5: Commit** `WP-03, F-02: player runs WAIT_FOR; no snapshot before a WAIT_FOR`.
@@ -164,7 +164,7 @@ Behaviour of `runStep` for `WAIT_FOR` (spec 6.3): `validate` (IAE → ERROR, `sr
   - `RecorderToolbarTest.refusesAComponentWithoutAName`: unnamed locator → message starts with `needs a name`; named locator and automatic `@Foo.bar` locator → null.
   - `RecorderWindowTest.waitForRemovesTheSnapshotOfTheStepBefore`: record a click (existing helpers), wait until `hasSnapshot`; `addWaitFor(waitFor(named label, text, current text quoted, 2000L))` on the EDT → previous step `hasSnapshot` false; the `WAIT_FOR` step gets a snapshot within 3000 ms; `save()` writes a golden without the click step.
   - `RecorderWindowTest.waitForSnapshotWaitsForTheCondition`: label `waiting…`, `addWaitFor` with `ready \d+`, a `Timer` sets `ready 1` after 800 ms → the stored snapshot of the `WAIT_FOR` step has the label text `ready 1`.
-- [ ] **Step 2: Run** `mvn -B -pl smoker-agent -am test -Dtest='Recorder*' -DfailIfNoTests=false` — expect compile failures.
+- [ ] **Step 2: Run** `mvn -B -pl smoker-agent -am test -Dtest='Recorder*' -Dsurefire.failIfNoSpecifiedTests=false` — expect compile failures.
 - [ ] **Step 3: Implement** `Recorder` changes, then the toolbar helpers, then the button, select mode and dialog.
 - [ ] **Step 4: Run** the Step 2 command — PASS. Then `mvn -B verify` and `mvn -B verify -Plocale-tr` — all pass.
 - [ ] **Step 5: Manual check** (macOS desktop, do not type into other demo windows): start the demo in record mode (`README.md`, "Use"), click Query, wait for `ready 42`, `Wait for…`, click the unnamed button "I have no name" → status `needs a name: …`; click `demo.answer` → dialog with regex `ready 42`; edit to `ready \d+`; OK; Save. Replay the saved scenario twice → NO_GOLDEN for nothing but new steps, then PASS after `approve`. Note the result in the commit message.
