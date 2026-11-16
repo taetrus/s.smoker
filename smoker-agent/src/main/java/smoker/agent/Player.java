@@ -2,6 +2,7 @@ package smoker.agent;
 
 import smoker.core.diff.SnapshotDiff;
 import smoker.core.io.Json;
+import smoker.core.model.Action;
 import smoker.core.model.RunResult;
 import smoker.core.model.Scenario;
 import smoker.core.model.Snapshot;
@@ -52,8 +53,8 @@ final class Player implements Runnable {
         result.os = System.getProperty("os.name") + " " + System.getProperty("os.version");
         try {
             startup();
-            for (Step step : scenario.steps) {
-                RunResult.StepResult sr = runStep(step);
+            for (int i = 0; i < scenario.steps.size(); i++) {
+                RunResult.StepResult sr = runStep(scenario.steps.get(i), !skipsSnapshot(scenario, i));
                 result.steps.add(sr);
                 result.status = worse(result.status, sr.status);
                 // Continue after FAIL, so that one approve covers all steps (F-21).
@@ -164,7 +165,47 @@ final class Player implements Runnable {
         }
     }
 
-    private RunResult.StepResult runStep(final Step step) {
+    /** True when the next step is a WAIT_FOR: this step takes no snapshot and has no golden (WP-03, decision B). */
+    static boolean skipsSnapshot(Scenario s, int index) {
+        if (index + 1 >= s.steps.size()) return false;
+        Action next = s.steps.get(index + 1).action;
+        return next != null && next.type == Action.Type.WAIT_FOR;
+    }
+
+    /**
+     * Runs the wait of a WAIT_FOR step on the player thread. Sets status, error and differences.
+     *
+     * @return true when the step continues to settle and snapshot (MATCHED or TIMEOUT); false on HANG or ERROR
+     */
+    static boolean runWaitFor(Action a, RunResult.StepResult sr, java.util.function.BooleanSupplier hang) {
+        java.util.regex.Pattern p;
+        try {
+            p = WaitCondition.validate(a);
+        } catch (IllegalArgumentException e) {
+            sr.status = RunResult.Status.ERROR;
+            sr.error = e.getMessage();
+            return false;
+        }
+        WaitCondition.Outcome o = WaitCondition.await(a, p, hang);
+        if (Thread.currentThread().isInterrupted()) {
+            sr.status = RunResult.Status.ERROR;
+            sr.error = "WAIT_FOR interrupted";
+            return false;
+        }
+        switch (o.kind) {
+            case MATCHED:
+                return true;
+            case TIMEOUT:
+                sr.status = RunResult.Status.FAIL;
+                sr.differences.add(WaitCondition.timeoutMessage(a, o.lastValue));
+                return true;
+            default:
+                sr.status = RunResult.Status.HANG;
+                return false;
+        }
+    }
+
+    private RunResult.StepResult runStep(final Step step, boolean takeSnapshot) {
         RunResult.StepResult sr = new RunResult.StepResult();
         sr.stepId = step.id;
         sr.stepName = step.name;
@@ -172,10 +213,25 @@ final class Player implements Runnable {
         watchdog.reset();
         SmokerAgent.log("step " + step.id + " " + step.action);
         try {
+            if (step.action != null && step.action.type == Action.Type.WAIT_FOR) {
+                // WAIT_FOR runs on the player thread; each read goes through the EDT (WP-03)
+                if (!runWaitFor(step.action, sr, new java.util.function.BooleanSupplier() {
+                    @Override
+                    public boolean getAsBoolean() {
+                        return watchdog.hangDetected();
+                    }
+                })) {
+                    if (sr.status == RunResult.Status.HANG) return hang(sr, t0, "WAIT_FOR: EDT blocked");
+                    finish(sr, t0);
+                    return sr;
+                }
+            }
             // 1. action on the EDT, bounded so a hung EDT cannot hang the player
             final Throwable[] failure = new Throwable[1];
             final CountDownLatch done = new CountDownLatch(1);
-            SwingUtilities.invokeLater(new Runnable() {
+            if (step.action != null && step.action.type == Action.Type.WAIT_FOR) {
+                done.countDown();
+            } else SwingUtilities.invokeLater(new Runnable() {
                 @Override
                 public void run() {
                     try {
@@ -203,6 +259,13 @@ final class Player implements Runnable {
             // 2. settle
             boolean quiet = Quiescence.await(scenario.quietMs, scenario.stepTimeoutMs);
             if (!quiet && watchdog.hangDetected()) return hang(sr, t0, "EDT blocked after action");
+
+            if (!takeSnapshot) {
+                SmokerAgent.log("step " + step.id + ": no snapshot, the next step is WAIT_FOR");
+                finish(sr, t0);
+                if (!sr.logHits.isEmpty() && sr.status != RunResult.Status.ERROR) sr.status = RunResult.Status.FAIL;
+                return sr;
+            }
 
             // 3. observe
             sr.actual = Quiescence.onEdt(new Callable<Snapshot>() {
