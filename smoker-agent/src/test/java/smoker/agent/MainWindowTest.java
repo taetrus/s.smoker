@@ -9,6 +9,7 @@ import javax.swing.JFrame;
 import javax.swing.SwingUtilities;
 import java.awt.GraphicsEnvironment;
 import java.util.concurrent.Callable;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -18,6 +19,12 @@ public class MainWindowTest {
 
     private JFrame frame;
 
+    /**
+     * The fake frame reports "showing" only while this flag is set. Window.getWindows() keeps the fake until it is
+     * collected, so a fake that stays "showing" goes into the snapshots of later test classes in the same JVM.
+     */
+    private final AtomicBoolean fakeShowing = new AtomicBoolean();
+
     @Before
     public void display() {
         Assume.assumeFalse(GraphicsEnvironment.isHeadless());
@@ -25,6 +32,7 @@ public class MainWindowTest {
 
     @After
     public void dispose() throws Exception {
+        fakeShowing.set(false);
         if (frame == null) return;
         SwingUtilities.invokeAndWait(new Runnable() {
             @Override
@@ -51,10 +59,11 @@ public class MainWindowTest {
 
     @Test
     public void undisplayableFrameThatReportsShowingIsNotAMainWindow() throws Exception {
+        fakeShowing.set(true);
         final JFrame f = new JFrame() {
             @Override
             public boolean isShowing() {
-                return true;
+                return fakeShowing.get();
             }
         };
         frame = f;
