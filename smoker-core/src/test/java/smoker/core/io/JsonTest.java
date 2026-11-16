@@ -42,6 +42,52 @@ public class JsonTest {
         return sc;
     }
 
+    private static Locator locatorNamed(String name) {
+        Locator l = new Locator();
+        l.name = name;
+        return l;
+    }
+
+    private Action readAction(String json) throws Exception {
+        Path f = tmp.newFile().toPath();
+        Files.write(f, json.getBytes(StandardCharsets.UTF_8));
+        return Json.read(f, Action.class);
+    }
+
+    @Test
+    public void waitForRoundTrips() throws Exception {
+        Scenario sc = new Scenario();
+        sc.name = "w";
+        sc.steps.add(new Step("s001", "wait", Action.waitFor(locatorNamed("demo.answer"), "text", "ready \\d+", 5000L)));
+        Path f = tmp.newFile().toPath();
+        Json.write(f, sc);
+        Action a = Json.read(f, Scenario.class).steps.get(0).action;
+        assertEquals(Action.Type.WAIT_FOR, a.type);
+        assertEquals("text", a.attribute);
+        assertEquals("ready \\d+", a.matches);
+        assertEquals(Long.valueOf(5000L), a.timeoutMs);
+        assertEquals(5000L, a.waitTimeoutMs());
+    }
+
+    @Test
+    public void waitForWithoutTimeoutUsesTheDefault() throws Exception {
+        Action a = readAction("{\"type\":\"WAIT_FOR\",\"locator\":{\"name\":\"a\"},\"attribute\":\"text\",\"matches\":\"x\"}");
+        assertNull(a.timeoutMs);
+        assertEquals(10000L, a.waitTimeoutMs());
+    }
+
+    @Test
+    public void oldActionHasNoWaitFields() throws Exception {
+        Action a = readAction("{\"type\":\"CLICK\",\"locator\":{\"name\":\"a\"}}");
+        assertNull(a.attribute);
+        assertNull(a.matches);
+        assertNull(a.timeoutMs);
+        String text = Json.toString(a);
+        assertFalse(text, text.contains("attribute"));
+        assertFalse(text, text.contains("matches"));
+        assertFalse(text, text.contains("timeoutMs"));
+    }
+
     @Test
     public void scenarioSurvivesWriteAndRead() throws Exception {
         Path f = tmp.getRoot().toPath().resolve("greet.json");

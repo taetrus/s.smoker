@@ -98,7 +98,7 @@ A path without spaces needs no quotes. This is the easier procedure.
 ```
 
 Actions: `CLICK`, `SET_TEXT`, `SELECT` (combo/list/tab by text or index, table by row), `KEY` (VK name, `modifiers` =
-`InputEvent.*_DOWN_MASK`), `WAIT` (ms), `CLOSE_WINDOW`.
+`InputEvent.*_DOWN_MASK`), `WAIT` (ms), `CLOSE_WINDOW`, `WAIT_FOR` (see "Wait for a condition").
 
 `schemaVersion` is 2. The scenario file has no golden snapshots. s.smoker refuses a file without `schemaVersion`,
 with `schemaVersion` 1, or with an `expected` block in a step: that is the old format. To convert an old file,
@@ -132,6 +132,24 @@ A list or a tree gives `items`. A tree row has two spaces of indent per level. T
 Password fields (`JPasswordField`): the snapshot gives the text `***` when the field has a value, and `""` when it is empty.
 The recorder does not record typing in a password field. If a scenario must fill one, add the `SET_TEXT` step by hand.
 Do not put a real password in a scenario file.
+
+### Wait for a condition
+
+Use `WAIT_FOR` when the application needs time after a step. The player polls each 100 ms until the condition is true.
+
+```json
+{ "type": "WAIT_FOR", "locator": { "name": "demo.answer" },
+  "attribute": "text", "matches": "ready .*", "timeoutMs": 10000 }
+```
+
+- `attribute` is one of `text`, `title`, `visible`, `enabled`, `selected`, `rowCount`, `itemCount`, `selectedIndex`.
+- `matches` is a Java regex. The whole value must match.
+- `timeoutMs` is optional. The default is 10000. It is independent of `stepTimeoutMs`.
+- On timeout the step is FAIL. The message shows the last value, for example `last value: "waiting"`.
+  If the player never finds the component, the last value is `<component not found>`.
+  The player keeps polling while the component is missing: it can appear later.
+- The step before a `WAIT_FOR` has no snapshot and no golden. Its status is PASS, unless its action fails or the log has a hit.
+- Prefer `WAIT_FOR` to `WAIT`. `WAIT` always sleeps the full time. `WAIT_FOR` continues as soon as the condition is true.
 
 ### Locators
 
