@@ -160,6 +160,8 @@ To record a `WAIT_FOR` step:
 4. In the dialog, set the attribute, the regex and the time limit. The default regex matches the current value.
 5. Click OK. The recorder adds the step and removes the snapshot of the step before it.
 
+Wait until the condition holds before the next input.
+
 ### Locators
 
 `{"name": "orders.save"}` — from `component.setName("orders.save")`, the only stable key. Fallback

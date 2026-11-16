@@ -280,6 +280,38 @@ public class RecorderWindowTest {
     }
 
     /**
+     * F-21 wins over WP-03: a mouse press before the WAIT_FOR condition matches takes the snapshot of the WAIT_FOR step
+     * at once, before the press changes the UI, and the recorder gives a warning.
+     */
+    @Test
+    public void inputBeforeTheMatchTakesTheWaitForSnapshotWithAWarning() throws Exception {
+        final List<String> said = java.util.Collections.synchronizedList(new ArrayList<String>());
+        recorder.setListener(new Recorder.Listener() {
+            public void stepAdded(Step s) {
+            }
+
+            public void stepUpdated(Step s) {
+            }
+
+            public void status(String text) {
+                said.add(text);
+            }
+        });
+        onEdt(new Runnable() {
+            public void run() {
+                status.setText("waiting\u2026");
+                recorder.addWaitFor(Action.waitFor(named("t.status"), "text", "ready \\d+", 3000L));
+            }
+        });
+        Step w = recorder.scenario().steps.get(0);
+        dispatch(press(clear));
+        assertTrue("the press took the snapshot at once", recorder.hasSnapshot(w));
+        assertEquals("waiting\u2026", node(recorder.snapshot(w), "t.status").text);
+        assertTrue(said.toString(), said.contains(
+                "WAIT_FOR #t.status did not match before the next input: its golden shows the state before the match"));
+    }
+
+    /**
      * WP-03, spec 6.5 (owner decision): the select mode of "Wait for..." refuses a component without a name and stays on.
      * A named component ends the select mode. The clicks go to the glass pane and not to the application.
      */

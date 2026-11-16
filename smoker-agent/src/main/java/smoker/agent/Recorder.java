@@ -161,7 +161,7 @@ final class Recorder implements AWTEventListener {
         }
         if (id == MouseEvent.MOUSE_PRESSED || id == KeyEvent.KEY_PRESSED || id == FocusEvent.FOCUS_GAINED) {
             // First input of the next step: the component has not processed it yet (F-21).
-            takePendingSnapshots();
+            takePendingSnapshots(id == FocusEvent.FOCUS_GAINED);
         }
         if (event instanceof FocusEvent) {
             onFocus((FocusEvent) event, src);
@@ -206,7 +206,7 @@ final class Recorder implements AWTEventListener {
         if (code == KeyEvent.VK_CONTROL || code == KeyEvent.VK_ALT || code == KeyEvent.VK_SHIFT || code == KeyEvent.VK_META) return;
         if (src == editing) {
             flushText();               // text first, then the key (e.g. ENTER in a field)
-            takePendingSnapshots();    // the field has not processed the key yet: this is the state after typing
+            takePendingSnapshots(false);    // the field has not processed the key yet: this is the state after typing
         }
         // Only a named component (real or automatic name) is a KEY target; else the key goes to the focus owner.
         Locator target = Locators.nameOf(src) != null ? Locators.resolve(src) : null;
@@ -352,18 +352,32 @@ final class Recorder implements AWTEventListener {
      * On the EDT, at the first input of the next step: takes the snapshot of every pending step now, before the input
      * changes the UI (F-21). Normally only the newest step is pending. An older pending step had no input after it
      * either, so the current state is its state too: one snapshot serves all of them.
-     * A WAIT_FOR step whose condition does not hold yet stays pending: the snapshot thread takes it after the match,
-     * as the player does (WP-03).
+     * <p>A WAIT_FOR step whose condition does not hold yet (WP-03):
+     * <ul>
+     * <li>FOCUS_GAINED: the step stays pending. A window that shows, or a modal dialog that closes, gives this event
+     * without input in the application. The snapshot thread takes the step after the match, as the player does.</li>
+     * <li>MOUSE_PRESSED, KEY_PRESSED: F-21 wins. The step gets the snapshot now, and the recorder gives a warning.</li>
+     * </ul>
+     *
+     * @param focusGained true for FOCUS_GAINED, false for a mouse press or a key press
      */
-    private void takePendingSnapshots() {
+    private void takePendingSnapshots(boolean focusGained) {
         List<Step> due = new ArrayList<Step>();
+        List<Step> early = new ArrayList<Step>();
         synchronized (pendingSnapshots) {
             for (Iterator<Step> it = pendingSnapshots.iterator(); it.hasNext(); ) {
                 Step s = it.next();
-                if (isWaiting(s)) continue;
+                if (isWaiting(s)) {
+                    if (focusGained) continue;
+                    early.add(s);
+                }
                 due.add(s);
                 it.remove();
             }
+        }
+        for (Step s : early) {
+            say("WAIT_FOR " + s.action.locator + " did not match before the next input: its golden shows the state"
+                    + " before the match");
         }
         if (due.isEmpty()) return;
         try {
