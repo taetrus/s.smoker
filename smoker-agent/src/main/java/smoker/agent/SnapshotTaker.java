@@ -286,7 +286,7 @@ final class SnapshotTaker {
     }
 
     /** The text of the first rows of a table as the user sees it ({@link #cellText}). */
-    private List<List<String>> tableCells(JTable t) {
+    private static List<List<String>> tableCells(JTable t, int maxRows) {
         List<List<String>> rows = new ArrayList<List<String>>();
         int nr = Math.min(maxRows, t.getRowCount());
         for (int r = 0; r < nr; r++) {
@@ -300,7 +300,7 @@ final class SnapshotTaker {
         return rows;
     }
 
-    private <E> List<String> listItems(JList<E> l) {
+    private static <E> List<String> listItems(JList<E> l, int maxRows) {
         List<String> items = new ArrayList<String>();
         int n = Math.min(maxRows, l.getModel().getSize());
         for (int i = 0; i < n; i++) {
@@ -312,7 +312,7 @@ final class SnapshotTaker {
     }
 
     /** The labels of the first visible rows, two spaces per depth. A hidden root does not count as a level. */
-    private List<String> treeRows(JTree t) {
+    private static List<String> treeRows(JTree t, int maxRows) {
         List<String> rows = new ArrayList<String>();
         int n = Math.min(maxRows, t.getRowCount());
         int rootLevel = t.isRootVisible() ? 0 : 1;
@@ -333,10 +333,30 @@ final class SnapshotTaker {
      * Records an interactive component without a real name for the lint, also when it has an automatic name (spec 5.2).
      */
     private NodeSnapshot node(Component c, String path, String name) {
-        NodeSnapshot n = new NodeSnapshot();
+        NodeSnapshot n = attributes(c, maxRows);
         n.path = path;
-        n.type = Locators.classNameOf(c);
         n.name = name;
+
+        if (Locators.isInteractive(c) && Locators.realName(c) == null && c.isShowing() && !lafInternal(c) && !generatedByOptionPane(c)) {
+            synchronized (this) {
+                unnamed.add(path);
+            }
+            pendingKeys.add(windowPart + "|" + path);
+            pending.add(lintEntry(c));
+        }
+
+        return n;
+    }
+
+    /**
+     * The attributes of {@code c} (type, visible, enabled, text, selected, counts, items, cells) without path,
+     * name or lint. WAIT_FOR reads them too (WP-03). Must run on the EDT.
+     *
+     * @param maxRows the content of at most this many rows of a table, list or tree is taken (F-07)
+     */
+    static NodeSnapshot attributes(Component c, int maxRows) {
+        NodeSnapshot n = new NodeSnapshot();
+        n.type = Locators.classNameOf(c);
         n.visible = c.isVisible() ? null : Boolean.FALSE;   // visible is the default; only record the exception
         n.enabled = c.isEnabled() ? null : Boolean.FALSE;
 
@@ -358,12 +378,12 @@ final class SnapshotTaker {
             JList<?> l = (JList<?>) c;
             n.itemCount = l.getModel().getSize();
             n.selectedIndex = l.getSelectedIndex();
-            n.items = listItems(l);
+            n.items = listItems(l, maxRows);
         } else if (c instanceof JTable) {
             JTable t = (JTable) c;
             n.rowCount = t.getRowCount();
             n.selectedIndex = t.getSelectedRow();
-            n.cells = tableCells(t);
+            n.cells = tableCells(t, maxRows);
         } else if (c instanceof JTabbedPane) {
             JTabbedPane tp = (JTabbedPane) c;
             n.itemCount = tp.getTabCount();
@@ -371,17 +391,8 @@ final class SnapshotTaker {
             n.text = tp.getSelectedIndex() >= 0 ? tp.getTitleAt(tp.getSelectedIndex()) : null;
         } else if (c instanceof JTree) {
             n.rowCount = ((JTree) c).getRowCount();
-            n.items = treeRows((JTree) c);
+            n.items = treeRows((JTree) c, maxRows);
         }
-
-        if (Locators.isInteractive(c) && Locators.realName(c) == null && c.isShowing() && !lafInternal(c) && !generatedByOptionPane(c)) {
-            synchronized (this) {
-                unnamed.add(path);
-            }
-            pendingKeys.add(windowPart + "|" + path);
-            pending.add(lintEntry(c));
-        }
-
         return n;
     }
 
