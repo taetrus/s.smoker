@@ -231,7 +231,9 @@ public class SelfTestIT {
         RunResult r2 = result(dir.resolve("run2/wait"));
         assertEquals(run2.output, RunResult.Status.PASS, r2.status);
         RunResult.StepResult w2 = assertStepStatus(r2, "s002", RunResult.Status.PASS);
-        assertTrue("s002 durationMs: " + w2.durationMs, w2.durationMs >= 2500);
+        // The 3 s of the demo start at the click of s001. s001 (click, quiet period, no snapshot) uses part of them,
+        // so s002 waits less than 3 s. The limit leaves a margin for a slow machine.
+        assertTrue("s002 durationMs: " + w2.durationMs, w2.durationMs >= 1500);
     }
 
     @Test
