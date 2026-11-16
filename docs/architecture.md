@@ -54,7 +54,7 @@ Three decisions carry the design:
 | smoker-agent | `smoker.agent` | `SmokerAgent` (premain), `AgentConfig`, `Observations` (+`LogTailer`), `EdtWatchdog`, `Quiescence`, `Locators`, `SnapshotTaker`, `ActionExecutor`, `Player`, `Recorder`, `RecorderToolbar`, `Screenshots` |
 | | `smoker.agent` | `WindowKeys` — applies the `WindowKey` rules to window titles |
 | smoker-cli | `smoker.cli` | `Main` — `run` / `record` / `approve` |
-| smoker-demo | `smoker.demo` | `DemoApp` + `scenarios/greet.json` + `scenarios-failing/` |
+| smoker-demo | `smoker.demo` | `DemoApp` + `scenarios/` (`greet.json`, `wait.json`, ...) + `scenarios-failing/` |
 
 Gson is relocated to `smoker.shaded.gson` in both shaded jars (R-03). The agent jar has no other dependency.
 
@@ -79,6 +79,9 @@ sequenceDiagram
 **Modal dialogs** are the classic trap: `doClick()` on a menu item that opens `JOptionPane` never returns until the
 dialog closes. The player therefore never waits for the action `Runnable` itself; it waits for a *subsequent ping*,
 which a modal dialog's secondary loop services. Only true silence is a hang.
+
+**Wait for a condition.** A `WAIT_FOR` step uses `WaitCondition`. The player polls one attribute of one component each
+100 ms, with every Swing read on the EDT, until the value matches or `timeoutMs` ends. A timeout is FAIL.
 
 **Startup** is a pseudo-step: first `Frame` showing within `startupTimeoutMs`, quiet, no log hits (R-14).
 
