@@ -5,7 +5,7 @@ compares semantic component snapshots with golden snapshots, and reads the appli
 
 ## Read first
 
-1. `docs/development-plan.md` — audit findings F-01..F-23, changed requirements, work packages WP-01..WP-09. **This is the backlog.**
+1. `docs/development-plan.md` — audit findings F-01..F-24, changed requirements, work packages WP-01..WP-09. **This is the backlog.**
 2. `docs/wp-01-handoff.md` — WP-01 state and the commands that operated on Windows.
 3. `docs/wp-01-pilot-report.md` — WP-01 test report (pilot on Windows). Reports stay in `docs/` (decision 6).
 4. `docs/architecture.md` — design decisions and class map of the current skeleton.
@@ -43,28 +43,26 @@ It also checks the WP-02 criterion on `table.json`: scenario under 80 lines, gol
 panel gives PASS (modes `all` and `named`), a wrong cell gives FAIL. Run `mvn -B verify` and `mvn -B verify -Plocale-tr`
 after every change to `smoker-agent` or `smoker-core`.
 
-## State on 2026-11-15
+## State on 2026-11-16
 
-- WP-01 complete (branch `wp-01-test-base`, pushed). WP-02 complete on branch `wp-02-snapshot-model` (not pushed).
-- Tests: 56 in `smoker-core`, 60 in `smoker-agent`, 3 IT. They pass on macOS (JDK 27 default locale and tr_TR, tr_TR with JRE 8 as test JVM).
+- `master` holds WP-01, WP-02 and WP-09. All three work packages are complete; their completion criteria passed.
+- Tests: 61 in `smoker-core`, 120 in `smoker-agent`, 21 in `smoker-cli`, 4 IT. They pass on macOS (JDK 27 default
+  locale and tr_TR, tr_TR with JRE 8 as test JVM) and on Windows 11 (JDK 25, the same three builds).
 - WP-02: golden file apart from the scenario (`schemaVersion: 2`), anchored paths, table cells, `compare` (`all` | `named`),
   `maxRows`, `windowKeys`, lint for names that are not unique, player continues after FAIL.
+- WP-09: automatic names `@<Class>.<field>` (on by default, scenario field `autoNames`), lint entries with proposed
+  names `<view>.<type>.<field>`, `lint --emit-patch`. Pilot: 14 of 14 proposals (`docs/wp-09-pilot-report.md`).
+  The scenario with automatic names `docs/wp-01-pilot/pilot-autonames.json` passes on Windows.
+- Pilot goldens approved again on Windows on 2026-11-16 (`docs/wp-01-handoff.md` section 5).
 - Decision 6 (2026-11-15): test reports go into `docs/` on GitHub, not Confluence.
-- Open findings: F-22 (WP-04), F-02 confirmed (WP-03).
-- WP-09 implemented on branch `wp-09-naming-assistant` (not pushed): automatic names `@<Class>.<field>`, lint entries, `lint --emit-patch`, demo case `notes.json`.
-  Tests on macOS: 61 in `smoker-core`, 120 in `smoker-agent`, 21 in `smoker-cli`, 4 IT.
-  Windows (2026-11-16, `master` 5372284 + test fix 6fd6fa7): 61 + 120 + 21 unit tests and 4 IT pass in the three builds.
-  The scenario with automatic names `docs/wp-01-pilot/pilot-autonames.json` passes on p.osgi.ds.
-- SelfTestIT failure of 2026-11-15 (2 of 3 methods under load): root cause found and fixed in 7c7458c.
-  The startup check read `Window.isShowing()` off the EDT. It could see a frame inside its constructor, where `visible` is still the default `true`.
-  The fix scans the windows on the EDT with a bounded wait and requires `isDisplayable()`.
-  Evidence: 2 of 100 demo starts failed before the fix, 0 of 100 after it.
+- Open findings: F-02 confirmed (WP-03); F-08, F-09, F-22, F-24 (WP-04).
+- SelfTestIT startup failure of 2026-11-15: root cause fixed in 7c7458c (the startup check read `Window.isShowing()`
+  off the EDT and could see a frame inside its constructor). 2 of 100 demo starts failed before, 0 of 100 after.
   If a failure recurs, keep `smoker-it/target/failsafe-reports` and `smoker-it/target/it-work`.
-- Pilot goldens approved again on Windows on 2026-11-16 (`docs/wp-01-handoff.md` section 5): `pilot.json` and
-  `pilot-autonames.json` PASS 3 times, `hang.json` HANG. `crash.json` has no golden: the JVM exits before `run-result.json`.
-- Open: `approve` on a run without `run-result.json` gives a stack trace (exit 1). It must give a message and exit 2, as `lint` does.
+- Do not type into the demo windows while SelfTestIT runs on a desktop: they take the focus, and a key press changes a text field.
 - Test isolation: a test must not leave a window that reports "showing". `Window.getWindows()` keeps it for later test classes.
-- Next work package in plan order: WP-03 or WP-04.
+- Process: specs in `docs/superpowers/specs/`, plans in `docs/superpowers/plans/` (one per work package).
+- Next work package in plan order: WP-03 or WP-04 (independent of each other).
 - Not verified: JRE 11 and JRE 17 at run time on a target application, a product with the hardware simulator.
 
 ## Decisions already made

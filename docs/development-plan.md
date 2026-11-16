@@ -50,6 +50,7 @@ The audit found 18 defects or gaps. Severity A stops the use on a real applicati
 | F-21 | B | The recorder takes the golden snapshot of a step after the UI is quiet for `quietMs`. If the next action comes before that time, the snapshot shows the state after the next step. Found on 2026-11-14 in p.osgi.ds: `SET_TEXT` is recorded when the field loses focus, which is the press on the next button. The goldens of s002 and s004 showed the state after s003 and s005. `approve` corrects the goldens, but the player stops at the first failing step, so each `approve` corrects one step. | Take the snapshot of a step before the recorder adds the next step. Let `approve` continue after a failing step, or replay all steps in approve mode. WP-02 part done (WP-06 owns the rest). | WP-02, WP-06 |
 | F-22 | B | The agent reads `System.err` and the log file. Equinox writes framework errors to the console (`-consoleLog`) and to `configuration/*.log`. Found on 2026-11-14 in p.osgi.ds: on JRE 8, 14 bundles of spike.master did not resolve, and startup was PASS. When the application calls `System.exit`, the report gives only the exit code. The step and the last ERROR line are only in `app-output.log`. | Read the Equinox log, or fail on `FrameworkEvent ERROR` in the application output. Write the step and the last log hits to `run-result.json` before each action. | WP-04 |
 | F-23 | A | `Locators.resolve` counts the index among components of the same class. `Locators.find` also accepts a component whose superclass has the locator class. `JPasswordField` extends `JTextField`, so the locator `JTextField` index 0 finds the password field in front of the first text field. Found on 2026-11-14 in p.osgi.ds: step s002 typed the model name into the API key field. `approve` accepted the wrong state, and the run gave PASS. | In `find`, use the same class rule as in `resolve`: the simple class name, or the superclass name only for an anonymous class. Add a test with a `JPasswordField` in front of a `JTextField`. Done in WP-01. | WP-01 |
+| F-24 | C | `approve` on a run without `run-result.json` stops with a `NoSuchFileException` stack trace and exit code 1. `lint` gives a message and exit code 2 in the same case. Found on 2026-11-16 on Windows: `crash.json` exits through `System.exit` before the agent writes `run-result.json` (F-22). | Give a message and exit code 2, as `lint` does. | WP-04 |
 
 One more risk has no technical correction: a locator without a name uses the visible text. The locator fails when the language of the user interface changes. The rule must be: each interactive component gets a name.
 
@@ -106,7 +107,7 @@ WP-02, WP-03 and WP-04 are independent. Three developers can do them at the same
 | WP-01 | Verification and test base | F-01, F-15, F-16, F-19, F-20, F-23 | 6 | Test report for one real application. Unit tests. Integration test in Maven. |
 | WP-02 | Snapshot model | F-05, F-06, F-07, F-17, F-21 | 8 | Golden file apart from the scenario. Named-component comparison. Cell content. |
 | WP-03 | Wait conditions | F-02 | 3 | `WAIT_FOR` action in player and recorder. |
-| WP-04 | Log analysis | F-08, F-09, F-22 | 4 | Level-based fail rules. One hit for each stack trace. Correct step assignment. |
+| WP-04 | Log analysis | F-08, F-09, F-22, F-24 | 4 | Level-based fail rules. One hit for each stack trace. Correct step assignment. |
 | WP-05 | Suite mode and lifecycle | F-03, F-04, F-10, F-11 | 8 | Suite file. One JVM for many scenarios. Clean OSGi stop. Properties configuration. |
 | WP-06 | Recorder | F-13, F-14, F-21 | 10 | More event types. Usability corrections. Golden preview. |
 | WP-07 | CI matrix and report | F-18 | 5 | Four matrix jobs. Joined report. Run history. Release guard. |
@@ -164,8 +165,10 @@ Completion criterion: R-23a passes. No scenario for the pilot application uses t
 4. Read each log file to its end before `Player` calls `hitsBetween`.
 5. Use the time in the log line to assign the hit when the time is available.
 6. Add a test with 100 repeated runs.
+7. F-22: fail on Equinox framework errors (`FrameworkEvent ERROR`, unresolved bundles) in the application output or in `configuration/*.log`. Write the current step and the last log hits to `run-result.json` before each action, so that a `System.exit` of the application leaves a result.
+8. F-24: `approve` on a run without `run-result.json` gives a message and exit code 2, as `lint` does.
 
-Completion criterion: R-10a and R-12a pass.
+Completion criterion: R-10a and R-12a pass. An unresolved bundle at startup gives FAIL. After `System.exit` in a step, `run-result.json` names that step. `approve` without `run-result.json` gives exit code 2.
 
 **WP-05 Suite mode and lifecycle (8 pd)**
 
@@ -231,7 +234,7 @@ Purpose: decrease the work to give names to the components of an existing applic
 6. DONE: Add the option `autoNames=true`. The agent then uses the name `@<Class>.<field>` at run time for a component without a name. The source code does not change.
 7. DONE: Mark each automatic name in the report. An automatic name changes when a developer renames the field.
 
-Completion criterion: on the pilot application, the tool proposes a name for a minimum of 80 % of the unnamed interactive components. A scenario that uses automatic names passes on Windows. Status: the demo scenario `notes.json` passes on macOS (SelfTestIT). The Windows part is open.
+Completion criterion: on the pilot application, the tool proposes a name for a minimum of 80 % of the unnamed interactive components. A scenario that uses automatic names passes on Windows. Status: met on 2026-11-16. Pilot: 14 of 14 proposals (100 %, `docs/wp-09-pilot-report.md`). The demo scenario `notes.json` passes on macOS (SelfTestIT), and `docs/wp-01-pilot/pilot-autonames.json` passes on Windows with JRE 8. WP-09 is complete.
 Sequence: do WP-09 immediately after WP-01. The lint result from WP-01 is its input.
 
 ## 5. Risks
