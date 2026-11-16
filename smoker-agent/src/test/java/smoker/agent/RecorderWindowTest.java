@@ -5,7 +5,9 @@ import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
 import nametest.SearchPanel;
+import smoker.core.io.ScenarioFiles;
 import smoker.core.model.Action;
+import smoker.core.model.Locator;
 import smoker.core.model.NodeSnapshot;
 import smoker.core.model.Scenario;
 import smoker.core.model.Snapshot;
@@ -33,13 +35,20 @@ import java.awt.event.ActionListener;
 import java.awt.event.FocusEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Callable;
+import java.util.function.Consumer;
+import java.util.regex.Pattern;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 /**
@@ -59,6 +68,7 @@ public class RecorderWindowTest {
     private JLabel status;
     private KeyboardFocusManager previousFocusManager;
     private Recorder recorder;
+    private RecorderToolbar toolbar;
     private final AtomicInteger dialogsShown = new AtomicInteger();
 
     @Before
@@ -139,6 +149,10 @@ public class RecorderWindowTest {
         if (frame == null) return;
         SwingUtilities.invokeAndWait(new Runnable() {
             public void run() {
+                if (toolbar != null) {
+                    if (toolbar.waitForPicker().selectModeOn()) toolbar.waitForPicker().cancel();
+                    toolbar.dispose();
+                }
                 frame.dispose();
             }
         });
@@ -220,6 +234,158 @@ public class RecorderWindowTest {
         assertEquals(describe(steps), 1, steps.size());
         assertEquals(describe(steps), Action.Type.KEY, steps.get(0).action.type);
         assertEquals(describe(steps), "@SearchPanel.queryField", steps.get(0).action.locator.name);
+    }
+
+    /** WP-03, spec 6.4: a WAIT_FOR step removes the snapshot of the step before it. */
+    @Test
+    public void waitForRemovesTheSnapshotOfTheStepBefore() throws Exception {
+        click(clear, true);
+        final List<Step> steps = recorder.scenario().steps;
+        assertEquals(describe(steps), 1, steps.size());
+        awaitSnapshot(steps.get(0), 10000);
+        onEdt(new Runnable() {
+            public void run() {
+                recorder.addWaitFor(Action.waitFor(named("t.status"), "text", Pattern.quote("idle"), 2000L));
+            }
+        });
+        assertEquals(describe(steps), 2, steps.size());
+        assertEquals(Action.Type.WAIT_FOR, steps.get(1).action.type);
+        assertFalse("the snapshot of the step before is gone", recorder.hasSnapshot(steps.get(0)));
+        awaitSnapshot(steps.get(1), 3000);
+        recorder.save();
+        Map<String, Snapshot> golden = ScenarioFiles.readGolden(Paths.get("target/recorder-window-test.json"));
+        assertEquals(golden.keySet().toString(), 1, golden.size());
+        assertTrue(golden.keySet().toString(), golden.containsKey(steps.get(1).id));
+    }
+
+    /** WP-03, spec 6.5: the snapshot of a WAIT_FOR step shows the state after the condition matched. */
+    @Test
+    public void waitForSnapshotWaitsForTheCondition() throws Exception {
+        onEdt(new Runnable() {
+            public void run() {
+                status.setText("waiting\u2026");
+                Timer t = new Timer(800, new ActionListener() {
+                    public void actionPerformed(ActionEvent e) {
+                        status.setText("ready 1");
+                    }
+                });
+                t.setRepeats(false);
+                t.start();
+                recorder.addWaitFor(Action.waitFor(named("t.status"), "text", "ready \\d+", 3000L));
+            }
+        });
+        Step w = recorder.scenario().steps.get(0);
+        awaitSnapshot(w, 5000);
+        assertEquals("ready 1", node(recorder.snapshot(w), "t.status").text);
+    }
+
+    /**
+     * WP-03, spec 6.5 (owner decision): the select mode of "Wait for..." refuses a component without a name and stays on.
+     * A named component ends the select mode. The clicks go to the glass pane and not to the application.
+     */
+    @Test
+    public void selectModeRefusesUnnamedAndAcceptsNamed() throws Exception {
+        final AtomicInteger clearFired = new AtomicInteger();
+        final List<Locator> chosen = new ArrayList<Locator>();
+        final Component[] oldGlass = new Component[1];
+        onEdt(new Runnable() {
+            public void run() {
+                clear.addActionListener(new ActionListener() {
+                    public void actionPerformed(ActionEvent e) {
+                        clearFired.incrementAndGet();
+                    }
+                });
+                oldGlass[0] = frame.getGlassPane();
+                toolbar = new RecorderToolbar(recorder);
+                toolbar.waitForPicker().opener = new Consumer<Locator>() {
+                    public void accept(Locator l) {
+                        chosen.add(l);
+                    }
+                };
+                toolbar.waitForPicker().toggle();
+            }
+        });
+        assertTrue(onEdt(new Callable<Boolean>() {
+            public Boolean call() {
+                return toolbar.waitForPicker().selectModeOn();
+            }
+        }));
+        assertFalse("the recorder pauses in select mode", recorder.isRecording());
+        assertTrue("a glass pane covers the frame", glassPane() != oldGlass[0]);
+
+        clickOnGlassPane(clear);
+        String text = onEdt(new Callable<String>() {
+            public String call() {
+                return toolbar.statusText();
+            }
+        });
+        assertTrue(text, text.startsWith("needs a name"));
+        assertTrue(onEdt(new Callable<Boolean>() {
+            public Boolean call() {
+                return toolbar.waitForPicker().selectModeOn();
+            }
+        }));
+        assertEquals("the click did not reach the button", 0, clearFired.get());
+        assertTrue(chosen.toString(), chosen.isEmpty());
+
+        clickOnGlassPane(status);
+        assertFalse(onEdt(new Callable<Boolean>() {
+            public Boolean call() {
+                return toolbar.waitForPicker().selectModeOn();
+            }
+        }));
+        assertEquals(chosen.toString(), 1, chosen.size());
+        assertEquals("t.status", chosen.get(0).name);
+        assertSame("the old glass pane is back", oldGlass[0], glassPane());
+        assertFalse(onEdt(new Callable<Boolean>() {
+            public Boolean call() {
+                return frame.getGlassPane().isVisible();
+            }
+        }));
+        assertTrue("the recorder records again", recorder.isRecording());
+        assertTrue(describe(recorder.scenario().steps), recorder.scenario().steps.isEmpty());
+        assertEquals(0, clearFired.get());
+    }
+
+    /** PRESSED, RELEASED and CLICKED on the glass pane of the frame, over the center of {@code over}. */
+    private void clickOnGlassPane(final Component over) throws Exception {
+        for (final int id : new int[] {MouseEvent.MOUSE_PRESSED, MouseEvent.MOUSE_RELEASED, MouseEvent.MOUSE_CLICKED}) {
+            onEdt(new Runnable() {
+                public void run() {
+                    Component glass = frame.getGlassPane();
+                    java.awt.Point p = SwingUtilities.convertPoint(over, over.getWidth() / 2, over.getHeight() / 2, glass);
+                    int mods = id == MouseEvent.MOUSE_PRESSED ? MouseEvent.BUTTON1_DOWN_MASK : 0;
+                    glass.dispatchEvent(new MouseEvent(glass, id, System.currentTimeMillis(), mods, p.x, p.y, 1, false,
+                            MouseEvent.BUTTON1));
+                }
+            });
+        }
+    }
+
+    private Component glassPane() throws Exception {
+        return onEdt(new Callable<Component>() {
+            public Component call() {
+                return frame.getGlassPane();
+            }
+        });
+    }
+
+    private static Locator named(String name) {
+        Locator l = new Locator();
+        l.name = name;
+        return l;
+    }
+
+    private void awaitSnapshot(Step s, long ms) throws Exception {
+        long deadline = System.currentTimeMillis() + ms;
+        while (!recorder.hasSnapshot(s)) {
+            if (System.currentTimeMillis() > deadline) fail("no snapshot for " + s.id + " within " + ms + " ms");
+            Thread.sleep(50);
+        }
+    }
+
+    private static <T> T onEdt(Callable<T> c) throws Exception {
+        return Quiescence.onEdt(c);
     }
 
     private SearchPanel addSearchPanel() throws Exception {

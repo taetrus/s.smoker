@@ -33,7 +33,7 @@ Windows (PowerShell): `mvn -B verify` then run the commands below; no Xvfb neede
 ## Use
 
 ```bash
-# 1. record (floating toolbar appears over the app: Record / Pick / Rename / Delete / Save)
+# 1. record (floating toolbar appears over the app: Record / Pick / Wait for… / Rename / Delete / Save)
 java -jar smoker-cli.jar record --agent smoker-agent.jar --app "java -jar myapp.jar" --scenario scenarios/orders-create.json
 
 # 2. run — first run has no goldens → NO_GOLDEN (exit 0 unless --strict)
@@ -150,6 +150,15 @@ Use `WAIT_FOR` when the application needs time after a step. The player polls ea
   The player keeps polling while the component is missing: it can appear later.
 - The step before a `WAIT_FOR` has no snapshot and no golden. Its status is PASS, unless its action fails or the log has a hit.
 - Prefer `WAIT_FOR` to `WAIT`. `WAIT` always sleeps the full time. `WAIT_FOR` continues as soon as the condition is true.
+
+To record a `WAIT_FOR` step:
+
+1. Wait until the application shows the value.
+2. Click `Wait for…` in the toolbar. The recorder pauses. Clicks do not go to the application.
+3. Click the component. It must have a name, real or automatic. For a component without a name, the status line
+   shows `needs a name` and a proposed name. ESC or a second click on `Wait for…` cancels.
+4. In the dialog, set the attribute, the regex and the time limit. The default regex matches the current value.
+5. Click OK. The recorder adds the step and removes the snapshot of the step before it.
 
 ### Locators
 

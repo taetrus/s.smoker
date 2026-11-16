@@ -425,7 +425,7 @@ final class SnapshotTaker {
      * The class of the nearest application-class ancestor, up to and including the window, or null.
      * The walk goes from a popup menu to its invoker ({@link AutoNames#logicalParent}).
      */
-    private static Class<?> applicationAncestor(Component c) {
+    static Class<?> applicationAncestor(Component c) {
         for (Component a = c.getParent(); a != null; a = AutoNames.logicalParent(a)) {
             if (AutoNames.isApplicationClass(a.getClass())) return a.getClass();
             if (a instanceof Window) break;
