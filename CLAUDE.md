@@ -53,13 +53,17 @@ after every change to `smoker-agent` or `smoker-core`.
 - Open findings: F-22 (WP-04), F-02 confirmed (WP-03).
 - WP-09 implemented on branch `wp-09-naming-assistant` (not pushed): automatic names `@<Class>.<field>`, lint entries, `lint --emit-patch`, demo case `notes.json`.
   Tests on macOS: 61 in `smoker-core`, 120 in `smoker-agent`, 21 in `smoker-cli`, 4 IT.
-  Open: the Windows run of a scenario with automatic names; approve the pilot goldens after WP-09 is merged.
+  Windows (2026-11-16, `master` 5372284 + test fix 6fd6fa7): 61 + 120 + 21 unit tests and 4 IT pass in the three builds.
+  The scenario with automatic names `docs/wp-01-pilot/pilot-autonames.json` passes on p.osgi.ds.
 - SelfTestIT failure of 2026-11-15 (2 of 3 methods under load): root cause found and fixed in 7c7458c.
   The startup check read `Window.isShowing()` off the EDT. It could see a frame inside its constructor, where `visible` is still the default `true`.
   The fix scans the windows on the EDT with a bounded wait and requires `isDisplayable()`.
   Evidence: 2 of 100 demo starts failed before the fix, 0 of 100 after it.
   If a failure recurs, keep `smoker-it/target/failsafe-reports` and `smoker-it/target/it-work`.
-- Open: re-approve the pilot goldens on Windows (`docs/wp-01-handoff.md` section 5).
+- Pilot goldens approved again on Windows on 2026-11-16 (`docs/wp-01-handoff.md` section 5): `pilot.json` and
+  `pilot-autonames.json` PASS 3 times, `hang.json` HANG. `crash.json` has no golden: the JVM exits before `run-result.json`.
+- Open: `approve` on a run without `run-result.json` gives a stack trace (exit 1). It must give a message and exit 2, as `lint` does.
+- Test isolation: a test must not leave a window that reports "showing". `Window.getWindows()` keeps it for later test classes.
 - Next work package in plan order: WP-03 or WP-04.
 - Not verified: JRE 11 and JRE 17 at run time on a target application, a product with the hardware simulator.
 

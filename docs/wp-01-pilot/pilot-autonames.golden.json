@@ -1,0 +1,147 @@
+{
+  "schemaVersion": 2,
+  "scenario": "pilot-autonames",
+  "steps": [
+    {
+      "id": "s001",
+      "full": [
+        {"path": "[OSGi Chatbot]", "type": "ChatFrame", "title": "OSGi Chatbot"},
+        {
+          "path": "[OSGi Chatbot]/#@ChatFrame.modelCombo",
+          "type": "JComboBox",
+          "name": "@ChatFrame.modelCombo",
+          "text": "minimax/minimax-m3.1-flash:free",
+          "itemCount": 406,
+          "selectedIndex": -1
+        },
+        {
+          "path": "[OSGi Chatbot]/#@ChatFrame.refreshModelsButton",
+          "type": "JButton",
+          "name": "@ChatFrame.refreshModelsButton",
+          "text": "Refresh Models"
+        },
+        {
+          "path": "[OSGi Chatbot]/#@ChatFrame.setDefaultButton",
+          "type": "JButton",
+          "name": "@ChatFrame.setDefaultButton",
+          "text": "Set Default"
+        },
+        {
+          "path": "[OSGi Chatbot]/#@ChatPanel.textPane",
+          "type": "JTextPane",
+          "name": "@ChatPanel.textPane",
+          "text": "\r\nTesting connection to https://openrouter.ai/api/v1...\r\n\r\nConnected! Loaded 406 tool-capable models.\r\n"
+        },
+        {
+          "path": "[OSGi Chatbot]/#@InputPanel.clearButton",
+          "type": "JButton",
+          "name": "@InputPanel.clearButton",
+          "text": "Clear"
+        },
+        {
+          "path": "[OSGi Chatbot]/#@InputPanel.sendButton",
+          "type": "JButton",
+          "name": "@InputPanel.sendButton",
+          "text": "Send"
+        },
+        {
+          "path": "[OSGi Chatbot]/#@InputPanel.textArea",
+          "type": "JTextArea",
+          "name": "@InputPanel.textArea",
+          "text": ""
+        },
+        {"path": "[OSGi Chatbot]/JButton[2]", "type": "JButton", "text": "Settings"},
+        {"path": "[OSGi Chatbot]/JLabel[0]", "type": "JLabel", "text": "Model:"},
+        {"path": "[Settings]", "type": "SettingsDialog", "title": "Settings"},
+        {
+          "path": "[Settings]/#@SettingsDialog.apiKeyField",
+          "type": "JPasswordField",
+          "name": "@SettingsDialog.apiKeyField",
+          "text": ""
+        },
+        {
+          "path": "[Settings]/#@SettingsDialog.baseUrlField",
+          "type": "JTextField",
+          "name": "@SettingsDialog.baseUrlField",
+          "text": ""
+        },
+        {
+          "path": "[Settings]/#@SettingsDialog.modelField",
+          "type": "JTextField",
+          "name": "@SettingsDialog.modelField",
+          "text": ""
+        },
+        {
+          "path": "[Settings]/#@SettingsDialog.statusLabel",
+          "type": "JLabel",
+          "name": "@SettingsDialog.statusLabel",
+          "text": " "
+        },
+        {
+          "path": "[Settings]/#@SettingsDialog.testButton",
+          "type": "JButton",
+          "name": "@SettingsDialog.testButton",
+          "text": "Test Connection"
+        },
+        {"path": "[Settings]/JButton[1]", "type": "JButton", "text": "Cancel"},
+        {"path": "[Settings]/JButton[2]", "type": "JButton", "text": "Save"},
+        {"path": "[Settings]/JLabel[0]", "type": "JLabel", "text": "API Key:"},
+        {
+          "path": "[Settings]/JLabel[1]",
+          "type": "JLabel",
+          "text": "Empty: no key. Set OPENROUTER_API_KEY or enter a key."
+        },
+        {"path": "[Settings]/JLabel[2]", "type": "JLabel", "text": "Model:"},
+        {
+          "path": "[Settings]/JLabel[3]",
+          "type": "JLabel",
+          "text": "Empty: uses minimax/minimax-m3.1-flash:free."
+        },
+        {"path": "[Settings]/JLabel[4]", "type": "JLabel", "text": "Base URL:"},
+        {
+          "path": "[Settings]/JLabel[5]",
+          "type": "JLabel",
+          "text": "Empty: uses https://openrouter.ai/api/v1."
+        },
+        {"path": "[🕐 OSGi Clock]", "type": "ClockFrame", "title": "🕐 OSGi Clock"}
+      ]
+    },
+    {
+      "id": "s002",
+      "changes": [{"path": "[Settings]/#@SettingsDialog.modelField", "op": "set", "node": {"text": "MODEL"}}]
+    },
+    {
+      "id": "s003",
+      "changes": [
+        {"path": "[Settings]", "op": "remove"},
+        {"path": "[Settings]/#@SettingsDialog.apiKeyField", "op": "remove"},
+        {"path": "[Settings]/#@SettingsDialog.baseUrlField", "op": "remove"},
+        {"path": "[Settings]/#@SettingsDialog.modelField", "op": "remove"},
+        {"path": "[Settings]/#@SettingsDialog.statusLabel", "op": "remove"},
+        {"path": "[Settings]/#@SettingsDialog.testButton", "op": "remove"},
+        {"path": "[Settings]/JButton[1]", "op": "remove"},
+        {"path": "[Settings]/JButton[2]", "op": "remove"},
+        {"path": "[Settings]/JLabel[0]", "op": "remove"},
+        {"path": "[Settings]/JLabel[1]", "op": "remove"},
+        {"path": "[Settings]/JLabel[2]", "op": "remove"},
+        {"path": "[Settings]/JLabel[3]", "op": "remove"},
+        {"path": "[Settings]/JLabel[4]", "op": "remove"},
+        {"path": "[Settings]/JLabel[5]", "op": "remove"}
+      ]
+    },
+    {
+      "id": "s004",
+      "changes": [{"path": "[OSGi Chatbot]/#@InputPanel.textArea", "op": "set", "node": {"text": "HELLO"}}]
+    },
+    {
+      "id": "s005",
+      "changes": [
+        {
+          "path": "[OSGi Chatbot]/#@ChatPanel.textPane",
+          "op": "set",
+          "node": {"text": "\r\nConversation cleared.\r\n"}
+        }
+      ]
+    }
+  ]
+}

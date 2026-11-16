@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 2,
+  "name": "pilot-autonames",
+  "startupTimeoutMs": 60000,
+  "quietMs": 400,
+  "stepTimeoutMs": 15000,
+  "ignore": {
+    "paths": [
+      "^\\[OSGi Chatbot\\]/#@ChatFrame\\.modelCombo$",
+      "^\\[OSGi Chatbot\\]/#@ChatPanel\\.textPane$"
+    ],
+    "attributes": [],
+    "valuePatterns": []
+  },
+  "steps": [
+    {
+      "id": "s001",
+      "name": "CLICK [OSGi Chatbot] JButton('Settings')",
+      "action": {
+        "type": "CLICK",
+        "locator": {
+          "windowTitle": "OSGi Chatbot",
+          "className": "JButton",
+          "text": "Settings",
+          "x": 662,
+          "y": 54
+        }
+      }
+    },
+    {
+      "id": "s002",
+      "name": "SET_TEXT [Settings] JTextField = \"MODEL\"",
+      "action": {
+        "type": "SET_TEXT",
+        "locator": {
+          "name": "@SettingsDialog.modelField"
+        },
+        "value": "MODEL"
+      }
+    },
+    {
+      "id": "s003",
+      "name": "CLICK [Settings] JButton('Cancel')",
+      "action": {
+        "type": "CLICK",
+        "locator": {
+          "windowTitle": "Settings",
+          "className": "JButton",
+          "text": "Cancel",
+          "x": 400,
+          "y": 324
+        }
+      }
+    },
+    {
+      "id": "s004",
+      "name": "SET_TEXT [OSGi Chatbot] JTextArea = \"HELLO\"",
+      "action": {
+        "type": "SET_TEXT",
+        "locator": {
+          "name": "@InputPanel.textArea"
+        },
+        "value": "HELLO"
+      }
+    },
+    {
+      "id": "s005",
+      "name": "CLICK [OSGi Chatbot] JButton('Clear')",
+      "action": {
+        "type": "CLICK",
+        "locator": {
+          "name": "@InputPanel.clearButton"
+        }
+      }
+    }
+  ]
+}
