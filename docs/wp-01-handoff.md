@@ -85,24 +85,33 @@ Add this appender to `configuration/logback.xml` of each product folder, and add
 Scenarios in `docs/wp-01-pilot/` (`hang.json` with `stepTimeoutMs` 3000, `crash.json`). Results: report section 4.
 On JRE 8, 14 bundles of spike.master do not resolve (4 platform bundles need JavaSE-17). The Freeze and Crash buttons operate.
 
-## 5. Next Windows session: new goldens for the pilot
+## 5. New goldens for the pilot: done on 2026-11-16
 
-The WP-02 format change (`schemaVersion` 2) removed the goldens from `docs/wp-01-pilot/pilot.json`, `hang.json` and `crash.json`.
-The goldens are now in a golden file beside each scenario. The pilot has no golden files yet.
+Done on Windows 11 with `master` at `5372284` (WP-02 and WP-09 merged), JRE 8u341. Branch `wp-01-pilot-goldens`.
 
-Approve the pilot goldens after WP-09 is merged. Automatic names (`@<Class>.<field>`) change the paths of unnamed components again.
-Goldens approved before WP-09 fail after the merge.
-A golden taken during a JTable cell edit can change once. Swing's `Table.editor` name is no longer treated as a real name.
+Tests first. `SnapshotTakerContentTest.toolTipsGiveNoNode` failed in each of the three builds: a fake frame of
+`MainWindowTest` stayed "showing" and went into later snapshots. The run order on Windows shows this, the order on macOS does not.
+Corrected in the test (commit 6fd6fa7). Then all three builds pass: 61 + 120 + 21 unit tests, 4 IT.
 
-1. Copy `pilot.json`, `hang.json` and `crash.json` to `C:\smoke` (`hang.json` and `crash.json` are for spike.master).
-2. Run each scenario. Expect `NO_GOLDEN`.
-3. Run `approve` for each run. This writes `<scenario>.golden.json`.
-4. Run each scenario again. Expect PASS for `pilot.json`.
-   `hang.json` and `crash.json` give HANG and ERROR (report section 4). Their steps have no snapshot, so their golden files have no steps.
-5. Copy the golden files to `docs/wp-01-pilot/` and commit them.
-   WP-09 Windows check: record or run a scenario that uses automatic names on p.osgi.ds. It must pass.
-   - [ ] Run the scenario. Expect `NO_GOLDEN`. Approve it. Run it again. Expect PASS.
-6. In the WP-06 recording session, make a test for focus changes. The recorder takes the pending snapshot of a step at `FOCUS_GAINED`.
+| Scenario | Result |
+|---|---|
+| `pilot.json` | `NO_GOLDEN`, `approve`, then PASS 3 times (5.1 s to 5.4 s). `pilot.golden.json`: 148 lines. s002 sets `MODEL` in `@SettingsDialog.modelField`. The API key field stays empty. |
+| `hang.json` | HANG 2 times. `hang.golden.json` has no steps (expected). |
+| `crash.json` | ERROR (exit code 7) 2 times. No golden file: the JVM stops before the agent writes `run-result.json` (F-22), and `approve` stops with a `NoSuchFileException` stack trace. |
+| `pilot-autonames.json` (WP-09 check) | `NO_GOLDEN`, `approve`, then PASS 3 times. The report marks the 3 automatic names. The golden is the same as `pilot.golden.json`. |
+
+- The ignore rules of `pilot.json` did not match after WP-09: the components have automatic names now. The rules are now
+  `^\[OSGi Chatbot\]/#@ChatFrame\.modelCombo$` and `^\[OSGi Chatbot\]/#@ChatPanel\.textPane$`. Each matches one node.
+- `pilot-autonames.json` is `pilot.json` with automatic names in 3 locators: s002 `@SettingsDialog.modelField`,
+  s004 `@InputPanel.textArea`, s005 `@InputPanel.clearButton`. s001 and s003 keep text locators: the Settings and Cancel
+  buttons are local variables, so they have no automatic name.
+- [x] WP-09 Windows check: a scenario with automatic names. `NO_GOLDEN`, approve, PASS.
+
+Open:
+
+- `approve` on a run without `run-result.json` gives a stack trace and exit code 1. `lint` gives a message and exit code 2 in the same case.
+
+For the WP-06 recording session (a person must record): make a test for focus changes. The recorder takes the pending snapshot of a step at `FOCUS_GAINED`.
    - [ ] Record a step whose action opens a dialog. Make sure that the golden of the step shows the dialog.
    - [ ] Record a step after which the application moves the focus by code. Make sure that the golden of the step is not taken too early.
 

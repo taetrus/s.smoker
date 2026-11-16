@@ -6,8 +6,8 @@
   "stepTimeoutMs": 15000,
   "ignore": {
     "paths": [
-      "^\\[OSGi Chatbot\\]/JComboBox\\[0\\]$",
-      "^\\[OSGi Chatbot\\]/JTextPane\\[0\\]$"
+      "^\\[OSGi Chatbot\\]/#@ChatFrame\\.modelCombo$",
+      "^\\[OSGi Chatbot\\]/#@ChatPanel\\.textPane$"
     ],
     "attributes": [],
     "valuePatterns": []
