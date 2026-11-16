@@ -41,4 +41,24 @@ public class PlayerTest {
         assertFalse(Player.skipsSnapshot(sc, 4));
         assertFalse(Player.skipsSnapshot(sc, 5));
     }
+
+    @Test
+    public void afterCompareKeepsFailWithoutGolden() {
+        assertEquals(Status.FAIL, Player.afterCompare(Status.FAIL, false, false));
+    }
+
+    @Test
+    public void afterCompareGivesNoGoldenForPass() {
+        assertEquals(Status.NO_GOLDEN, Player.afterCompare(Status.PASS, false, false));
+    }
+
+    @Test
+    public void afterCompareGivesFailForDifferences() {
+        assertEquals(Status.FAIL, Player.afterCompare(Status.PASS, true, true));
+    }
+
+    @Test
+    public void afterCompareKeepsFailWithGoldenAndNoDifferences() {
+        assertEquals(Status.FAIL, Player.afterCompare(Status.FAIL, true, false));
+    }
 }

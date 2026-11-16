@@ -165,6 +165,13 @@ final class Player implements Runnable {
         }
     }
 
+    /** Status after the compare. A FAIL (for example a WAIT_FOR timeout) stays FAIL, also without a golden. */
+    static RunResult.Status afterCompare(RunResult.Status current, boolean hasGolden, boolean hasDifferences) {
+        if (current != RunResult.Status.PASS) return current;
+        if (!hasGolden) return RunResult.Status.NO_GOLDEN;
+        return hasDifferences ? RunResult.Status.FAIL : current;
+    }
+
     /** True when the next step is a WAIT_FOR: this step takes no snapshot and has no golden (WP-03, decision B). */
     static boolean skipsSnapshot(Scenario s, int index) {
         if (index + 1 >= s.steps.size()) return false;
@@ -278,12 +285,8 @@ final class Player implements Runnable {
 
             // 4. compare
             Snapshot expected = golden.get(step.id);
-            if (expected == null) {
-                sr.status = RunResult.Status.NO_GOLDEN;
-            } else {
-                sr.differences.addAll(SnapshotDiff.diff(expected, sr.actual, scenario.ignore));
-                if (!sr.differences.isEmpty()) sr.status = RunResult.Status.FAIL;
-            }
+            if (expected != null) sr.differences.addAll(SnapshotDiff.diff(expected, sr.actual, scenario.ignore));
+            sr.status = afterCompare(sr.status, expected != null, !sr.differences.isEmpty());
             finish(sr, t0);
             if (!sr.logHits.isEmpty() && sr.status != RunResult.Status.ERROR) sr.status = RunResult.Status.FAIL;
             if (!quiet && sr.status == RunResult.Status.PASS) sr.differences.add("WARN UI did not become quiet within " + scenario.stepTimeoutMs + " ms");
