@@ -343,6 +343,11 @@ public class RecorderWindowTest {
             }
         }));
         assertFalse("the recorder pauses in select mode", recorder.isRecording());
+        assertFalse("the Record toggle is disabled in select mode", onEdt(new Callable<Boolean>() {
+            public Boolean call() {
+                return toolbar.recEnabled();
+            }
+        }));
         assertTrue("a glass pane covers the frame", glassPane() != oldGlass[0]);
 
         clickOnGlassPane(clear);
@@ -375,6 +380,11 @@ public class RecorderWindowTest {
             }
         }));
         assertTrue("the recorder records again", recorder.isRecording());
+        assertTrue("the Record toggle is enabled again", onEdt(new Callable<Boolean>() {
+            public Boolean call() {
+                return toolbar.recEnabled();
+            }
+        }));
         assertTrue(describe(recorder.scenario().steps), recorder.scenario().steps.isEmpty());
         assertEquals(0, clearFired.get());
     }

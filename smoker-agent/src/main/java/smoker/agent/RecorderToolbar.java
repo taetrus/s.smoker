@@ -1,5 +1,6 @@
 package smoker.agent;
 
+import smoker.core.model.Action;
 import smoker.core.model.Locator;
 import smoker.core.model.Step;
 
@@ -126,7 +127,9 @@ final class RecorderToolbar extends JFrame implements Recorder.Listener {
             @Override
             public Component getListCellRendererComponent(JList<?> l, Object v, int i, boolean sel, boolean foc) {
                 Step s = (Step) v;
-                String txt = s.id + "  " + s.name + (recorder.hasSnapshot(s) ? "" : "  (snapshot pending…)");
+                int next = i + 1;
+                boolean waitForFollows = next < model.size() && model.get(next).action.type == Action.Type.WAIT_FOR;
+                String txt = s.id + "  " + s.name + snapshotSuffix(recorder.hasSnapshot(s), waitForFollows);
                 return super.getListCellRendererComponent(l, txt, i, sel, foc);
             }
         });
@@ -169,6 +172,21 @@ final class RecorderToolbar extends JFrame implements Recorder.Listener {
             s.name = n.trim();
             list.repaint();
         }
+    }
+
+    /** The list text after a step name. A step before a WAIT_FOR never gets a snapshot (WP-03). */
+    static String snapshotSuffix(boolean hasSnapshot, boolean waitForFollows) {
+        if (hasSnapshot) return "";
+        return waitForFollows ? "  (no snapshot: WAIT_FOR follows)" : "  (snapshot pending…)";
+    }
+
+    /** Enables or disables the Record toggle. Must run on the EDT. */
+    void setRecEnabled(boolean enabled) {
+        rec.setEnabled(enabled);
+    }
+
+    boolean recEnabled() {
+        return rec.isEnabled();
     }
 
     WaitForPicker waitForPicker() {

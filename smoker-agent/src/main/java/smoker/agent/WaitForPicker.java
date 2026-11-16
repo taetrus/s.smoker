@@ -91,6 +91,7 @@ final class WaitForPicker {
         on = true;
         wasRecording = recorder.isRecording();
         if (wasRecording) recorder.pause();
+        toolbar.setRecEnabled(false);
         for (Window w : Window.getWindows()) {
             if (!w.isShowing() || !(w instanceof RootPaneContainer) || Recorder.isSmokerUi(w)) continue;
             RootPaneContainer rpc = (RootPaneContainer) w;
@@ -114,6 +115,7 @@ final class WaitForPicker {
         }
         covered.clear();
         toolbar.unhover();
+        toolbar.setRecEnabled(true);
         if (wasRecording) recorder.start();
     }
 
@@ -183,7 +185,7 @@ final class WaitForPicker {
 
     // ---- dialog ------------------------------------------------------------------------------
 
-    /** The dialog {@code smoker.waitfor}: attribute, regex and time limit of the WAIT_FOR step. */
+    /** The dialog {@code smoker.waitfor}: attribute, regex and timeout of the WAIT_FOR step. */
     private void showDialog(final Locator l) {
         final JDialog d = new JDialog(toolbar, "Wait for", true);
         d.setName("smoker.waitfor");
@@ -205,7 +207,7 @@ final class WaitForPicker {
         row(form, 0, "Component", new JLabel(l.toString()));
         row(form, 1, "Attribute", attribute);
         row(form, 2, "Matches (regex)", regex);
-        row(form, 3, "Time limit (ms)", timeout);
+        row(form, 3, "Timeout (ms)", timeout);
 
         JButton ok = new JButton("OK");
         JButton cancel = new JButton("Cancel");
@@ -270,7 +272,7 @@ final class WaitForPicker {
         return WaitCondition.NOT_FOUND.equals(v) ? "" : RecorderToolbar.literalRegex(v);
     }
 
-    /** The time limit in ms; empty or the default gives null (the scenario then omits it). */
+    /** The timeout in ms; empty or the default gives null (the scenario then omits it). */
     static Long timeoutOf(String text) {
         String t = text == null ? "" : text.trim();
         if (t.isEmpty()) return null;
@@ -278,9 +280,9 @@ final class WaitForPicker {
         try {
             ms = Long.parseLong(t);
         } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("time limit \"" + t + "\" is not a number of ms");
+            throw new IllegalArgumentException("timeout \"" + t + "\" is not a number of ms");
         }
-        if (ms <= 0) throw new IllegalArgumentException("time limit must be more than 0 ms");
+        if (ms <= 0) throw new IllegalArgumentException("timeout must be more than 0 ms");
         return ms == Action.DEFAULT_WAIT_TIMEOUT_MS ? null : ms;
     }
 }

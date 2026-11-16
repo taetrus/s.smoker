@@ -49,4 +49,12 @@ public class RecorderToolbarTest {
         automatic.name = "@Foo.bar";
         assertNull(RecorderToolbar.refusal(automatic));
     }
+
+    @Test
+    public void snapshotSuffixDependsOnTheNextStep() {
+        assertEquals("", RecorderToolbar.snapshotSuffix(true, false));
+        assertEquals("", RecorderToolbar.snapshotSuffix(true, true));
+        assertEquals("  (snapshot pending\u2026)", RecorderToolbar.snapshotSuffix(false, false));
+        assertEquals("  (no snapshot: WAIT_FOR follows)", RecorderToolbar.snapshotSuffix(false, true));
+    }
 }

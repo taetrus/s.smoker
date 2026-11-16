@@ -148,6 +148,8 @@ Use `WAIT_FOR` when the application needs time after a step. The player polls ea
 - On timeout the step is FAIL. The message shows the last value, for example `last value: "waiting"`.
   If the player never finds the component, the last value is `<component not found>`.
   The player keeps polling while the component is missing: it can appear later.
+- A component in a closed or hidden window gives `<component not found>`, not `visible = false`.
+- After a timeout the step still has a snapshot. `approve` after a timed-out run approves the state before the answer.
 - The step before a `WAIT_FOR` has no snapshot and no golden. Its status is PASS, unless its action fails or the log has a hit.
 - Prefer `WAIT_FOR` to `WAIT`. `WAIT` always sleeps the full time. `WAIT_FOR` continues as soon as the condition is true.
 
@@ -157,7 +159,7 @@ To record a `WAIT_FOR` step:
 2. Click `Wait for…` in the toolbar. The recorder pauses. Clicks do not go to the application.
 3. Click the component. It must have a name, real or automatic. For a component without a name, the status line
    shows `needs a name` and a proposed name. ESC or a second click on `Wait for…` cancels.
-4. In the dialog, set the attribute, the regex and the time limit. The default regex matches the current value.
+4. In the dialog, set the attribute, the regex and the timeout. The default regex matches the current value.
 5. Click OK. The recorder adds the step and removes the snapshot of the step before it.
 
 Wait until the condition holds before the next input.

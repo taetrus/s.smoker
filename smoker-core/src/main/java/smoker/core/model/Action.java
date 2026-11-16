@@ -34,7 +34,7 @@ public class Action {
     public String attribute;
     /** WAIT_FOR: Java regex; the whole value must match. */
     public String matches;
-    /** WAIT_FOR: time limit in ms; {@code null} means {@link #DEFAULT_WAIT_TIMEOUT_MS}. */
+    /** WAIT_FOR: timeout in ms; {@code null} means {@link #DEFAULT_WAIT_TIMEOUT_MS}. */
     public Long timeoutMs;
 
     public static Action click(Locator l) {
