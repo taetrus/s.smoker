@@ -144,7 +144,39 @@ public class DemoApp {
         JPanel south = new JPanel(new BorderLayout());
         south.add(bottom, BorderLayout.CENTER);
         south.add(new NotesPanel(), BorderLayout.SOUTH);
-        f.getContentPane().add(south, BorderLayout.SOUTH);
+        // The query row is below the notes row: the delayed answer stands in for a hardware simulator (WAIT_FOR).
+        JPanel queryRow = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        JButton query = new JButton("Query");
+        query.setName("demo.query");
+        final JLabel answer = new JLabel("-");
+        answer.setName("demo.answer");
+        query.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                answer.setText("waiting\u2026");
+                Thread t = new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        try { Thread.sleep(3000); } catch (InterruptedException ignored) { return; }
+                        SwingUtilities.invokeLater(new Runnable() {
+                            @Override
+                            public void run() {
+                                answer.setText("ready 42");
+                            }
+                        });
+                        LOG.info("answer ready");
+                    }
+                }, "demo-query");
+                t.setDaemon(true);
+                t.start();
+            }
+        });
+        queryRow.add(query);
+        queryRow.add(answer);
+        JPanel southAll = new JPanel(new BorderLayout());
+        southAll.add(south, BorderLayout.CENTER);
+        southAll.add(queryRow, BorderLayout.SOUTH);
+        f.getContentPane().add(southAll, BorderLayout.SOUTH);
         f.setSize(640, 400);
         f.setLocation(100, 100);
         f.setVisible(true);

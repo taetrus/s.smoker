@@ -193,4 +193,17 @@ public class MainTest {
         assertEquals(0, Main.changedComponents(before, before));
         assertEquals(2, Main.changedComponents(null, snap(node("[W]/#a", "a"), node("[W]/#b", "b"))));
     }
+
+    @Test
+    public void budgetAddsWaitForTimeouts() {
+        smoker.core.model.Locator l = new smoker.core.model.Locator();
+        l.name = "x";
+        Scenario sc = new Scenario();
+        sc.steps.add(new Step("s001", "a", smoker.core.model.Action.click(l)));
+        long base = Main.budgetMs(sc);
+        sc.steps.add(new Step("s002", "b", smoker.core.model.Action.waitFor(l, "text", "a", 20000L)));
+        long old = sc.startupTimeoutMs + (sc.steps.size() + 1) * (sc.stepTimeoutMs + 2000) + 10_000;
+        assertEquals(old + 20000, Main.budgetMs(sc));
+        assertTrue(base > 0);
+    }
 }

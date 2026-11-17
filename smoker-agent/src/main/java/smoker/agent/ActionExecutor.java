@@ -38,6 +38,7 @@ final class ActionExecutor {
             case KEY: key(a); break;
             case WAIT: Thread.sleep(Long.parseLong(a.value)); break;
             case CLOSE_WINDOW: closeWindow(a.locator); break;
+            case WAIT_FOR: throw new IllegalStateException("WAIT_FOR runs in the player");
             default: throw new IllegalArgumentException("unknown action " + a.type);
         }
     }

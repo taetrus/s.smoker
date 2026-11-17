@@ -33,7 +33,7 @@ Windows (PowerShell): `mvn -B verify` then run the commands below; no Xvfb neede
 ## Use
 
 ```bash
-# 1. record (floating toolbar appears over the app: Record / Pick / Rename / Delete / Save)
+# 1. record (floating toolbar appears over the app: Record / Pick / Wait for… / Rename / Delete / Save)
 java -jar smoker-cli.jar record --agent smoker-agent.jar --app "java -jar myapp.jar" --scenario scenarios/orders-create.json
 
 # 2. run — first run has no goldens → NO_GOLDEN (exit 0 unless --strict)
@@ -98,7 +98,7 @@ A path without spaces needs no quotes. This is the easier procedure.
 ```
 
 Actions: `CLICK`, `SET_TEXT`, `SELECT` (combo/list/tab by text or index, table by row), `KEY` (VK name, `modifiers` =
-`InputEvent.*_DOWN_MASK`), `WAIT` (ms), `CLOSE_WINDOW`.
+`InputEvent.*_DOWN_MASK`), `WAIT` (ms), `CLOSE_WINDOW`, `WAIT_FOR` (see "Wait for a condition").
 
 `schemaVersion` is 2. The scenario file has no golden snapshots. s.smoker refuses a file without `schemaVersion`,
 with `schemaVersion` 1, or with an `expected` block in a step: that is the old format. To convert an old file,
@@ -132,6 +132,37 @@ A list or a tree gives `items`. A tree row has two spaces of indent per level. T
 Password fields (`JPasswordField`): the snapshot gives the text `***` when the field has a value, and `""` when it is empty.
 The recorder does not record typing in a password field. If a scenario must fill one, add the `SET_TEXT` step by hand.
 Do not put a real password in a scenario file.
+
+### Wait for a condition
+
+Use `WAIT_FOR` when the application needs time after a step. The player polls each 100 ms until the condition is true.
+
+```json
+{ "type": "WAIT_FOR", "locator": { "name": "demo.answer" },
+  "attribute": "text", "matches": "ready .*", "timeoutMs": 10000 }
+```
+
+- `attribute` is one of `text`, `title`, `visible`, `enabled`, `selected`, `rowCount`, `itemCount`, `selectedIndex`.
+- `matches` is a Java regex. The whole value must match.
+- `timeoutMs` is optional. The default is 10000. It is independent of `stepTimeoutMs`.
+- On timeout the step is FAIL. The message shows the last value, for example `last value: "waiting"`.
+  If the player never finds the component, the last value is `<component not found>`.
+  The player keeps polling while the component is missing: it can appear later.
+- A component in a closed or hidden window gives `<component not found>`, not `visible = false`.
+- After a timeout the step still has a snapshot. `approve` after a timed-out run approves the state before the answer.
+- The step before a `WAIT_FOR` has no snapshot and no golden. Its status is PASS, unless its action fails or the log has a hit.
+- Prefer `WAIT_FOR` to `WAIT`. `WAIT` always sleeps the full time. `WAIT_FOR` continues as soon as the condition is true.
+
+To record a `WAIT_FOR` step:
+
+1. Wait until the application shows the value.
+2. Click `Wait for…` in the toolbar. The recorder pauses. Clicks do not go to the application.
+3. Click the component. It must have a name, real or automatic. For a component without a name, the status line
+   shows `needs a name` and a proposed name. ESC or a second click on `Wait for…` cancels.
+4. In the dialog, set the attribute, the regex and the timeout. The default regex matches the current value.
+5. Click OK. The recorder adds the step and removes the snapshot of the step before it.
+
+Wait until the condition holds before the next input.
 
 ### Locators
 

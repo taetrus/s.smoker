@@ -31,12 +31,15 @@ import java.awt.event.MouseEvent;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.Callable;
+import java.util.function.BooleanSupplier;
+import java.util.regex.Pattern;
 
 /**
  * Records user actions through {@link Toolkit#addAWTEventListener} (R-20) and, after each action settles,
@@ -158,7 +161,7 @@ final class Recorder implements AWTEventListener {
         }
         if (id == MouseEvent.MOUSE_PRESSED || id == KeyEvent.KEY_PRESSED || id == FocusEvent.FOCUS_GAINED) {
             // First input of the next step: the component has not processed it yet (F-21).
-            takePendingSnapshots();
+            takePendingSnapshots(id == FocusEvent.FOCUS_GAINED);
         }
         if (event instanceof FocusEvent) {
             onFocus((FocusEvent) event, src);
@@ -203,7 +206,7 @@ final class Recorder implements AWTEventListener {
         if (code == KeyEvent.VK_CONTROL || code == KeyEvent.VK_ALT || code == KeyEvent.VK_SHIFT || code == KeyEvent.VK_META) return;
         if (src == editing) {
             flushText();               // text first, then the key (e.g. ENTER in a field)
-            takePendingSnapshots();    // the field has not processed the key yet: this is the state after typing
+            takePendingSnapshots(false);    // the field has not processed the key yet: this is the state after typing
         }
         // Only a named component (real or automatic name) is a KEY target; else the key goes to the focus owner.
         Locator target = Locators.nameOf(src) != null ? Locators.resolve(src) : null;
@@ -328,21 +331,70 @@ final class Recorder implements AWTEventListener {
     }
 
     /**
+     * Adds a WAIT_FOR step (WP-03, F-02). The player takes no snapshot of the step directly before a WAIT_FOR
+     * (spec 6.4), so the recorder removes the snapshot of the current last step, taken or pending. Must run on the EDT.
+     */
+    void addWaitFor(Action a) {
+        if (!scenario.steps.isEmpty()) {
+            Step last = scenario.steps.get(scenario.steps.size() - 1);
+            synchronized (pendingSnapshots) {
+                pendingSnapshots.remove(last);
+            }
+            synchronized (snapshots) {
+                snapshots.remove(last.id);
+            }
+            if (listener != null) listener.stepUpdated(last);
+        }
+        add(a);
+    }
+
+    /**
      * On the EDT, at the first input of the next step: takes the snapshot of every pending step now, before the input
      * changes the UI (F-21). Normally only the newest step is pending. An older pending step had no input after it
      * either, so the current state is its state too: one snapshot serves all of them.
+     * <p>A WAIT_FOR step whose condition does not hold yet (WP-03):
+     * <ul>
+     * <li>FOCUS_GAINED: the step stays pending. A window that shows, or a modal dialog that closes, gives this event
+     * without input in the application. The snapshot thread takes the step after the match, as the player does.</li>
+     * <li>MOUSE_PRESSED, KEY_PRESSED: F-21 wins. The step gets the snapshot now, and the recorder gives a warning.</li>
+     * </ul>
+     *
+     * @param focusGained true for FOCUS_GAINED, false for a mouse press or a key press
      */
-    private void takePendingSnapshots() {
-        List<Step> due;
+    private void takePendingSnapshots(boolean focusGained) {
+        List<Step> due = new ArrayList<Step>();
+        List<Step> early = new ArrayList<Step>();
         synchronized (pendingSnapshots) {
-            if (pendingSnapshots.isEmpty()) return;
-            due = new ArrayList<Step>(pendingSnapshots);
-            pendingSnapshots.clear();
+            for (Iterator<Step> it = pendingSnapshots.iterator(); it.hasNext(); ) {
+                Step s = it.next();
+                if (isWaiting(s)) {
+                    if (focusGained) continue;
+                    early.add(s);
+                }
+                due.add(s);
+                it.remove();
+            }
         }
+        for (Step s : early) {
+            say("WAIT_FOR " + s.action.locator + " did not match before the next input: its golden shows the state"
+                    + " before the match");
+        }
+        if (due.isEmpty()) return;
         try {
             store(due, taker.take());
         } catch (RuntimeException e) {
             say("snapshot failed: " + e);
+        }
+    }
+
+    /** True for a WAIT_FOR step whose condition does not match now. Must run on the EDT. */
+    private static boolean isWaiting(Step s) {
+        if (s.action == null || s.action.type != Action.Type.WAIT_FOR) return false;
+        try {
+            Pattern p = WaitCondition.validate(s.action);
+            return !WaitCondition.matches(p, WaitCondition.read(s.action.locator, s.action.attribute));
+        } catch (IllegalArgumentException e) {
+            return false;
         }
     }
 
@@ -370,6 +422,7 @@ final class Recorder implements AWTEventListener {
                 s = pendingSnapshots.get(0);
             }
             try {
+                if (s.action != null && s.action.type == Action.Type.WAIT_FOR) awaitCondition(s);
                 Quiescence.await(scenario.quietMs, scenario.stepTimeoutMs);
                 Quiescence.onEdt(new Callable<Void>() {
                     @Override
@@ -384,6 +437,35 @@ final class Recorder implements AWTEventListener {
             } catch (Exception e) {
                 say("snapshot failed: " + e);
             }
+        }
+    }
+
+    private static final BooleanSupplier NO_HANG = new BooleanSupplier() {
+        @Override
+        public boolean getAsBoolean() {
+            return false;
+        }
+    };
+
+    /**
+     * Waits until the condition of a WAIT_FOR step matches, so that its snapshot shows the awaited state. On a time-out
+     * the step keeps its place and gets the snapshot of the current state. Runs on the snapshot thread.
+     */
+    private void awaitCondition(Step s) {
+        Pattern p;
+        try {
+            p = WaitCondition.validate(s.action);
+        } catch (IllegalArgumentException e) {
+            say("WAIT_FOR is not valid: " + e.getMessage());
+            return;
+        }
+        WaitCondition.Outcome o = WaitCondition.await(s.action, p, NO_HANG);
+        boolean pending;
+        synchronized (pendingSnapshots) {
+            pending = pendingSnapshots.contains(s);
+        }
+        if (o.kind != WaitCondition.Kind.MATCHED && pending) {
+            say("WAIT_FOR did not match: " + WaitCondition.timeoutMessage(s.action, o.lastValue));
         }
     }
 

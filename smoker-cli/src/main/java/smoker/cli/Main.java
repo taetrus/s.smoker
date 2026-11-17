@@ -3,6 +3,7 @@ package smoker.cli;
 import smoker.core.diff.SnapshotDiff;
 import smoker.core.io.Json;
 import smoker.core.io.ScenarioFiles;
+import smoker.core.model.Action;
 import smoker.core.model.NodeSnapshot;
 import smoker.core.model.RunResult;
 import smoker.core.model.Scenario;
@@ -55,6 +56,15 @@ public final class Main {
 
     // ---- run -----------------------------------------------------------------------------------
 
+    /** Time limit of one application run: startup, one limit per step, plus the timeout of each WAIT_FOR. */
+    static long budgetMs(Scenario s) {
+        long ms = s.startupTimeoutMs + (s.steps.size() + 1) * (s.stepTimeoutMs + 2000) + 10_000;
+        for (Step st : s.steps) {
+            if (st.action != null && st.action.type == Action.Type.WAIT_FOR) ms += st.action.waitTimeoutMs();
+        }
+        return ms;
+    }
+
     static int run(Map<String, String> o) throws Exception {
         Path agent = Paths.get(req(o, "agent")).toAbsolutePath();
         Path out = Paths.get(o.containsKey("out") ? o.get("out") : "smoker-out").toAbsolutePath();
@@ -85,7 +95,7 @@ public final class Main {
             if (o.containsKey("allowRegex")) agentArgs.append(";allowRegex=").append(o.get("allowRegex"));
 
             Scenario scenario = parsed.get(sc);
-            long budgetMs = scenario.startupTimeoutMs + (scenario.steps.size() + 1) * (scenario.stepTimeoutMs + 2000) + 10_000;
+            long budgetMs = budgetMs(scenario);
             if (o.containsKey("timeout")) budgetMs = Long.parseLong(o.get("timeout")) * 1000;
 
             System.out.println("== " + name);

@@ -173,7 +173,7 @@ public class SelfTestIT {
         Path dir = Files.createDirectories(work.resolve("failing"));
         Path scenarios = dir.resolve("scenarios");
         Files.createDirectories(scenarios);
-        for (String n : Arrays.asList("empty-name.json", "hang.json")) {
+        for (String n : Arrays.asList("empty-name.json", "hang.json", "wait-timeout.json")) {
             Files.copy(demoDir.resolve("scenarios-failing").resolve(n), scenarios.resolve(n), StandardCopyOption.REPLACE_EXISTING);
         }
         Cli run4 = run(scenarios, dir.resolve("run4"), dir.resolve("demo.log"));
@@ -197,6 +197,44 @@ public class SelfTestIT {
         assertNotNull("thread dump", h1.threadDump);
         assertTrue("thread dump shows the EDT", h1.threadDump.contains("AWT-EventQueue"));
         assertJUnitXmlIsValid(dir.resolve("run4/junit.xml"));
+
+        // R-23a: a WAIT_FOR that does not match in time gives FAIL, with the last value in the difference.
+        RunResult timeout = result(dir.resolve("run4/wait-timeout"));
+        RunResult.StepResult w2 = assertStepStatus(timeout, "s002", RunResult.Status.FAIL);
+        assertTrue(String.valueOf(w2.differences), w2.differences.toString().contains("last value: \"waiting\u2026\""));
+    }
+
+    @Test
+    public void waitForPassesOnADelayedAnswer() throws Exception {
+        Path dir = Files.createDirectories(work.resolve("wait"));
+        Path scenario = dir.resolve("wait.json");
+        Files.copy(demoDir.resolve("scenarios/wait.json"), scenario);
+        Path log = dir.resolve("demo.log");
+
+        // run1: the step before a WAIT_FOR has no snapshot. The WAIT_FOR step has no golden yet.
+        Cli run1 = run(scenario, dir.resolve("run1"), log);
+        assertEquals(run1.output, 0, run1.exit);
+        RunResult r1 = result(dir.resolve("run1/wait"));
+        RunResult.StepResult c1 = assertStepStatus(r1, "s001", RunResult.Status.PASS);
+        assertEquals("step before WAIT_FOR has no snapshot", null, c1.actual);
+        assertStepStatus(r1, "s002", RunResult.Status.NO_GOLDEN);
+
+        Cli approve = cli("approve", "--run", dir.resolve("run1/wait").toString(), "--scenario", scenario.toString());
+        assertEquals(approve.output, 0, approve.exit);
+        assertTrue(approve.output, approve.output.contains("approved 1 step(s)"));
+        assertEquals(Arrays.asList("s002"), keys(ScenarioFiles.readGolden(scenario)));
+        assertTrue("golden has the answer", read(ScenarioFiles.goldenPath(scenario)).contains("ready 42"));
+
+        // run2: PASS. The wait is real: the demo answers after 3 s.
+        Cli run2 = run(scenario, dir.resolve("run2"), log);
+        assertEquals(run2.output, 0, run2.exit);
+        RunResult r2 = result(dir.resolve("run2/wait"));
+        assertEquals(run2.output, RunResult.Status.PASS, r2.status);
+        RunResult.StepResult w2 = assertStepStatus(r2, "s002", RunResult.Status.PASS);
+        // The 3 s of the demo start at the click of s001, which comes after the start of s001. The match comes at
+        // least 3 s after the click, so the two durations together reach 2900 ms.
+        RunResult.StepResult c2 = assertStepStatus(r2, "s001", RunResult.Status.PASS);
+        assertTrue("s001+s002 durationMs: " + (c2.durationMs + w2.durationMs), c2.durationMs + w2.durationMs >= 2900);
     }
 
     @Test

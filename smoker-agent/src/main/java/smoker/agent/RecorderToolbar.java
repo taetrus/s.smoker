@@ -1,5 +1,6 @@
 package smoker.agent;
 
+import smoker.core.model.Action;
 import smoker.core.model.Locator;
 import smoker.core.model.Step;
 
@@ -44,6 +45,7 @@ final class RecorderToolbar extends JFrame implements Recorder.Listener {
     private final JLabel pickerLabel = new JLabel(" ");
     private final JToggleButton rec = new JToggleButton("● Record");
     private final JToggleButton pick = new JToggleButton("Pick");
+    private final WaitForPicker waitFor;
 
     private JComponent highlighted;
     private Border highlightedBorder;
@@ -61,12 +63,15 @@ final class RecorderToolbar extends JFrame implements Recorder.Listener {
         setAlwaysOnTop(true);
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
         setFocusableWindowState(true);
+        waitFor = new WaitForPicker(this, recorder);
 
         for (Step s : recorder.scenario().steps) model.addElement(s);
 
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 4));
         buttons.add(rec);
         buttons.add(pick);
+        JButton waitForButton = new JButton("Wait for…");
+        buttons.add(waitForButton);
         JButton rename = new JButton("Rename");
         JButton delete = new JButton("Delete");
         JButton save = new JButton("Save");
@@ -85,7 +90,13 @@ final class RecorderToolbar extends JFrame implements Recorder.Listener {
             @Override
             public void actionPerformed(ActionEvent e) {
                 if (pick.isSelected()) Toolkit.getDefaultToolkit().addAWTEventListener(pickerListener, AWTEvent.MOUSE_MOTION_EVENT_MASK);
-                else { Toolkit.getDefaultToolkit().removeAWTEventListener(pickerListener); unhighlight(); pickerLabel.setText(" "); }
+                else { Toolkit.getDefaultToolkit().removeAWTEventListener(pickerListener); unhover(); }
+            }
+        });
+        waitForButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                waitFor.toggle();
             }
         });
         rename.addActionListener(new ActionListener() {
@@ -116,7 +127,9 @@ final class RecorderToolbar extends JFrame implements Recorder.Listener {
             @Override
             public Component getListCellRendererComponent(JList<?> l, Object v, int i, boolean sel, boolean foc) {
                 Step s = (Step) v;
-                String txt = s.id + "  " + s.name + (recorder.hasSnapshot(s) ? "" : "  (snapshot pending…)");
+                int next = i + 1;
+                boolean waitForFollows = next < model.size() && model.get(next).action.type == Action.Type.WAIT_FOR;
+                String txt = s.id + "  " + s.name + snapshotSuffix(recorder.hasSnapshot(s), waitForFollows);
                 return super.getListCellRendererComponent(l, txt, i, sel, foc);
             }
         });
@@ -138,7 +151,7 @@ final class RecorderToolbar extends JFrame implements Recorder.Listener {
         cp.add(buttons, BorderLayout.NORTH);
         cp.add(new JScrollPane(list), BorderLayout.CENTER);
         cp.add(south, BorderLayout.SOUTH);
-        setSize(520, 300);
+        setSize(620, 300);
         setLocation(20, 20);
         recorder.setListener(this);
     }
@@ -161,10 +174,39 @@ final class RecorderToolbar extends JFrame implements Recorder.Listener {
         }
     }
 
+    /** The list text after a step name. A step before a WAIT_FOR never gets a snapshot (WP-03). */
+    static String snapshotSuffix(boolean hasSnapshot, boolean waitForFollows) {
+        if (hasSnapshot) return "";
+        return waitForFollows ? "  (no snapshot: WAIT_FOR follows)" : "  (snapshot pending…)";
+    }
+
+    /** Enables or disables the Record toggle. Must run on the EDT. */
+    void setRecEnabled(boolean enabled) {
+        rec.setEnabled(enabled);
+    }
+
+    boolean recEnabled() {
+        return rec.isEnabled();
+    }
+
+    WaitForPicker waitForPicker() {
+        return waitFor;
+    }
+
+    /** The text of the status line. Must run on the EDT. */
+    String statusText() {
+        return status.getText();
+    }
+
     private void onHover(Component c, MouseEvent e) {
-        if (Recorder.isSmokerUi(c)) return;
+        // In select mode the glass pane gets the mouse: the picker of "Wait for…" calls hover itself.
+        if (Recorder.isSmokerUi(c) || waitFor.selectModeOn()) return;
         Component deepest = SwingUtilities.getDeepestComponentAt(c, e.getX(), e.getY());
-        if (deepest == null) deepest = c;
+        hover(deepest == null ? c : deepest);
+    }
+
+    /** Highlights {@code deepest} and shows its locator. Must run on the EDT. */
+    void hover(Component deepest) {
         if (deepest == highlighted) return;
         unhighlight();
         if (deepest instanceof JComponent) {
@@ -179,6 +221,29 @@ final class RecorderToolbar extends JFrame implements Recorder.Listener {
     static String pickerText(Locator l, String simpleClassName) {
         String auto = l.isNamed() && l.name.startsWith("@") ? " (automatic name - needs a real name)" : "";
         return (l.isNamed() ? "" : "⚠ unnamed  ") + l + auto + "   [" + simpleClassName + "]";
+    }
+
+    /** Removes the highlight and the locator text. Must run on the EDT. */
+    void unhover() {
+        unhighlight();
+        pickerLabel.setText(" ");
+    }
+
+    /** Null when the locator has a name (real or unique automatic); else the reason for the status line (spec 6.5). */
+    static String refusal(Locator l) {
+        return l.isNamed() ? null : "needs a name";
+    }
+
+    /** A regex that matches exactly {@code value}: a backslash before each regex metacharacter. Null gives {@code ""}. */
+    static String literalRegex(String value) {
+        if (value == null) return "";
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < value.length(); i++) {
+            char ch = value.charAt(i);
+            if ("\\.[]{}()*+?^$|".indexOf(ch) >= 0) sb.append('\\');
+            sb.append(ch);
+        }
+        return sb.toString();
     }
 
     private void unhighlight() {

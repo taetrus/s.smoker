@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 2,
+  "name": "wait-timeout",
+  "description": "Click Query. The answer comes after 3 s, but WAIT_FOR gives up after 0.5 s: FAIL with the last value. Expected text: the label shows 'ready N'.",
+  "startupTimeoutMs": 30000,
+  "quietMs": 300,
+  "stepTimeoutMs": 10000,
+  "ignore": { "paths": [], "attributes": [], "valuePatterns": [] },
+  "steps": [
+    { "id": "s001", "name": "query", "action": { "type": "CLICK", "locator": { "name": "demo.query" } } },
+    { "id": "s002", "name": "wait for the answer", "action": { "type": "WAIT_FOR", "locator": { "name": "demo.answer" },
+      "attribute": "text", "matches": "ready \\d+", "timeoutMs": 500 } }
+  ]
+}
