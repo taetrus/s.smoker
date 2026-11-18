@@ -99,12 +99,12 @@ final class WaitForPicker {
             rpc.setGlassPane(glassPane(rpc));
             rpc.getGlassPane().setVisible(true);
         }
-        toolbar.status("Wait for: click a named component (ESC cancels)");
+        toolbar.showStatus("Wait for: click a named component (ESC cancels)");
     }
 
     void cancel() {
         stop();
-        toolbar.status("Wait for: cancelled");
+        toolbar.showStatus("Wait for: cancelled");
     }
 
     private void stop() {
@@ -162,7 +162,7 @@ final class WaitForPicker {
         String refused = RecorderToolbar.refusal(l);
         if (refused != null) {
             String proposal = proposalFor(c);
-            toolbar.status(refused + ": " + (proposal != null ? proposal : l + " (give it a name with setName)"));
+            toolbar.showStatus(refused + ": " + (proposal != null ? proposal : l + " (give it a name with setName)"));
             return;
         }
         stop();
@@ -192,6 +192,7 @@ final class WaitForPicker {
         final JComboBox<String> attribute = new JComboBox<String>(WaitCondition.ATTRIBUTES.toArray(new String[0]));
         attribute.setSelectedItem("text");
         final JTextField regex = new JTextField(currentValueRegex(l, "text"), 24);
+        SmokerAgent.log("Wait for: dialog for " + l + ", attribute text, regex " + regex.getText());
         final JTextField timeout = new JTextField(String.valueOf(Action.DEFAULT_WAIT_TIMEOUT_MS), 8);
         final JLabel error = new JLabel(" ");
         error.setForeground(Color.RED.darker());
@@ -221,6 +222,7 @@ final class WaitForPicker {
                     recorder.addWaitFor(a);
                     d.dispose();
                 } catch (IllegalArgumentException ex) {
+                    SmokerAgent.log("Wait for: dialog refused the input: " + ex.getMessage());
                     error.setText(ex.getMessage());
                     d.pack();
                 }

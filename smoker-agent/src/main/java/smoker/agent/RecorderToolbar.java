@@ -49,6 +49,8 @@ final class RecorderToolbar extends JFrame implements Recorder.Listener {
 
     private JComponent highlighted;
     private Border highlightedBorder;
+    /** The last logged text of each row of the step list. EDT only. */
+    private final java.util.Map<Step, String> loggedRows = new java.util.IdentityHashMap<Step, String>();
     private final AWTEventListener pickerListener = new AWTEventListener() {
         @Override
         public void eventDispatched(AWTEvent e) {
@@ -109,7 +111,13 @@ final class RecorderToolbar extends JFrame implements Recorder.Listener {
             @Override
             public void actionPerformed(ActionEvent e) {
                 Step s = list.getSelectedValue();
-                if (s != null) { RecorderToolbar.this.recorder.remove(s); model.removeElement(s); }
+                if (s != null) {
+                    RecorderToolbar.this.recorder.remove(s);
+                    model.removeElement(s);
+                    loggedRows.remove(s);
+                    SmokerAgent.log("step list: deleted " + s.id);
+                    logChangedRows();
+                }
             }
         });
         save.addActionListener(new ActionListener() {
@@ -118,7 +126,7 @@ final class RecorderToolbar extends JFrame implements Recorder.Listener {
                 try {
                     RecorderToolbar.this.recorder.save();
                 } catch (Exception ex) {
-                    status("save failed: " + ex);
+                    showStatus("save failed: " + ex);
                 }
             }
         });
@@ -126,11 +134,7 @@ final class RecorderToolbar extends JFrame implements Recorder.Listener {
         list.setCellRenderer(new javax.swing.DefaultListCellRenderer() {
             @Override
             public Component getListCellRendererComponent(JList<?> l, Object v, int i, boolean sel, boolean foc) {
-                Step s = (Step) v;
-                int next = i + 1;
-                boolean waitForFollows = next < model.size() && model.get(next).action.type == Action.Type.WAIT_FOR;
-                String txt = s.id + "  " + s.name + snapshotSuffix(recorder.hasSnapshot(s), waitForFollows);
-                return super.getListCellRendererComponent(l, txt, i, sel, foc);
+                return super.getListCellRendererComponent(l, listText(i), i, sel, foc);
             }
         });
         list.addMouseListener(new MouseAdapter() {
@@ -180,9 +184,38 @@ final class RecorderToolbar extends JFrame implements Recorder.Listener {
         return waitForFollows ? "  (no snapshot: WAIT_FOR follows)" : "  (snapshot pending…)";
     }
 
-    /** Enables or disables the Record toggle. Must run on the EDT. */
+    /** The text of row {@code i} of the step list. Must run on the EDT. */
+    String listText(int i) {
+        Step s = model.get(i);
+        int next = i + 1;
+        boolean waitForFollows = next < model.size() && model.get(next).action.type == Action.Type.WAIT_FOR;
+        return s.id + "  " + s.name + snapshotSuffix(recorder.hasSnapshot(s), waitForFollows);
+    }
+
+    /**
+     * Writes each row of the step list whose text changed to the agent log. The person who records cannot always
+     * remember the list; the record log shows it. Must run on the EDT.
+     */
+    private void logChangedRows() {
+        for (int i = 0; i < model.size(); i++) {
+            String text = listText(i);
+            if (!text.equals(loggedRows.put(model.get(i), text))) SmokerAgent.log("step list: " + text);
+        }
+    }
+
+    /** Enables or disables the Record toggle, and writes a change to the agent log. Must run on the EDT. */
     void setRecEnabled(boolean enabled) {
+        if (rec.isEnabled() != enabled) SmokerAgent.log("Record button " + (enabled ? "enabled" : "disabled"));
         rec.setEnabled(enabled);
+    }
+
+    /**
+     * Shows {@code text} in the status line and writes it to the agent log. For messages of the toolbar itself:
+     * the recorder writes its own messages to the log before it calls {@link #status}. Callable from any thread.
+     */
+    void showStatus(String text) {
+        SmokerAgent.log("status: " + text);
+        status(text);
     }
 
     boolean recEnabled() {
@@ -262,6 +295,7 @@ final class RecorderToolbar extends JFrame implements Recorder.Listener {
             public void run() {
                 model.addElement(s);
                 list.ensureIndexIsVisible(model.size() - 1);
+                logChangedRows();
             }
         });
     }
@@ -272,6 +306,7 @@ final class RecorderToolbar extends JFrame implements Recorder.Listener {
             @Override
             public void run() {
                 list.repaint();
+                logChangedRows();
             }
         });
     }
