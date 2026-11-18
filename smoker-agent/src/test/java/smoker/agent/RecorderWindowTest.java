@@ -22,9 +22,13 @@ import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.MenuElement;
 import javax.swing.MenuSelectionManager;
+import javax.swing.JScrollPane;
+import javax.swing.JTable;
 import javax.swing.JTextField;
+import javax.swing.JViewport;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
+import javax.swing.border.Border;
 import java.awt.AWTEvent;
 import java.awt.Component;
 import java.awt.DefaultKeyboardFocusManager;
@@ -49,6 +53,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 
 /**
@@ -364,6 +370,35 @@ public class RecorderWindowTest {
         } finally {
             System.setOut(old);
         }
+    }
+
+    /**
+     * Windows walkthrough 2026-11-18: hover over a scroll pane threw "JViewport.setBorder() not supported".
+     * The picker shows the locator of a JViewport without a border, and the next component still gets the highlight.
+     */
+    @Test
+    public void hoverOverAViewportShowsItsLocatorWithoutABorder() throws Exception {
+        final String[] texts = new String[2];
+        final Border[] borders = new Border[3];
+        onEdt(new Runnable() {
+            public void run() {
+                toolbar = new RecorderToolbar(recorder);
+                JViewport viewport = new JScrollPane(new JTable()).getViewport();
+                toolbar.hover(viewport);
+                texts[0] = toolbar.pickerLabelText();
+                borders[0] = viewport.getBorder();
+                toolbar.hover(status);
+                texts[1] = toolbar.pickerLabelText();
+                borders[1] = status.getBorder();
+                toolbar.hover(viewport);   // the label gets its old border back
+                borders[2] = status.getBorder();
+            }
+        });
+        assertTrue(texts[0], texts[0].contains("[JViewport]"));
+        assertNull(borders[0]);
+        assertTrue(texts[1], texts[1].contains("#t.status"));
+        assertNotNull("the label after the viewport is highlighted", borders[1]);
+        assertNull("unhighlight restores the old border", borders[2]);
     }
 
     /**
