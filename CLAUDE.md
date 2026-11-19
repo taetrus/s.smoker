@@ -60,7 +60,7 @@ after every change to `smoker-agent` or `smoker-core`.
   PR #8 (merged 2026-11-19) makes the `[smoker]` texts ASCII and documents this in `README.md`.
   Windows record session: the record log has no non-ASCII byte (PR #8 comment).
 - Windows CI (PR #9, merged 2026-11-19): `.github/workflows/windows.yml` runs the three Windows builds on each pull
-  request and each push to `master`. Self-hosted runner `CARLOSCARMEN` in `D:\Dev\actions-runner` on the Windows PC
+  request and each push to `master`, except for a change to `*.md` files only. Self-hosted runner `CARLOSCARMEN` in `D:\Dev\actions-runner` on the Windows PC
   (outside the repository; not a service). Start it with `run.cmd` in the desktop session. When it is offline, the
   checks wait in the queue. Do not type on the PC while a job runs. Follow-up: move `actions/checkout@v4` to v5 (Node.js 20 warning).
 - Pilot goldens approved again on Windows on 2026-11-16 (`docs/wp-01-handoff.md` section 5).
