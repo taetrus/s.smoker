@@ -312,6 +312,61 @@ public class RecorderWindowTest {
     }
 
     /**
+     * WP-03 walkthrough on Windows (2026-11-18): the person could not remember the toolbar. The record log must show
+     * the Record toggle, the status line of the select mode, and the step list text.
+     */
+    @Test
+    public void selectModeWritesWhatTheToolbarShowsToTheLog() throws Exception {
+        final java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+        final java.io.PrintStream old = System.out;
+        System.setOut(new java.io.PrintStream(new java.io.OutputStream() {
+            public void write(int b) {
+                old.write(b);
+                synchronized (buf) { buf.write(b); }
+            }
+        }, true));
+        try {
+            onEdt(new Runnable() {
+                public void run() {
+                    toolbar = new RecorderToolbar(recorder);
+                    toolbar.waitForPicker().opener = new Consumer<Locator>() {
+                        public void accept(Locator l) {
+                            recorder.addWaitFor(Action.waitFor(l, "text", "idle", 3000L));
+                        }
+                    };
+                }
+            });
+            // s001 CLICK. Not "Done": its new label text is wider, and the packed frame moves the label out of view.
+            click(clear, true);
+            onEdt(new Runnable() {
+                public void run() {
+                    toolbar.waitForPicker().toggle();
+                }
+            });
+            clickOnGlassPane(clear);                 // refused: no name
+            clickOnGlassPane(status);                // s002 WAIT_FOR #t.status
+            String log = "";
+            for (int i = 0; i < 50; i++) {           // the toolbar logs the list on the EDT, after the recorder
+                onEdt(new Runnable() {
+                    public void run() {
+                    }
+                });
+                synchronized (buf) { log = buf.toString("UTF-8"); }
+                if (log.contains("WAIT_FOR follows")) break;
+                Thread.sleep(100);
+            }
+            assertTrue(log, log.contains("[smoker] Record button disabled"));
+            assertTrue(log, log.contains("[smoker] status: Wait for: click a named component"));
+            assertTrue(log, log.contains("[smoker] status: needs a name: "));
+            assertTrue(log, log.contains("[smoker] Record button enabled"));
+            assertTrue(log, Pattern.compile("\\[smoker\\] step list: s001 .*\\(no snapshot: WAIT_FOR follows\\)").matcher(log).find());
+            assertTrue(log, log.contains("[smoker] step list: s002 "));
+        } finally {
+            System.setOut(old);
+        }
+    }
+
+    /**
      * WP-03, spec 6.5 (owner decision): the select mode of "Wait for..." refuses a component without a name and stays on.
      * A named component ends the select mode. The clicks go to the glass pane and not to the application.
      */
