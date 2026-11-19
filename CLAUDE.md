@@ -8,6 +8,7 @@ compares semantic component snapshots with golden snapshots, and reads the appli
 1. `docs/development-plan.md` — audit findings F-01..F-24, changed requirements, work packages WP-01..WP-09. **This is the backlog.**
 2. `docs/wp-01-handoff.md` — WP-01 state and the commands that operated on Windows.
 3. `docs/wp-01-pilot-report.md` — WP-01 test report (pilot on Windows). Reports stay in `docs/` (decision 6).
+   `docs/wp-03-windows-report.md` — WP-03 test report (Windows).
 4. `docs/architecture.md` — design decisions and class map of the current skeleton.
 5. `docs/requirements.md` — original requirements. The development plan wins where they differ.
 6. `README.md` — build and CLI usage.
@@ -46,13 +47,16 @@ It checks the WP-03 criterion on `wait.json`: run1 s001 PASS without a snapshot,
 Run `mvn -B verify` and `mvn -B verify -Plocale-tr`
 after every change to `smoker-agent` or `smoker-core`.
 
-## State on 2026-11-18
+## State on 2026-11-19
 
-- `master` holds WP-01, WP-02, WP-09 and WP-03. WP-01, WP-02 and WP-09 are complete; their completion criteria passed.
+- `master` holds WP-01, WP-02, WP-09 and WP-03. All four work packages are complete; their completion criteria passed.
 - WP-03 (`WAIT_FOR`, F-02, R-23a) was merged on 2026-11-17 (PR #5). R-23a passes on the demo (`wait.json`, SelfTestIT).
-  The Windows run and the manual walkthrough of `Wait for…` are open.
-- Tests: 64 in `smoker-core`, 152 in `smoker-agent`, 22 in `smoker-cli`, 5 IT. They pass on macOS
-  (JDK 27 default locale and `-Plocale-tr`). The Windows run of the three builds is from before WP-03.
+  Windows run and manual walkthrough of `Wait for…`: pass (`docs/wp-03-windows-report.md`). Follow-ups from the
+  walkthrough: the toolbar writes what it shows to the record log (PR #6), the picker gives no border to a `JViewport` (PR #7).
+- Tests: 64 in `smoker-core`, 154 in `smoker-agent`, 22 in `smoker-cli`, 5 IT. They pass on macOS (JDK 27 default
+  locale and `-Plocale-tr`) and on Windows 11 (JDK 25: default, `-Plocale-tr`, tr_TR with JRE 8u341 as test JVM).
+- The record log and `app-output.log` are in the console charset of the application (Cp1252 on Windows), not UTF-8.
+  PR #8 (open) makes the `[smoker]` texts ASCII and documents this in `README.md`.
 - Pilot goldens approved again on Windows on 2026-11-16 (`docs/wp-01-handoff.md` section 5).
 - Decision 6 (2026-11-15): test reports go into `docs/` on GitHub, not Confluence.
 - Open findings: F-02 fixed in the tool, untested on a product with the simulator; F-08, F-09, F-22, F-24 (WP-04).
@@ -62,8 +66,7 @@ after every change to `smoker-agent` or `smoker-core`.
 - Do not type into the demo windows while SelfTestIT runs on a desktop: they take the focus, and a key press changes a text field.
 - Test isolation: a test must not leave a window that reports "showing". `Window.getWindows()` keeps it for later test classes.
 - Next work package in plan order: WP-04.
-- Not verified: JRE 11 and JRE 17 at run time on a target application, a product with the hardware simulator,
-  the manual walkthrough of the recorder button `Wait for…`, the Windows run of `wait.json`.
+- Not verified: JRE 11 and JRE 17 at run time on a target application, a product with the hardware simulator.
 
 ## Decisions already made
 
