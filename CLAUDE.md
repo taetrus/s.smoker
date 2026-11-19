@@ -54,10 +54,15 @@ after every change to `smoker-agent` or `smoker-core`.
   Windows run and manual walkthrough of `Wait for…`: pass (`docs/wp-03-windows-report.md`). Follow-ups from the
   walkthrough: the toolbar writes what it shows to the record log (PR #6), the picker gives no border to a `JViewport` (PR #7).
 - Tests: 64 in `smoker-core`, 155 in `smoker-agent`, 22 in `smoker-cli`, 5 IT. They pass on macOS (JDK 27 default
-  locale and `-Plocale-tr`) and on Windows 11 (JDK 25: default, `-Plocale-tr`, tr_TR with JRE 8u341 as test JVM).
+  locale and `-Plocale-tr`) and on Windows 11 (JDK 25: default, `-Plocale-tr`, tr_TR with JRE 8u341 as test JVM),
+  also in the Windows CI.
 - The record log and `app-output.log` are in the console charset of the application (Cp1252 on Windows), not UTF-8.
   PR #8 (merged 2026-11-19) makes the `[smoker]` texts ASCII and documents this in `README.md`.
   Windows record session: the record log has no non-ASCII byte (PR #8 comment).
+- Windows CI (PR #9, merged 2026-11-19): `.github/workflows/windows.yml` runs the three Windows builds on each pull
+  request and each push to `master`. Self-hosted runner `CARLOSCARMEN` in `D:\Dev\actions-runner` on the Windows PC
+  (outside the repository; not a service). Start it with `run.cmd` in the desktop session. When it is offline, the
+  checks wait in the queue. Do not type on the PC while a job runs. Follow-up: move `actions/checkout@v4` to v5 (Node.js 20 warning).
 - Pilot goldens approved again on Windows on 2026-11-16 (`docs/wp-01-handoff.md` section 5).
 - Decision 6 (2026-11-15): test reports go into `docs/` on GitHub, not Confluence.
 - Open findings: F-02 fixed in the tool, untested on a product with the simulator; F-08, F-09, F-22, F-24 (WP-04).
