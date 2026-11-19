@@ -182,7 +182,7 @@ final class RecorderToolbar extends JFrame implements Recorder.Listener {
     /** The list text after a step name. A step before a WAIT_FOR never gets a snapshot (WP-03). */
     static String snapshotSuffix(boolean hasSnapshot, boolean waitForFollows) {
         if (hasSnapshot) return "";
-        return waitForFollows ? "  (no snapshot: WAIT_FOR follows)" : "  (snapshot pending…)";
+        return waitForFollows ? "  (no snapshot: WAIT_FOR follows)" : "  (snapshot pending...)";
     }
 
     /** The text of row {@code i} of the step list. Must run on the EDT. */

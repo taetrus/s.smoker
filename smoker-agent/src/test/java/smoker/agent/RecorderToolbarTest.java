@@ -54,7 +54,21 @@ public class RecorderToolbarTest {
     public void snapshotSuffixDependsOnTheNextStep() {
         assertEquals("", RecorderToolbar.snapshotSuffix(true, false));
         assertEquals("", RecorderToolbar.snapshotSuffix(true, true));
-        assertEquals("  (snapshot pending\u2026)", RecorderToolbar.snapshotSuffix(false, false));
+        assertEquals("  (snapshot pending...)", RecorderToolbar.snapshotSuffix(false, false));
         assertEquals("  (no snapshot: WAIT_FOR follows)", RecorderToolbar.snapshotSuffix(false, true));
+    }
+
+    /**
+     * The step list rows go to the record log, which is in the console charset of the application (Cp1252 on Windows).
+     * The fixed texts of s.smoker are ASCII, so they read the same in every charset (Windows walkthrough, 2026-11-18).
+     */
+    @Test
+    public void snapshotSuffixIsAscii() {
+        for (boolean has : new boolean[] {true, false}) {
+            for (boolean follows : new boolean[] {true, false}) {
+                String s = RecorderToolbar.snapshotSuffix(has, follows);
+                assertTrue(s, s.matches("\\p{ASCII}*"));
+            }
+        }
     }
 }

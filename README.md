@@ -64,6 +64,12 @@ java -jar smoker-cli.jar run --agent smoker-agent.jar --app "\"C:\Program Files\
 
 A path without spaces needs no quotes. This is the easier procedure.
 
+The CLI writes the console output of the application to `<scenario>.record.log` (record) and to `app-output.log`
+(run). The application writes this output in its console charset, not in UTF-8: Cp1252 on a Windows with English
+or German settings, Cp1254 on a Turkish Windows. The CLI copies the bytes and does not convert them.
+The `[smoker]` lines of the agent are ASCII, except for texts of the application, for example a label text.
+Scenario, golden and `run-result.json` files are always UTF-8.
+
 ### Agent arguments (`-javaagent:smoker-agent.jar=k=v;k=v`)
 
 | key | values | default |
