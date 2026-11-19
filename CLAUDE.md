@@ -53,10 +53,11 @@ after every change to `smoker-agent` or `smoker-core`.
 - WP-03 (`WAIT_FOR`, F-02, R-23a) was merged on 2026-11-17 (PR #5). R-23a passes on the demo (`wait.json`, SelfTestIT).
   Windows run and manual walkthrough of `Wait for…`: pass (`docs/wp-03-windows-report.md`). Follow-ups from the
   walkthrough: the toolbar writes what it shows to the record log (PR #6), the picker gives no border to a `JViewport` (PR #7).
-- Tests: 64 in `smoker-core`, 154 in `smoker-agent`, 22 in `smoker-cli`, 5 IT. They pass on macOS (JDK 27 default
+- Tests: 64 in `smoker-core`, 155 in `smoker-agent`, 22 in `smoker-cli`, 5 IT. They pass on macOS (JDK 27 default
   locale and `-Plocale-tr`) and on Windows 11 (JDK 25: default, `-Plocale-tr`, tr_TR with JRE 8u341 as test JVM).
 - The record log and `app-output.log` are in the console charset of the application (Cp1252 on Windows), not UTF-8.
-  PR #8 (open) makes the `[smoker]` texts ASCII and documents this in `README.md`.
+  PR #8 (merged 2026-11-19) makes the `[smoker]` texts ASCII and documents this in `README.md`.
+  Windows record session: the record log has no non-ASCII byte (PR #8 comment).
 - Pilot goldens approved again on Windows on 2026-11-16 (`docs/wp-01-handoff.md` section 5).
 - Decision 6 (2026-11-15): test reports go into `docs/` on GitHub, not Confluence.
 - Open findings: F-02 fixed in the tool, untested on a product with the simulator; F-08, F-09, F-22, F-24 (WP-04).
