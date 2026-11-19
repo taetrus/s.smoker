@@ -15,6 +15,7 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JToggleButton;
+import javax.swing.JViewport;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
 import javax.swing.border.Border;
@@ -226,6 +227,11 @@ final class RecorderToolbar extends JFrame implements Recorder.Listener {
         return waitFor;
     }
 
+    /** The text of the picker line. Must run on the EDT. */
+    String pickerLabelText() {
+        return pickerLabel.getText();
+    }
+
     /** The text of the status line. Must run on the EDT. */
     String statusText() {
         return status.getText();
@@ -238,11 +244,14 @@ final class RecorderToolbar extends JFrame implements Recorder.Listener {
         hover(deepest == null ? c : deepest);
     }
 
-    /** Highlights {@code deepest} and shows its locator. Must run on the EDT. */
+    /**
+     * Highlights {@code deepest} and shows its locator. Must run on the EDT.
+     * A {@link JViewport} refuses a border ({@code setBorder} throws): it gets the locator text but no highlight.
+     */
     void hover(Component deepest) {
         if (deepest == highlighted) return;
         unhighlight();
-        if (deepest instanceof JComponent) {
+        if (deepest instanceof JComponent && !(deepest instanceof JViewport)) {
             highlighted = (JComponent) deepest;
             highlightedBorder = highlighted.getBorder();
             highlighted.setBorder(BorderFactory.createLineBorder(Color.RED, 2));
