@@ -224,7 +224,7 @@ See `.gitlab-ci.yml`. Linux runners: `xvfb-run -a`. Windows runners: the GitLab 
 logged-in-user process (not a service in Session 0) for screenshots; semantic replay itself works without focus.
 
 For development, `.github/workflows/windows.yml` runs the three Windows builds (default, `-Plocale-tr`, tr_TR with
-JRE 8) on each pull request and each push to `master`. It uses a self-hosted runner on a Windows PC:
+JRE 8) on each pull request and each push to `master`, except when the change has only Markdown files (`*.md`). It uses a self-hosted runner on a Windows PC:
 
 1. On GitHub, open Settings > Actions > Runners > New self-hosted runner. Select Windows and do the steps that GitHub shows.
 2. When `config.cmd` asks to run the runner as a service, answer no. Start the runner with `run.cmd` in your desktop session.

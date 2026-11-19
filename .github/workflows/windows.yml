@@ -11,7 +11,9 @@ name: windows
 on:
   push:
     branches: [master]
+    paths-ignore: ['**.md']   # a change to documentation only does not need the three builds
   pull_request:
+    paths-ignore: ['**.md']
   workflow_dispatch:
 
 concurrency:
