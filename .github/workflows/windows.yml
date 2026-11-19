@@ -1,0 +1,59 @@
+# Windows builds of s.smoker on a self-hosted runner (development aid; the corporate pipeline is .gitlab-ci.yml, WP-07).
+#
+# The runner must run in a logged-in desktop session (start it with run.cmd, not as a service):
+# SelfTestIT and the window tests open real Swing windows. Do not type on the runner PC while a job runs:
+# the demo windows take the focus, and a key press changes a text field.
+#
+# Never use this runner with a public repository: a pull request can run any code on it.
+
+name: windows
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: windows (${{ matrix.build }})
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      max-parallel: 1          # one desktop: the jobs must not open demo windows at the same time
+      matrix:
+        build: [default, locale-tr, locale-tr-jre8]
+    env:
+      # The test JVM of the third build. Set the repository variable JRE8_JAVA if the path is different.
+      JRE8_JAVA: ${{ vars.JRE8_JAVA || 'C:\Program Files\Java\jdk1.8.0_341\bin\java.exe' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: mvn verify (${{ matrix.build }})
+        shell: powershell
+        run: |
+          $mvnArgs = @('-B', 'verify')
+          if ('${{ matrix.build }}' -ne 'default') { $mvnArgs += '-Plocale-tr' }
+          if ('${{ matrix.build }}' -eq 'locale-tr-jre8') {
+            if (-not (Test-Path $env:JRE8_JAVA)) { throw "JRE 8 not found: $env:JRE8_JAVA" }
+            $mvnArgs += "-Djvm=$env:JRE8_JAVA"
+          }
+          Write-Host "mvn $($mvnArgs -join ' ')"
+          mvn @mvnArgs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Keep the test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports-${{ matrix.build }}
+          path: |
+            */target/surefire-reports/
+            smoker-it/target/failsafe-reports/
+            smoker-it/target/it-work/
+          if-no-files-found: ignore
