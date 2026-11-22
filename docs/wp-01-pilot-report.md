@@ -74,7 +74,7 @@ F-22 note (WP-04): on JRE 8, spike.master now gives startup FAIL (28 Equinox ent
 | F-23 | A | Player | The locator `[Settings] JTextField` index 0 found the `JPasswordField` (subclass of `JTextField`) in front of the Model field. s002 typed "MODEL" into the API key field. `approve` accepted this state, so the run gave PASS. | Corrected. `find` and `resolve` use the same class rule (`Locators.classNameOf`). 2 window tests. After the correction: FAIL at s002 with the old golden, `approve`, then PASS 3 times. |
 | F-21 | B | Recorder | The golden snapshot of a step can show the state after the next step. Each `approve` corrects only one step. | Open (WP-02, WP-06). |
 | F-02 | A | Player | Confirmed without a simulator: the answer from `openrouter.ai` arrives after the snapshot. The result changes from run to run. | Open (WP-03). Workaround: ignore rules. |
-| F-22 | B | Agent | Equinox framework errors are not read. 14 unresolved bundles gave startup PASS. After `System.exit` the report shows only the exit code. | Open (WP-04). Implemented in WP-04, Windows check open. |
+| F-22 | B | Agent | Equinox framework errors are not read. 14 unresolved bundles gave startup PASS. After `System.exit` the report shows only the exit code. | Closed (WP-04, PR #11 and PR #13). Windows check passed: `docs/wp-04-windows-report.md`. |
 | F-10 | B | Agent | The agent called `System.exit` 12 times, and the PC lost power one time. The `configuration` folder was not damaged, and each next start operated. Equinox adds one `configuration\<n>.log` file in each run. | Not seen as a problem. |
 
 Findings for p.osgi.ds (not for s.smoker):
