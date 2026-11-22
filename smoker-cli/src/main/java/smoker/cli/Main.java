@@ -5,6 +5,7 @@ import smoker.core.io.ConfigFile;
 import smoker.core.io.Json;
 import smoker.core.io.ScenarioFiles;
 import smoker.core.model.Action;
+import smoker.core.model.LintFile;
 import smoker.core.model.NodeSnapshot;
 import smoker.core.model.RunResult;
 import smoker.core.model.Scenario;
@@ -38,7 +39,7 @@ import java.util.concurrent.TimeUnit;
  * java -jar smoker-cli.jar record  --agent smoker-agent.jar --app "java -jar app.jar" --scenario scenarios/new.json [--log app.log]
  *     [--logPattern p] [--failLevel L] [--logCharset c]
  * java -jar smoker-cli.jar approve --run out/greet --scenario scenarios/greet.json [--steps s001,s002]
- * java -jar smoker-cli.jar lint    --run out/ [--emit-patch names.patch]
+ * java -jar smoker-cli.jar lint    --run out/ [--emit-patch names.patch]   (--run scenarios/ reads the *.lint.json files of record)
  * </pre>
  * {@code --app} is the full command line; the token {@code {agent}} marks where the -javaagent option goes.
  * Without the token it is inserted right after the first argument (the java executable).
@@ -233,6 +234,7 @@ public final class Main {
         cfg.put("mode", "record");
         Path log = scenario.getParent().resolve(stripExt(scenario.getFileName().toString()) + ".record.log");
         Path cfgFile = Files.createTempFile("smoker-agent-", ".cfg");
+        long started = System.currentTimeMillis();
         int exit;
         try {
             ConfigFile.write(cfgFile, cfg);
@@ -241,7 +243,29 @@ public final class Main {
             Files.deleteIfExists(cfgFile);
         }
         System.out.println("application exited with " + exit + "; scenario file: " + scenario);
+        printRecordLint(scenario, started);
         return 0;
+    }
+
+    /**
+     * Prints the lint summary of the record session (WP-09). Prints nothing when the session did not save: the lint
+     * file is then missing or from an earlier session.
+     *
+     * @param since the start of the session; 2 s less is accepted for a file system with a coarse file time
+     */
+    static void printRecordLint(Path scenario, long since) {
+        Path f = ScenarioFiles.lintPath(scenario);
+        try {
+            if (!Files.isRegularFile(f) || Files.getLastModifiedTime(f).toMillis() < since - 2000) return;
+            LintFile l = Json.read(f, LintFile.class);
+            List<smoker.core.model.LintEntry> entries = l == null || l.lint == null
+                    ? new ArrayList<smoker.core.model.LintEntry>() : l.lint;
+            System.out.println("lint file: " + f);
+            System.out.println(Lint.summary(entries));
+            System.out.println("table and patch: lint --run " + f.getParent() + " --emit-patch <file>");
+        } catch (Exception e) {
+            System.err.println("lint: cannot read " + f + ": " + e.getMessage());
+        }
     }
 
     // ---- approve -------------------------------------------------------------------------------
@@ -338,7 +362,7 @@ public final class Main {
             return 2;
         }
         if (loaded.files == 0) {
-            System.err.println("lint: no run-result.json below " + dir);
+            System.err.println("lint: no run-result.json and no *.lint.json below " + dir);
             return 2;
         }
         List<smoker.core.model.LintEntry> entries = loaded.entries;
@@ -412,12 +436,12 @@ public final class Main {
         return out;
     }
 
-    /** The scenario files of one folder: {@code *.json} without golden files, sorted. */
+    /** The scenario files of one folder: {@code *.json} without golden files and lint files, sorted. */
     static List<Path> scenariosIn(Path dir) throws IOException {
         List<Path> out = new ArrayList<Path>();
         DirectoryStream<Path> ds = Files.newDirectoryStream(dir, "*.json");
         try {
-            for (Path f : ds) if (!ScenarioFiles.isGoldenFile(f)) out.add(f);
+            for (Path f : ds) if (ScenarioFiles.isScenarioFile(f)) out.add(f);
         } finally {
             ds.close();
         }
@@ -464,7 +488,7 @@ public final class Main {
                 + "  record  --agent smoker-agent.jar --app \"<cmd>\" --scenario <file> [--log <file>]\n"
                 + "          [--logPattern <p>] [--failLevel <L>] [--logCharset <c>]\n"
                 + "  approve --run <out/scenario-dir> --scenario <file> [--steps s001,s002]\n"
-                + "  lint    --run <out dir> [--emit-patch <file>]\n"
+                + "  lint    --run <out dir or scenario folder> [--emit-patch <file>]\n"
                 + "  <cmd> may contain the token {agent} where -javaagent:... must be placed (default: after the first word).");
         System.exit(code);
     }

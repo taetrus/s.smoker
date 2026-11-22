@@ -1,7 +1,9 @@
 package smoker.cli;
 
 import smoker.core.io.Json;
+import smoker.core.io.ScenarioFiles;
 import smoker.core.model.LintEntry;
+import smoker.core.model.LintFile;
 import smoker.core.model.RunResult;
 
 import java.io.IOException;
@@ -17,18 +19,24 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-/** The lint command (WP-09): reads the lint entries of all runs and writes table, summary and patch. */
+/**
+ * The lint command (WP-09): reads the lint entries of all runs and record sessions, and writes table, summary and
+ * patch. A run writes them into {@code run-result.json}, a record session into {@code <scenario>.lint.json}.
+ */
 final class Lint {
 
     private Lint() {
     }
 
-    /** All entries of all run-result.json files below the directory. One entry per {@link #joinKey}; the first one wins. */
+    /**
+     * All entries of all run-result.json and lint files below the directory. One entry per {@link #joinKey}; the
+     * first one wins, in the sorted order of the file paths.
+     */
     static List<LintEntry> read(Path outDir) throws IOException {
         return load(outDir).entries;
     }
 
-    /** The joined entries and the number of run-result.json files found. */
+    /** The joined entries and the number of run-result.json and lint files found. */
     static final class Loaded {
         final List<LintEntry> entries = new ArrayList<LintEntry>();
         int files;
@@ -40,7 +48,8 @@ final class Lint {
         try {
             files = walk.filter(new java.util.function.Predicate<Path>() {
                 public boolean test(Path p) {
-                    return Files.isRegularFile(p) && "run-result.json".equals(p.getFileName().toString());
+                    return Files.isRegularFile(p)
+                            && ("run-result.json".equals(p.getFileName().toString()) || ScenarioFiles.isLintFile(p));
                 }
             }).sorted().collect(Collectors.<Path>toList());
         } finally {
@@ -51,19 +60,27 @@ final class Lint {
         List<LintEntry> out = loaded.entries;
         loaded.files = files.size();
         for (Path f : files) {
-            RunResult r;
+            List<LintEntry> entries;
             try {
-                r = Json.read(f, RunResult.class);
+                entries = ScenarioFiles.isLintFile(f) ? lintOf(Json.read(f, LintFile.class)) : lintOf(Json.read(f, RunResult.class));
             } catch (Exception e) {
                 System.err.println("lint: cannot read " + f + ": " + e.getMessage());
                 continue;
             }
-            if (r == null || r.lint == null) continue;
-            for (LintEntry e : r.lint) {
+            if (entries == null) continue;
+            for (LintEntry e : entries) {
                 if (seen.add(joinKey(e))) out.add(e);
             }
         }
         return loaded;
+    }
+
+    private static List<LintEntry> lintOf(RunResult r) {
+        return r == null ? null : r.lint;
+    }
+
+    private static List<LintEntry> lintOf(LintFile l) {
+        return l == null ? null : l.lint;
     }
 
     /**

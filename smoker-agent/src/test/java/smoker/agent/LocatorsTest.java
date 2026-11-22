@@ -127,6 +127,8 @@ public class LocatorsTest {
         assertTrue(Locators.isInteractive(new JButton()));
         assertTrue(Locators.isInteractive(new JTextField()));
         assertTrue(Locators.isInteractive(new JTable()));
+        assertTrue(Locators.isInteractive(new javax.swing.JSpinner()));
+        assertTrue(Locators.isInteractive(new javax.swing.JSlider()));
         assertFalse(Locators.isInteractive(new JLabel()));
         assertFalse(Locators.isInteractive(new JPanel()));
     }

@@ -46,6 +46,7 @@ Windows (PowerShell): `mvn -B verify` then run the commands below; no Xvfb neede
 
 ```bash
 # 1. record (floating toolbar appears over the app: Record / Pick / Wait for… / Rename / Delete / Save)
+#    Save also writes scenarios/orders-create.lint.json: the components without a real name (see "Lint")
 java -jar smoker-cli.jar record --agent smoker-agent.jar --app "java -jar myapp.jar" --scenario scenarios/orders-create.json
 
 # 2. run — first run has no goldens → NO_GOLDEN (exit 0 unless --strict)
@@ -447,15 +448,36 @@ The source code does not change.
 java -jar smoker-cli.jar lint --run out/ [--emit-patch names.patch]
 ```
 
-`lint` reads the `run-result.json` files below the `--run` folder. It prints a table with these columns: window,
-class, field, type, text, automatic name, proposed name and source. The proposed name is `<view>.<type>.<field>`.
-Example: field `saveButton` in `OrdersPanel` gives `orders.btn.save`.
+`lint` reads the `run-result.json` files and the `*.lint.json` files below the `--run` folder. It prints a table with
+these columns: window, class, field, type, text, automatic name, proposed name and source. The proposed name is
+`<view>.<type>.<field>`. Example: field `saveButton` in `OrdersPanel` gives `orders.btn.save`.
 The last line is a summary: the number of unnamed interactive components, the number with a proposed name,
-and the number with an automatic name. `lint` exits with 0. It exits with 2 if it finds no `run-result.json` or cannot write the file.
+and the number with an automatic name. `lint` exits with 0. It exits with 2 if it finds no `run-result.json` and no
+`*.lint.json`, or if it cannot write the file.
 `--emit-patch` writes one Java line for each proposed name, for example `saveButton.setName("orders.btn.save");`,
 with the class where the developer must add it.
 One field gives one line, also when the component shows in more than one window.
 In one window, the second equal proposal gets the suffix `2`, the third `3` (`orders.btn.ok2`).
+
+Interactive components are buttons, menu items, text components, combo boxes, lists, tables, trees, tabbed panes,
+spinners and sliders. The text field inside a spinner is part of the spinner: it gives no entry of its own.
+
+#### Lint without a run
+
+The recorder also writes the lint. At each `Save`, it writes `<scenario>.lint.json` beside the scenario. The file
+holds the components of all snapshots of the record session, and of one more snapshot at the save. That snapshot
+is for the lint only: it gives no golden. A record session with no steps thus also gives a lint.
+
+To find the components that need a name, without a scenario:
+
+1. Start `record`.
+2. Open each window, dialog and tab of the application. A click on a tab is a step, and each step takes a snapshot.
+3. Click `Save` while the last window shows. Then close the application.
+4. `record` prints the summary line and the path of the lint file.
+5. Run `lint --run scenarios/ --emit-patch names.patch` for the table and the patch.
+
+The lint only sees the components that showed. A tab that you did not open is not in the lint.
+Each save replaces the lint file: it holds the last record session only.
 
 ### Statuses
 
