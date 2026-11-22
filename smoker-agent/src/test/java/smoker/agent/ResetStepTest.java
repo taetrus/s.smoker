@@ -261,4 +261,126 @@ public class ResetStepTest {
         assertNotNull(r.steps.get(0).threadDump);
         assertTrue(Quiescence.edtResponds(5000));
     }
+
+    private Path scenarioWithTimeouts(String name, long quietMs, long stepTimeoutMs, Action action) throws Exception {
+        Scenario sc = new Scenario();
+        sc.name = name;
+        sc.quietMs = quietMs;
+        sc.stepTimeoutMs = stepTimeoutMs;
+        sc.startupTimeoutMs = 10000;
+        sc.steps.add(new Step("s001", "step", action));
+        Path file = tmp.getRoot().toPath().resolve(name + ".json");
+        Json.write(file, sc);
+        return file;
+    }
+
+    private static Locator field() {
+        Locator l = new Locator();
+        l.name = "reset.field";
+        return l;
+    }
+
+    @Test
+    public void resetScenarioUsesItsOwnTimeouts() throws Exception {
+        // never quiet: its own step ends at its stepTimeoutMs (500 ms), not at the 100 ms quiet of the next scenario
+        Scenario clear = Json.read(scenarioWithTimeouts("clear", 5000, 500, Action.setText(field(), "R")), Scenario.class);
+        cfg.resetScenario = tmp.getRoot().toPath().resolve("clear.json");
+        runSession(scenario("one", "reset.field", "a"), scenario("two", "reset.field", "b"));
+        RunResult.StepResult reset = result("two").steps.get(0);
+        assertEquals(RunResult.Status.PASS, reset.status);
+        assertTrue("took " + reset.durationMs, reset.durationMs >= 450);
+        assertTrue("took " + reset.durationMs, reset.durationMs < 5000);
+        assertEquals(500, clear.stepTimeoutMs);
+    }
+
+    @Test
+    public void waitForTimeoutInTheResetScenarioNamesTheCondition() throws Exception {
+        cfg.resetScenario = scenarioWithTimeouts("clear", 100, 3000,
+                Action.waitFor(field(), "text", "never", 300L));
+        runSession(scenario("one", "reset.field", "a"), scenario("two", "reset.field", "b"));
+        RunResult.StepResult reset = result("two").steps.get(0);
+        assertEquals(RunResult.Status.FAIL, reset.status);
+        assertTrue(reset.error, reset.error.startsWith("reset scenario: step s001: "));
+        assertFalse(reset.error, reset.error.endsWith("log hit"));
+        assertEquals(1, reset.differences.size());
+        assertTrue(reset.error, reset.error.endsWith(reset.differences.get(0)));
+    }
+
+    private Player resetPlayer(EdtWatchdog dog, long quietMs, long stepTimeoutMs, Path outDir) throws Exception {
+        Scenario sc = new Scenario();
+        sc.name = "next";
+        sc.quietMs = quietMs;
+        sc.stepTimeoutMs = stepTimeoutMs;
+        Path file = tmp.getRoot().toPath().resolve("next.json");
+        Json.write(file, sc);
+        return new Player(cfg, file, sc, new java.util.HashMap<String, smoker.core.model.Snapshot>(), obs, dog,
+                outDir, true);
+    }
+
+    private static void blockEdt(final long ms) {
+        SwingUtilities.invokeLater(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    Thread.sleep(ms);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        });
+    }
+
+    @Test
+    public void staleWatchdogFlagGivesNoHangAtTheReset() throws Exception {
+        EdtWatchdog dog = new EdtWatchdog(200);
+        dog.start();
+        try {
+            blockEdt(1500);
+            long deadline = System.currentTimeMillis() + 10000;
+            while (!dog.hangDetected() && System.currentTimeMillis() < deadline) Thread.sleep(20);
+            assertTrue("the watchdog did not fire", dog.hangDetected());
+            assertTrue(Quiescence.edtResponds(10000));
+            // the UI is never quiet: Quiescence.await gives false, and the old flag must not count
+            Player p = resetPlayer(dog, 100000, 400, tmp.newFolder("stale").toPath());
+            p.begin(Player.First.RESET);
+            assertEquals(RunResult.Status.PASS, p.play(Player.First.RESET, Long.MIN_VALUE));
+        } finally {
+            dog.shutdown();
+        }
+    }
+
+    @Test
+    public void edtBlockedDuringTheResetCommandGivesHang() throws Exception {
+        cfg.resetCommands.add(command("sleep", 1500));
+        cfg.resetTimeoutS.add(60L);
+        EdtWatchdog dog = new EdtWatchdog(300);
+        dog.start();
+        try {
+            final Path outDir = tmp.newFolder("blocked").toPath();
+            final Player p = resetPlayer(dog, 100, 1000, outDir);
+            p.begin(Player.First.RESET);
+            final RunResult.Status[] status = new RunResult.Status[1];
+            Thread t = new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    status[0] = p.play(Player.First.RESET, Long.MIN_VALUE);
+                }
+            });
+            t.start();
+            long deadline = System.currentTimeMillis() + 20000;
+            while (status[0] == null && !Files.exists(outDir.resolve("reset-command.log")) && System.currentTimeMillis() < deadline) {
+                Thread.sleep(10);
+            }
+            blockEdt(4000); // the command runs 1.5 s: the dialogs are closed, the next wait meets the block
+            t.join(30000);
+            RunResult r0 = Json.read(outDir.resolve("run-result.json"), RunResult.class);
+            assertEquals(r0.error, RunResult.Status.HANG, status[0]);
+            RunResult r = Json.read(outDir.resolve("run-result.json"), RunResult.class);
+            assertEquals("reset", r.steps.get(0).stepId);
+            assertNotNull(r.steps.get(0).threadDump);
+        } finally {
+            dog.shutdown();
+            assertTrue(Quiescence.edtResponds(15000));
+        }
+    }
 }

@@ -104,7 +104,7 @@ final class Player {
         try {
             boolean go = first == First.STARTUP ? startup() : reset();
             for (int i = 0; go && i < scenario.steps.size(); i++) {
-                RunResult.StepResult sr = runStep(scenario.steps.get(i), !skipsSnapshot(scenario, i), scenario.steps.get(i).id);
+                RunResult.StepResult sr = runStep(scenario.steps.get(i), !skipsSnapshot(scenario, i), scenario.steps.get(i).id, scenario);
                 addStep(sr);
                 // Continue after FAIL, so that one approve covers all steps (F-21).
                 // After HANG or ERROR the state of the UI is not known: stop (R-35).
@@ -318,6 +318,7 @@ final class Player {
         RunResult.StepResult sr = new RunResult.StepResult();
         sr.stepId = "reset";
         sr.stepName = "reset between scenarios";
+        watchdog.reset(); // a flag from a step before must not give a false HANG here
         String dialog = DialogCloser.closeAll(10, scenario.stepTimeoutMs);
         if (DialogCloser.EDT_SILENT.equals(dialog)) return resetEnds(hang(sr, t0, "reset: the EDT does not answer"));
         if (dialog != null) return resetEnds(resetError(sr, t0, "reset: a dialog stays open: " + dialog));
@@ -330,10 +331,13 @@ final class Player {
             AutoNames.enable(resetScenario.autoNames);
             try {
                 for (Step step : resetScenario.steps) {
-                    RunResult.StepResult inner = runStep(step, false, "reset");
+                    RunResult.StepResult inner = runStep(step, false, "reset", resetScenario);
                     if (inner.status == RunResult.Status.PASS) continue;
                     sr.status = inner.status;
-                    sr.error = "reset scenario: step " + step.id + ": " + (inner.error != null ? inner.error : "log hit");
+                    String why = inner.error != null ? inner.error
+                            : !inner.differences.isEmpty() ? inner.differences.get(0) : "log hit";
+                    sr.error = "reset scenario: step " + step.id + ": " + why;
+                    sr.differences.addAll(inner.differences);
                     sr.logHits.addAll(inner.logHits);
                     sr.threadDump = inner.threadDump;
                     sr.durationMs = System.currentTimeMillis() - t0;
@@ -463,8 +467,12 @@ final class Player {
         }
     }
 
-    /** @param progressId the id that {@code currentStep} shows during the step */
-    private RunResult.StepResult runStep(final Step step, boolean takeSnapshot, String progressId) {
+    /**
+     * @param progressId the id that {@code currentStep} shows during the step
+     * @param owner the scenario that holds the step: its {@code stepTimeoutMs} and {@code quietMs} apply
+     */
+    private RunResult.StepResult runStep(final Step step, boolean takeSnapshot, String progressId,
+            Scenario owner) {
         RunResult.StepResult sr = new RunResult.StepResult();
         sr.stepId = step.id;
         sr.stepName = step.name;
@@ -505,8 +513,8 @@ final class Player {
             });
             // A ping posted after the action is serviced when the action has finished OR when it opened a
             // modal dialog (nested event loop). Both mean "the UI is alive again"; only silence means a hang.
-            if (!Quiescence.edtResponds(scenario.stepTimeoutMs)) {
-                return hang(sr, t0, "action did not complete within " + scenario.stepTimeoutMs + " ms");
+            if (!Quiescence.edtResponds(owner.stepTimeoutMs)) {
+                return hang(sr, t0, "action did not complete within " + owner.stepTimeoutMs + " ms");
             }
             done.await(50, TimeUnit.MILLISECONDS);
             if (failure[0] != null) {
@@ -517,7 +525,7 @@ final class Player {
             }
 
             // 2. settle
-            boolean quiet = Quiescence.await(scenario.quietMs, scenario.stepTimeoutMs);
+            boolean quiet = Quiescence.await(owner.quietMs, owner.stepTimeoutMs);
             if (!quiet && watchdog.hangDetected()) return hang(sr, t0, "EDT blocked after action");
 
             if (!takeSnapshot) {
@@ -542,7 +550,7 @@ final class Player {
             sr.status = afterCompare(sr.status, expected != null, !sr.differences.isEmpty());
             finish(sr, t0);
             if (!sr.logHits.isEmpty() && sr.status != RunResult.Status.ERROR) sr.status = RunResult.Status.FAIL;
-            if (!quiet && sr.status == RunResult.Status.PASS) sr.differences.add("WARN UI did not become quiet within " + scenario.stepTimeoutMs + " ms");
+            if (!quiet && sr.status == RunResult.Status.PASS) sr.differences.add("WARN UI did not become quiet within " + owner.stepTimeoutMs + " ms");
         } catch (Throwable t) {
             sr.status = RunResult.Status.ERROR;
             sr.error = String.valueOf(t);
