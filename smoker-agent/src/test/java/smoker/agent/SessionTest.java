@@ -215,4 +215,34 @@ public class SessionTest {
         t.join(30000);
         assertEquals(0, seen.get());
     }
+
+    @Test
+    public void writeErrorGivesAnErrorResultInTheFolderOfTheScenario() throws Exception {
+        Path file = scenario("bad", "a");
+        Path outDir = cfg.out.resolve("bad");
+        Session.writeError(file, "bad", outDir, true, new IllegalStateException("boom"));
+        RunResult r = result("bad");
+        assertEquals(RunResult.Status.ERROR, r.status);
+        assertTrue(r.error, r.error.contains("boom"));
+        assertEquals("bad", r.scenarioName);
+        assertTrue(r.sharedJvm);
+    }
+
+    @Test
+    public void fatalErrorPrintsTheStackTraceAndStopsTheList() throws Exception {
+        Path blocker = tmp.newFile("blocker").toPath(); // the out folder is a file: no folder can be made
+        cfg.out = blocker;
+        java.io.PrintStream err = System.err;
+        java.io.ByteArrayOutputStream captured = new java.io.ByteArrayOutputStream();
+        System.setErr(new java.io.PrintStream(captured, true));
+        try {
+            runSession(scenario("one", "a"), scenario("two", "b"));
+        } finally {
+            System.setErr(err);
+        }
+        String text = captured.toString();
+        assertTrue(text, text.contains("[smoker] fatal:"));
+        assertTrue(text, text.contains("\tat smoker.agent.Session.run"));
+        assertFalse(text, text.contains("scenario 'two'"));
+    }
 }

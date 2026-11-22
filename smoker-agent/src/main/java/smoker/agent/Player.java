@@ -8,6 +8,7 @@ import smoker.core.model.RunResult;
 import smoker.core.model.Scenario;
 import smoker.core.model.Snapshot;
 import smoker.core.model.Step;
+import smoker.core.proc.Processes;
 
 import javax.swing.SwingUtilities;
 import java.awt.Frame;
@@ -45,6 +46,7 @@ final class Player {
     private final RunResult result = new RunResult();
     /** End of the last step window: each step takes the hits in (lastEnd, now] (WP-04, F-08). The hook reads it. */
     private volatile long lastEnd = Long.MIN_VALUE;
+    private Scenario resetScenario;
     /** Guards {@link #result} and the file, {@link #finished} and {@link #exiting}: the player and the hook (F-22). */
     final ReentrantLock resultLock = new ReentrantLock();
     /** The player wrote its final result. Guarded by {@link #resultLock}. */
@@ -102,7 +104,7 @@ final class Player {
         try {
             boolean go = first == First.STARTUP ? startup() : reset();
             for (int i = 0; go && i < scenario.steps.size(); i++) {
-                RunResult.StepResult sr = runStep(scenario.steps.get(i), !skipsSnapshot(scenario, i));
+                RunResult.StepResult sr = runStep(scenario.steps.get(i), !skipsSnapshot(scenario, i), scenario.steps.get(i).id);
                 addStep(sr);
                 // Continue after FAIL, so that one approve covers all steps (F-21).
                 // After HANG or ERROR the state of the UI is not known: stop (R-35).
@@ -301,20 +303,85 @@ final class Player {
         return true;
     }
 
+    /** The scenario that the reset step replays between two scenarios (WP-05, F-04); null for none. */
+    void setResetScenario(Scenario resetScenario) {
+        this.resetScenario = resetScenario;
+    }
+
     /**
-     * The first step of a scenario after an earlier one (WP-05, F-03): waits for a quiet EDT and takes the log
-     * hits since the end of the player before. A hit gives FAIL and the steps do not run.
+     * The first step of a scenario after an earlier one (WP-05, F-04, R-37): closes the dialogs, runs the reset
+     * commands, replays the reset scenario, waits for a quiet EDT and takes the log hits since the end of the
+     * player before. Any problem gives the step a status that is not PASS, and the steps do not run.
      */
-    private boolean reset() {
+    private boolean reset() throws Exception {
         long t0 = System.currentTimeMillis();
         RunResult.StepResult sr = new RunResult.StepResult();
         sr.stepId = "reset";
         sr.stepName = "reset between scenarios";
-        Quiescence.await(scenario.quietMs, scenario.stepTimeoutMs);
+        String dialog = DialogCloser.closeAll(10, scenario.stepTimeoutMs);
+        if (DialogCloser.EDT_SILENT.equals(dialog)) return resetEnds(hang(sr, t0, "reset: the EDT does not answer"));
+        if (dialog != null) return resetEnds(resetError(sr, t0, "reset: a dialog stays open: " + dialog));
+        for (int k = 0; k < cfg.resetCommands.size(); k++) {
+            String error = runResetCommand(k);
+            if (error != null) return resetEnds(resetError(sr, t0, error));
+        }
+        if (resetScenario != null) {
+            Locators.useWindowKeys(new WindowKeys(resetScenario.windowKeys));
+            AutoNames.enable(resetScenario.autoNames);
+            try {
+                for (Step step : resetScenario.steps) {
+                    RunResult.StepResult inner = runStep(step, false, "reset");
+                    if (inner.status == RunResult.Status.PASS) continue;
+                    sr.status = inner.status;
+                    sr.error = "reset scenario: step " + step.id + ": " + (inner.error != null ? inner.error : "log hit");
+                    sr.logHits.addAll(inner.logHits);
+                    sr.threadDump = inner.threadDump;
+                    sr.durationMs = System.currentTimeMillis() - t0;
+                    return resetEnds(sr);
+                }
+            } finally {
+                Locators.useWindowKeys(new WindowKeys(scenario.windowKeys));
+                AutoNames.enable(scenario.autoNames);
+            }
+        }
+        boolean quiet = Quiescence.await(scenario.quietMs, scenario.stepTimeoutMs);
+        if (!quiet && watchdog.hangDetected()) return resetEnds(hang(sr, t0, "reset: EDT blocked"));
         finish(sr, t0);
         if (!sr.logHits.isEmpty()) sr.status = RunResult.Status.FAIL;
+        return resetEnds(sr);
+    }
+
+    private boolean resetEnds(RunResult.StepResult sr) {
         addStep(sr);
         return sr.status == RunResult.Status.PASS;
+    }
+
+    private RunResult.StepResult resetError(RunResult.StepResult sr, long t0, String error) {
+        sr.status = RunResult.Status.ERROR;
+        sr.error = error;
+        finish(sr, t0);
+        return sr;
+    }
+
+    /** @return the error text of reset command k (0 based), or null when the command ended with exit code 0 */
+    private String runResetCommand(int k) {
+        int n = k + 1;
+        try {
+            Process p = Processes.start(Processes.split(cfg.resetCommands.get(k)), null,
+                    outDir.resolve("reset-command.log"));
+            if (p.waitFor(cfg.resetTimeoutS.get(k) * 1000, TimeUnit.MILLISECONDS)) {
+                return p.exitValue() == 0 ? null : "reset command " + n + " failed: exit code " + p.exitValue();
+            }
+            boolean tree = Processes.stopTree(p);
+            p.waitFor(10, TimeUnit.SECONDS);
+            return "reset command " + n + " timed out"
+                    + (tree ? "" : "; child processes can remain");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return "reset command " + n + " failed: interrupted";
+        } catch (java.io.IOException e) {
+            return "reset command " + n + " failed: " + e;
+        }
     }
 
     private boolean mainWindowShowing() {
@@ -396,11 +463,12 @@ final class Player {
         }
     }
 
-    private RunResult.StepResult runStep(final Step step, boolean takeSnapshot) {
+    /** @param progressId the id that {@code currentStep} shows during the step */
+    private RunResult.StepResult runStep(final Step step, boolean takeSnapshot, String progressId) {
         RunResult.StepResult sr = new RunResult.StepResult();
         sr.stepId = step.id;
         sr.stepName = step.name;
-        writeProgress(step.id); // a System.exit or a crash in the action leaves a file that names the step
+        writeProgress(progressId); // a System.exit or a crash in the action leaves a file that names the step
         long t0 = System.currentTimeMillis();
         watchdog.reset();
         SmokerAgent.log("step " + step.id + " " + step.action);

@@ -56,8 +56,21 @@ final class Session implements Runnable {
         boolean bad = false;
         RunResult.Status last = null;
         long lastEnd = Long.MIN_VALUE;
+        Scenario resetScenario = null;
         try {
-            for (int i = 0; i < cfg.scenarios.size(); i++) {
+            if (cfg.resetScenario != null && !cfg.scenarios.isEmpty()) {
+                try {
+                    resetScenario = ScenarioFiles.readScenario(cfg.resetScenario); // its golden is not read
+                } catch (Exception e) {
+                    Path first = cfg.scenarios.get(0);
+                    String firstName = SmokerAgent.stripExt(first.getFileName().toString());
+                    writeError(first, firstName, cfg.out.resolve(firstName), false,
+                            new IllegalArgumentException("reset scenario " + cfg.resetScenario + ": " + e, e));
+                    bad = true;
+                    last = RunResult.Status.ERROR;
+                }
+            }
+            for (int i = 0; !bad && i < cfg.scenarios.size(); i++) {
                 if (i > 0 && !cliAlive(cfg.aliveFile, System.currentTimeMillis())) {
                     SmokerAgent.log("the CLI stopped; stopping the application");
                     break;
@@ -72,7 +85,7 @@ final class Session implements Runnable {
                         sc = ScenarioFiles.readScenario(file);
                         golden = ScenarioFiles.readGolden(file);
                     } catch (Exception e) {
-                        writeReadError(file, name, outDir, i > 0, e);
+                        writeError(file, name, outDir, i > 0, e);
                         bad = true;
                         last = RunResult.Status.ERROR;
                         break;
@@ -83,12 +96,15 @@ final class Session implements Runnable {
                     Files.createDirectories(outDir);
                     Player player = new Player(cfg, file, sc, golden, obs, watchdog, outDir, i > 0);
                     Player.First first = i == 0 ? Player.First.STARTUP : Player.First.RESET;
+                    player.setResetScenario(resetScenario);
                     player.begin(first);
                     current = player;
                     last = player.play(first, lastEnd);
                     lastEnd = player.lastEnd();
                 } catch (Throwable t) {
                     System.err.println("[smoker] fatal: " + t);
+                    t.printStackTrace();
+                    writeError(file, name, outDir, i > 0, t);
                     bad = true;
                     last = RunResult.Status.ERROR;
                     break;
@@ -105,8 +121,8 @@ final class Session implements Runnable {
         }
     }
 
-    /** A scenario file that cannot be read gives a result with status ERROR in its folder. */
-    private static void writeReadError(Path file, String name, Path outDir, boolean shared, Exception e) {
+    /** A scenario that cannot be read or run gives a result with status ERROR in its folder. */
+    static void writeError(Path file, String name, Path outDir, boolean shared, Throwable e) {
         RunResult r = new RunResult();
         r.scenarioName = name;
         r.scenarioFile = file.toString();

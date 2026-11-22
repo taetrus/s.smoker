@@ -10,6 +10,7 @@ import smoker.core.model.RunResult;
 import smoker.core.model.Scenario;
 import smoker.core.model.Snapshot;
 import smoker.core.model.Step;
+import smoker.core.proc.Processes;
 import smoker.core.report.HtmlReportWriter;
 import smoker.core.report.JUnitXmlWriter;
 
@@ -335,7 +336,7 @@ public final class Main {
     static int launch(String appCmd, Path agentJar, Path configFile, Path workDir, Path outputLog, long budgetMs)
             throws IOException, InterruptedException {
         String javaagent = "-javaagent:" + agentJar + "=config=" + configFile.toAbsolutePath();
-        List<String> cmd = new ArrayList<String>(splitCommand(appCmd));
+        List<String> cmd = new ArrayList<String>(Processes.split(appCmd));
         int at = cmd.indexOf("{agent}");
         if (at >= 0) cmd.set(at, javaagent);
         else cmd.add(1, javaagent);
@@ -352,20 +353,6 @@ public final class Main {
             return -999;
         }
         return p.exitValue();
-    }
-
-    /** Minimal shell-like splitting: whitespace separated, double quotes group. */
-    static List<String> splitCommand(String s) {
-        List<String> out = new ArrayList<String>();
-        StringBuilder cur = new StringBuilder();
-        boolean q = false;
-        for (char c : s.toCharArray()) {
-            if (c == '"') q = !q;
-            else if (Character.isWhitespace(c) && !q) { if (cur.length() > 0) { out.add(cur.toString()); cur.setLength(0); } }
-            else cur.append(c);
-        }
-        if (cur.length() > 0) out.add(cur.toString());
-        return out;
     }
 
     static List<Path> scenarios(String spec) throws IOException {
