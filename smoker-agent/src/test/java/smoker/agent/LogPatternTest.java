@@ -123,4 +123,40 @@ public class LogPatternTest {
             Locale.setDefault(old);
         }
     }
+
+    @Test
+    public void quotedLiteralInDateFormatKeepsItsQuotes() {
+        LogPattern.Match m = parse("%d{'T'HH:mm:ss.SSS} %msg%n", "T10:00:00.000 hi", local(2026, 11, 14, 10, 0, 1, 0));
+        assertEquals("hi", m.msg);
+        assertEquals(local(2026, 11, 14, 10, 0, 0, 0), m.time);
+    }
+
+    @Test
+    public void dateTimeZoneIsRefused() {
+        for (String p : new String[] {"%d{HH:mm:ss.SSS, UTC} %msg%n", "%d{HH:mm:ss.SSS}{UTC} %msg%n"}) {
+            try {
+                LogPattern.compile(p);
+                fail(p);
+            } catch (IllegalArgumentException e) {
+                assertEquals("smoker: logPattern: %d with a time zone or locale is not supported", e.getMessage());
+            }
+        }
+    }
+
+    @Test
+    public void ofJulMapsLevels() {
+        assertEquals(LogLevel.ERROR, LogLevel.ofJul(java.util.logging.Level.SEVERE));
+        assertEquals(LogLevel.WARN, LogLevel.ofJul(java.util.logging.Level.WARNING));
+        assertEquals(LogLevel.INFO, LogLevel.ofJul(java.util.logging.Level.INFO));
+        assertEquals(LogLevel.DEBUG, LogLevel.ofJul(java.util.logging.Level.FINE));
+    }
+
+    @Test
+    public void ofEquinoxSeverityMapsValues() {
+        assertEquals(LogLevel.INFO, LogLevel.ofEquinoxSeverity(1));
+        assertEquals(LogLevel.WARN, LogLevel.ofEquinoxSeverity(2));
+        assertEquals(LogLevel.ERROR, LogLevel.ofEquinoxSeverity(4));
+        assertEquals(LogLevel.ERROR, LogLevel.ofEquinoxSeverity(8));
+        assertNull(LogLevel.ofEquinoxSeverity(0));
+    }
 }

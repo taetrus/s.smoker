@@ -185,11 +185,16 @@ final class LogPattern {
             }
             String word = pattern.substring(start, pos);
             String option = null;
+            int options = 0;
             while (pos < pattern.length() && pattern.charAt(pos) == '{') {
                 String text = readOption();
-                if (option == null) {
+                if (options++ == 0) {
                     option = text;
                 }
+            }
+            if ((word.equals("d") || word.equals("date"))
+                    && (options > 1 || option != null && option.matches("(?s).*,\\s.*"))) {
+                throw new IllegalArgumentException("smoker: logPattern: %d with a time zone or locale is not supported");
             }
             if (word.equals("n")) {
                 regex.append("$");
@@ -257,8 +262,10 @@ final class LogPattern {
                     quote = c;
                 } else if (c == '}') {
                     String text = pattern.substring(start, pos++);
+                    // Strip the quotes only when the whole option is one quoted string.
                     if (text.length() >= 2 && (text.charAt(0) == '"' || text.charAt(0) == '\'')
-                            && text.charAt(text.length() - 1) == text.charAt(0)) {
+                            && text.charAt(text.length() - 1) == text.charAt(0)
+                            && text.indexOf(text.charAt(0), 1) == text.length() - 1) {
                         text = text.substring(1, text.length() - 1);
                     }
                     return text;
