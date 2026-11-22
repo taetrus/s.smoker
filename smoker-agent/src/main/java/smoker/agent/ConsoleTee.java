@@ -4,8 +4,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.io.UnsupportedEncodingException;
 import java.nio.charset.Charset;
-import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Supplier;
 
@@ -34,7 +34,9 @@ final class ConsoleTee extends PrintStream {
     private final Charset cs;
     private final Supplier<EventJoiner> joiners;
     /** Guarded by the lock of this stream, as all fields below. */
-    private final Map<Thread, Line> lines = new HashMap<Thread, Line>();
+    private final Map<Thread, Line> lines = new LinkedHashMap<Thread, Line>(); // first-write order
+    /** From this size on, a new thread first removes the state of the threads that ended. */
+    private static final int SWEEP_AT = 16;
     /** Number of the current write call, over all threads. */
     private long write;
 
@@ -87,7 +89,11 @@ final class ConsoleTee extends PrintStream {
             for (Iterator<Map.Entry<Thread, Line>> it = lines.entrySet().iterator(); it.hasNext(); ) {
                 Map.Entry<Thread, Line> e = it.next();
                 Line line = e.getValue();
-                if (line.bytes.size() > 0 && !e.getKey().isAlive()) emit(line);
+                if (!e.getKey().isAlive()) {
+                    release(line);
+                    it.remove();
+                    continue;
+                }
                 line.joiner.close();
                 if (line.bytes.size() == 0) it.remove();
             }
@@ -106,10 +112,27 @@ final class ConsoleTee extends PrintStream {
         Thread t = Thread.currentThread();
         Line line = lines.get(t);
         if (line == null) {
+            if (lines.size() >= SWEEP_AT) sweep(); // no drain in record mode: keep the map bounded
             line = new Line(joiners.get());
             lines.put(t, line);
         }
         return line;
+    }
+
+    /** Caller holds the lock of this stream. Removes the state of each thread that ended. */
+    private void sweep() {
+        for (Iterator<Map.Entry<Thread, Line>> it = lines.entrySet().iterator(); it.hasNext(); ) {
+            Map.Entry<Thread, Line> e = it.next();
+            if (e.getKey().isAlive()) continue;
+            release(e.getValue());
+            it.remove();
+        }
+    }
+
+    /** Caller holds the lock of this stream. The thread of {@code line} ended: its partial line and event close. */
+    private void release(Line line) {
+        if (line.bytes.size() > 0) emit(line);
+        line.joiner.close();
     }
 
     /** Caller holds the lock of this stream. Never throws into the print call of the application. */

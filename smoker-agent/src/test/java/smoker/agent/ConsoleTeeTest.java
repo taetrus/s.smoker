@@ -113,6 +113,27 @@ public class ConsoleTeeTest {
     }
 
     @Test(timeout = 10000)
+    public void endedThreadsDoNotGrowTheStateWithoutADrain() throws Exception {
+        Observations obs = new Observations(new AgentConfig());
+        final ConsoleTee tee = obs.tee(new PrintStream(new ByteArrayOutputStream(), true, "UTF-8"),
+                StandardCharsets.UTF_8, "stdout");
+        for (int i = 0; i < 50; i++) {
+            final int n = i;
+            Thread t = new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    tee.println("ERROR from thread " + n);
+                }
+            });
+            t.start();
+            t.join();
+        }
+        write(a, tee, "INFO a new thread\n");
+        assertTrue("threads: " + tee.threads(), tee.threads() <= 17);
+        assertEquals(50, obs.takeHits(Long.MIN_VALUE, Long.MAX_VALUE).size());
+    }
+
+    @Test(timeout = 10000)
     public void drainGivesThePartialLineOfAThreadThatEnded() throws Exception {
         Observations obs = new Observations(new AgentConfig());
         final ConsoleTee tee = obs.tee(new PrintStream(new ByteArrayOutputStream(), true, "UTF-8"),
