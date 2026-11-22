@@ -68,13 +68,17 @@ public class AppStopperTest {
     }
 
     private void showFrame(final Recorder rec) throws Exception {
+        showFrame(rec, JFrame.DO_NOTHING_ON_CLOSE);
+    }
+
+    private void showFrame(final Recorder rec, final int closeOperation) throws Exception {
         Assume.assumeFalse(GraphicsEnvironment.isHeadless());
         SwingUtilities.invokeAndWait(new Runnable() {
             @Override
             public void run() {
                 frame = new JFrame("stopper test");
                 frame.setName("stopper.frame");
-                frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+                frame.setDefaultCloseOperation(closeOperation);
                 frame.addWindowListener(new WindowAdapter() {
                     @Override
                     public void windowClosing(WindowEvent e) {
@@ -94,6 +98,28 @@ public class AppStopperTest {
         new AppStopper(200, rec).stop(0, false);
         assertEquals("closing", rec.calls.get(0));
         assertEquals("exit(0)", rec.calls.get(1));
+    }
+
+    @Test
+    public void stopGoesOnWhenTheFramesAreGone() throws Exception {
+        Recorder rec = new Recorder(null);
+        showFrame(rec, JFrame.DISPOSE_ON_CLOSE);
+        long t0 = System.currentTimeMillis();
+        new AppStopper(5000, rec).stop(0, false);
+        long ms = System.currentTimeMillis() - t0;
+        assertEquals("closing", rec.calls.get(0));
+        assertTrue(String.valueOf(rec.calls), rec.calls.contains("exit(0)"));
+        assertTrue("the stop took " + ms + " ms", ms < 2500);
+    }
+
+    @Test
+    public void stopWaitsWhileAFrameStillShows() throws Exception {
+        Recorder rec = new Recorder(null);
+        showFrame(rec);
+        long t0 = System.currentTimeMillis();
+        new AppStopper(600, rec).stop(0, false);
+        long ms = System.currentTimeMillis() - t0;
+        assertTrue("the stop took " + ms + " ms", ms >= 600);
     }
 
     @Test
