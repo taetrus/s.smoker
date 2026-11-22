@@ -41,7 +41,7 @@ final class Player implements Runnable {
     /** End of the last step window: each step takes the hits in (lastEnd, now] (WP-04, F-08). The hook reads it. */
     private volatile long lastEnd = Long.MIN_VALUE;
     /** Guards {@link #result} and the file, {@link #finished} and {@link #exiting}: the player and the hook (F-22). */
-    private final ReentrantLock resultLock = new ReentrantLock();
+    final ReentrantLock resultLock = new ReentrantLock();
     /** The player wrote its final result. Guarded by {@link #resultLock}. */
     private boolean finished;
     /** The shutdown hook took the result. Guarded by {@link #resultLock}. */
@@ -65,6 +65,7 @@ final class Player implements Runnable {
         result.startedAt = System.currentTimeMillis();
         result.javaVersion = System.getProperty("java.version");
         result.os = System.getProperty("os.name") + " " + System.getProperty("os.version");
+        writeProgress("startup"); // before the hook: the hook always has a currentStep
         Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
             @Override
             public void run() {
@@ -73,7 +74,6 @@ final class Player implements Runnable {
         }, "smoker-exit"));
         Throwable failure = null;
         try {
-            writeProgress("startup");
             startup();
             for (int i = 0; i < scenario.steps.size(); i++) {
                 RunResult.StepResult sr = runStep(scenario.steps.get(i), !skipsSnapshot(scenario, i));
@@ -259,13 +259,14 @@ final class Player implements Runnable {
             sr.error = "no frame became visible within " + scenario.startupTimeoutMs + " ms";
         }
         Quiescence.await(scenario.quietMs, scenario.stepTimeoutMs);
+        // before the hits, as in runStep: no gap between takeHits and addStep where an exit loses the hits
+        if (cfg.screenshots) sr.screenshot = shots.capture(cfg.out, "startup");
         obs.drain(); // a plain file line gets the time of reading: read before the end of the window
         long now = System.currentTimeMillis();
         sr.durationMs = now - t0;
         sr.logHits.addAll(obs.takeHits(Long.MIN_VALUE, now)); // the startup window starts at the agent start
         lastEnd = now;
         if (sr.status == RunResult.Status.PASS && !sr.logHits.isEmpty()) sr.status = RunResult.Status.FAIL;
-        if (cfg.screenshots) sr.screenshot = shots.capture(cfg.out, "startup");
         addStep(sr);
         if (sr.status != RunResult.Status.PASS) {
             throw new IllegalStateException("startup failed: " + (sr.error != null ? sr.error : "log hits during startup"));

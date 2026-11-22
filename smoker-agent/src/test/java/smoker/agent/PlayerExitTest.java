@@ -9,10 +9,15 @@ import smoker.core.model.RunResult;
 import smoker.core.model.Scenario;
 import smoker.core.model.Snapshot;
 
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -129,5 +134,80 @@ public class PlayerExitTest {
         assertEquals("the application exited during step s001", r.error);
         assertEquals("s001", r.currentStep);
         assertEquals(1, r.steps.size());
+    }
+    @Test(timeout = 30000)
+    public void onExitDoesNotWaitForABlockedConsole() throws Exception {
+        final ConsoleTee tee = obs.tee(new PrintStream(new ByteArrayOutputStream()), StandardCharsets.UTF_8, "stdout");
+        player.writeProgress("s001");
+        obs.accept(new LogEvent("file:app.log", LogEvent.Kind.LOGBACK, System.currentTimeMillis(), 1, LogLevel.ERROR,
+                Arrays.asList("12:00:00.000 [main] ERROR demo - crashing on purpose")));
+        final CountDownLatch held = new CountDownLatch(1);
+        final CountDownLatch release = new CountDownLatch(1);
+        Thread app = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                synchronized (tee) { // as an application thread inside a print: the drain blocks
+                    held.countDown();
+                    awaitQuietly(release);
+                }
+            }
+        });
+        app.setDaemon(true);
+        app.start();
+        try {
+            assertTrue(held.await(10, TimeUnit.SECONDS));
+            long t0 = System.nanoTime();
+            player.onExit();
+            long ms = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - t0);
+            assertTrue("onExit took " + ms + " ms", ms < 3000);
+        } finally {
+            release.countDown();
+        }
+        RunResult r = read();
+        assertEquals(RunResult.Status.ERROR, r.status);
+        assertEquals("the application exited during step s001", r.error);
+        assertEquals(1, r.steps.size());
+        assertEquals("s001", r.steps.get(0).stepId);
+        assertTrue(r.steps.get(0).logHits.isEmpty());
+    }
+
+    @Test(timeout = 30000)
+    public void onExitGivesUpWhenThePlayerHoldsTheLock() throws Exception {
+        player.writeProgress("s001");
+        byte[] before = Files.readAllBytes(file);
+        final CountDownLatch held = new CountDownLatch(1);
+        final CountDownLatch release = new CountDownLatch(1);
+        Thread holder = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                player.resultLock.lock();
+                try {
+                    held.countDown();
+                    awaitQuietly(release);
+                } finally {
+                    player.resultLock.unlock();
+                }
+            }
+        });
+        holder.setDaemon(true);
+        holder.start();
+        try {
+            assertTrue(held.await(10, TimeUnit.SECONDS));
+            long t0 = System.nanoTime();
+            player.onExit();
+            long ms = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - t0);
+            assertTrue("onExit took " + ms + " ms", ms < 3000);
+        } finally {
+            release.countDown();
+        }
+        assertArrayEquals(before, Files.readAllBytes(file));
+    }
+
+    private static void awaitQuietly(CountDownLatch latch) {
+        try {
+            latch.await(30, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 }

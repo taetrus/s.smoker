@@ -8,8 +8,8 @@ import smoker.core.model.Action;
 import smoker.core.model.Golden;
 import smoker.core.model.IgnoreRules;
 import smoker.core.model.Locator;
-import smoker.core.model.RunResult;
 import smoker.core.model.NodeSnapshot;
+import smoker.core.model.RunResult;
 import smoker.core.model.Scenario;
 import smoker.core.model.Snapshot;
 import smoker.core.model.Step;
@@ -274,6 +274,7 @@ public class JsonTest {
             assertTrue(written, written.contains("q\\\"b\\\\n\\nt\\tc\\u0001"));
         }
     }
+
     @Test
     public void writeAtomicReplacesTheFile() throws Exception {
         Path f = tmp.getRoot().toPath().resolve("run-result.json");
