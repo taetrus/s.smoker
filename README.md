@@ -75,6 +75,20 @@ is 0 and `currentStep` names the step that runs (`startup` included). When the a
 before the end, a shutdown hook writes the file with status ERROR, the error
 `the application exited during step <id>` and the log hits of that step.
 
+The CLI deletes an old `run-result.json` before it starts the application. After the run it reads the file:
+
+- The file has `finishedAt` 0: the application stopped before the end. The CLI sets the status ERROR and the error
+  `the application stopped during step <id>; exit code <n>`. If the CLI killed the application at the time limit,
+  the status is HANG and the error ends with `killed after <ms> ms`.
+- The file comes from the exit hook: the CLI adds `; exit code <n>` to the error.
+- There is no file: ERROR `no run-result.json produced; app exit code <n>`, or HANG after a kill.
+
+`run` passes `--log`, `--screenshots`, `--failRegex`, `--allowRegex`, `--logPattern`, `--failLevel` and `--logCharset`
+to the agent. `record` passes `--log`, `--logPattern`, `--failLevel` and `--logCharset`. `--logPattern` cannot contain `;`.
+The CLI refuses it with exit code 2.
+
+`approve` without a `run-result.json` in the `--run` folder prints `approve: no run-result.json in <dir>` and exits with 2.
+
 ### Agent arguments (`-javaagent:smoker-agent.jar=k=v;k=v`)
 
 | key | values | default |

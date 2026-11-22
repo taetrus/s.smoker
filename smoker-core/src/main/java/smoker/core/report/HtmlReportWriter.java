@@ -78,7 +78,7 @@ public final class HtmlReportWriter {
                     }
                     if (!s.logHits.isEmpty()) {
                         w.write("<details open><summary>" + s.logHits.size() + " log hit(s)</summary><pre>");
-                        for (RunResult.LogHit h : s.logHits) w.write("[" + e(h.source) + "] " + e(h.line) + "\n");
+                        for (RunResult.LogHit h : s.logHits) w.write("[" + e(h.source) + "] " + e(h.text != null ? h.text : h.line) + "\n");
                         w.write("</pre></details>");
                     }
                     if (s.error != null) w.write("<pre>" + e(s.error) + "</pre>");

@@ -31,7 +31,9 @@ import java.util.concurrent.TimeUnit;
 /**
  * <pre>
  * java -jar smoker-cli.jar run     --agent smoker-agent.jar --app "java -jar app.jar" --scenarios scenarios/ --out out/ [--log app.log] [--screenshots off] [--strict]
+ *     [--failRegex r] [--allowRegex r] [--logPattern p] [--failLevel L] [--logCharset c]
  * java -jar smoker-cli.jar record  --agent smoker-agent.jar --app "java -jar app.jar" --scenario scenarios/new.json [--log app.log]
+ *     [--logPattern p] [--failLevel L] [--logCharset c]
  * java -jar smoker-cli.jar approve --run out/greet --scenario scenarios/greet.json [--steps s001,s002]
  * java -jar smoker-cli.jar lint    --run out/ [--emit-patch names.patch]
  * </pre>
@@ -80,6 +82,10 @@ public final class Main {
             System.err.println(e.getMessage());
             return 2;
         }
+        if (o.containsKey("logPattern") && o.get("logPattern").indexOf(';') >= 0) {
+            System.err.println(SEMICOLON.replace("<cmd>", "run"));
+            return 2;
+        }
         Files.createDirectories(out);
         List<RunResult> results = new ArrayList<RunResult>();
         int failures = 0;
@@ -87,33 +93,17 @@ public final class Main {
             String name = stripExt(sc.getFileName().toString());
             Path runDir = out.resolve(name);
             Files.createDirectories(runDir);
-            StringBuilder agentArgs = new StringBuilder("mode=play;scenario=").append(sc.toAbsolutePath())
-                    .append(";out=").append(runDir);
-            if (o.containsKey("log")) agentArgs.append(";log=").append(o.get("log"));
-            if (o.containsKey("screenshots")) agentArgs.append(";screenshots=").append(o.get("screenshots"));
-            if (o.containsKey("failRegex")) agentArgs.append(";failRegex=").append(o.get("failRegex"));
-            if (o.containsKey("allowRegex")) agentArgs.append(";allowRegex=").append(o.get("allowRegex"));
-
+            String agentArgs = agentArgs(o, sc, runDir);
             Scenario scenario = parsed.get(sc);
             long budgetMs = budgetMs(scenario);
             if (o.containsKey("timeout")) budgetMs = Long.parseLong(o.get("timeout")) * 1000;
 
             System.out.println("== " + name);
-            int exit = launch(req(o, "app"), agent, agentArgs.toString(), runDir.resolve("app-output.log"), budgetMs);
+            // An old result must not look like the result of this run.
+            Files.deleteIfExists(runDir.resolve("run-result.json"));
+            int exit = launch(req(o, "app"), agent, agentArgs, runDir.resolve("app-output.log"), budgetMs);
 
-            RunResult r;
-            Path resultFile = runDir.resolve("run-result.json");
-            if (Files.exists(resultFile)) {
-                r = Json.read(resultFile, RunResult.class);
-            } else {
-                r = new RunResult();
-                r.scenarioName = name;
-                r.scenarioFile = sc.toString();
-                r.status = exit == -999 ? RunResult.Status.HANG : RunResult.Status.ERROR;
-                r.error = exit == -999 ? "application did not exit within " + budgetMs + " ms (killed)"
-                        : "no run-result.json produced; app exit code " + exit + " — see app-output.log";
-                r.startedAt = r.finishedAt = System.currentTimeMillis();
-            }
+            RunResult r = resultOf(runDir, name, sc, exit, budgetMs);
             // make screenshot paths relative to the report
             for (RunResult.StepResult s : r.steps) if (s.screenshot != null) s.screenshot = name + "/" + s.screenshot;
             results.add(r);
@@ -134,6 +124,52 @@ public final class Main {
         return failures == 0 ? 0 : 1;
     }
 
+    private static final String SEMICOLON = "<cmd>: logPattern must not contain ';' "
+            + "(agent arguments use ';'; WP-05 adds a configuration file)";
+
+    /** The agent arguments of one {@code run}. */
+    static String agentArgs(Map<String, String> o, Path scenario, Path runDir) {
+        StringBuilder a = new StringBuilder("mode=play;scenario=").append(scenario.toAbsolutePath())
+                .append(";out=").append(runDir);
+        for (String k : new String[] {"log", "screenshots", "failRegex", "allowRegex", "logPattern", "failLevel", "logCharset"}) {
+            if (o.containsKey(k)) a.append(';').append(k).append('=').append(o.get(k));
+        }
+        return a.toString();
+    }
+
+    /**
+     * The result of one run. The file of the agent has a step in {@code currentStep} and {@code finishedAt} 0 when the
+     * application stopped before the end of the run (F-22). The CLI adds the exit code to the error of the exit hook.
+     */
+    static RunResult resultOf(Path runDir, String name, Path scenario, int exit, long budgetMs) throws IOException {
+        Path resultFile = runDir.resolve("run-result.json");
+        if (!Files.exists(resultFile)) {
+            RunResult r = new RunResult();
+            r.scenarioName = name;
+            r.scenarioFile = scenario.toString();
+            r.status = exit == -999 ? RunResult.Status.HANG : RunResult.Status.ERROR;
+            r.error = exit == -999 ? "application did not exit within " + budgetMs + " ms (killed)"
+                    : "no run-result.json produced; app exit code " + exit + " \u2014 see app-output.log";
+            r.startedAt = r.finishedAt = System.currentTimeMillis();
+            return r;
+        }
+        RunResult r = Json.read(resultFile, RunResult.class);
+        if (r.finishedAt == 0) {
+            String step = r.currentStep != null ? r.currentStep : "unknown";
+            if (exit == -999) {
+                r.status = RunResult.Status.HANG;
+                r.error = "the application stopped during step " + step + "; killed after " + budgetMs + " ms";
+            } else {
+                r.status = RunResult.Status.ERROR;
+                r.error = "the application stopped during step " + step + "; exit code " + exit;
+            }
+            r.finishedAt = System.currentTimeMillis();
+        } else if (r.error != null && r.error.startsWith("the application exited during step ")) {
+            r.error = r.error + "; exit code " + exit;
+        }
+        return r;
+    }
+
     // ---- record --------------------------------------------------------------------------------
 
     static int record(Map<String, String> o) throws Exception {
@@ -148,9 +184,16 @@ public final class Main {
                 return 2;
             }
         }
-        String agentArgs = "mode=record;scenario=" + scenario + (o.containsKey("log") ? ";log=" + o.get("log") : "");
+        if (o.containsKey("logPattern") && o.get("logPattern").indexOf(';') >= 0) {
+            System.err.println(SEMICOLON.replace("<cmd>", "record"));
+            return 2;
+        }
+        StringBuilder agentArgs = new StringBuilder("mode=record;scenario=").append(scenario);
+        for (String k : new String[] {"log", "logPattern", "failLevel", "logCharset"}) {
+            if (o.containsKey(k)) agentArgs.append(';').append(k).append('=').append(o.get(k));
+        }
         Path log = scenario.getParent().resolve(stripExt(scenario.getFileName().toString()) + ".record.log");
-        int exit = launch(req(o, "app"), agent, agentArgs, log, Long.MAX_VALUE);
+        int exit = launch(req(o, "app"), agent, agentArgs.toString(), log, Long.MAX_VALUE);
         System.out.println("application exited with " + exit + "; scenario file: " + scenario);
         return 0;
     }
@@ -160,6 +203,10 @@ public final class Main {
     static int approve(Map<String, String> o) throws Exception {
         Path runDir = Paths.get(req(o, "run"));
         Path scFile = Paths.get(req(o, "scenario"));
+        if (!Files.exists(runDir.resolve("run-result.json"))) {
+            System.err.println("approve: no run-result.json in " + runDir);
+            return 2;
+        }
         RunResult r = Json.read(runDir.resolve("run-result.json"), RunResult.class);
         Scenario sc;
         LinkedHashMap<String, Snapshot> old;
@@ -363,7 +410,9 @@ public final class Main {
     static void usage(int code) {
         System.err.println("usage:\n"
                 + "  run     --agent smoker-agent.jar --app \"<cmd>\" --scenarios <dir|file> --out <dir> [--log <file>] [--screenshots off] [--strict] [--timeout <s>]\n"
+                + "          [--failRegex <r>] [--allowRegex <r>] [--logPattern <p>] [--failLevel <L>] [--logCharset <c>]\n"
                 + "  record  --agent smoker-agent.jar --app \"<cmd>\" --scenario <file> [--log <file>]\n"
+                + "          [--logPattern <p>] [--failLevel <L>] [--logCharset <c>]\n"
                 + "  approve --run <out/scenario-dir> --scenario <file> [--steps s001,s002]\n"
                 + "  lint    --run <out dir> [--emit-patch <file>]\n"
                 + "  <cmd> may contain the token {agent} where -javaagent:... must be placed (default: after the first word).");
