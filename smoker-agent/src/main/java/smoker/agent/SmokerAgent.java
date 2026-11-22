@@ -21,12 +21,29 @@ public final class SmokerAgent {
     private SmokerAgent() {}
 
     public static void premain(String args, Instrumentation inst) {
-        start(args);
+        AgentConfig cfg;
+        try {
+            cfg = parseConfig(args);
+        } catch (IllegalArgumentException e) {
+            System.exit(2); // as the fatal path of start: the run cannot start
+            return;
+        }
+        start(cfg);
     }
 
     /** Dynamic attach entry (Java 9+ needs {@code -Djdk.attach.allowAttachSelf} on the attaching side). */
     public static void agentmain(String args, Instrumentation inst) {
-        start(args);
+        start(parseConfig(args)); // the attach call fails, the application continues
+    }
+
+    /** Parses the agent arguments. A bad argument gives one line {@code [smoker] fatal: <message>} on System.err. */
+    static AgentConfig parseConfig(String args) {
+        try {
+            return AgentConfig.parse(args);
+        } catch (IllegalArgumentException e) {
+            System.err.println("[smoker] fatal: " + e.getMessage());
+            throw e;
+        }
     }
 
     static Observations observations() {
@@ -37,8 +54,7 @@ public final class SmokerAgent {
         System.out.println("[smoker] " + s);
     }
 
-    private static void start(String args) {
-        final AgentConfig cfg = AgentConfig.parse(args);
+    private static void start(final AgentConfig cfg) {
         final Observations obs = new Observations(cfg);
         OBS = obs;
         obs.install(cfg);

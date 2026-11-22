@@ -105,6 +105,15 @@ public class ObservationsTest {
         assertArrayEquals(line, bytes.toByteArray());
     }
 
+    /** Kept hits plus the hits that the line "N more hits not shown" counts. */
+    private static int count(List<RunResult.LogHit> hits) {
+        int n = 0;
+        for (RunResult.LogHit h : hits) {
+            n += "smoker".equals(h.source) ? Integer.parseInt(h.line.substring(0, h.line.indexOf(' '))) : 1;
+        }
+        return n;
+    }
+
     private static String repeat(char c, int n) {
         StringBuilder b = new StringBuilder(n);
         for (int i = 0; i < n; i++) b.append(c);
@@ -170,7 +179,7 @@ public class ObservationsTest {
                     synchronized (printed) {
                         done = printed[0];
                     }
-                    total.addAndGet(obs.takeHits(Long.MIN_VALUE, Long.MAX_VALUE).size());
+                    total.addAndGet(count(obs.takeHits(Long.MIN_VALUE, Long.MAX_VALUE)));
                     if (done) return;
                 }
             }
@@ -181,5 +190,66 @@ public class ObservationsTest {
         taker.join();
         assertFalse(printer.isAlive() || taker.isAlive());
         assertEquals(1000, total.get());
+    }
+
+    @Test
+    public void teeRemovesAnsiColorCodesFromAPlainLine() throws Exception {
+        Observations obs = new Observations(new AgentConfig());
+        PrintStream tee = obs.tee(new PrintStream(new ByteArrayOutputStream(), true, "UTF-8"),
+                StandardCharsets.UTF_8, "stdout");
+        tee.println("\u001b[31mERROR\u001b[0;39m boom");
+        List<RunResult.LogHit> hits = obs.takeHits(Long.MIN_VALUE, Long.MAX_VALUE);
+        assertEquals(1, hits.size());
+        assertEquals("ERROR boom", hits.get(0).line);
+    }
+
+    @Test
+    public void printStackTraceAfterALogbackInfoLineIsAHit() throws Exception {
+        Observations obs = new Observations(new AgentConfig());
+        PrintStream tee = obs.tee(new PrintStream(new ByteArrayOutputStream(), true, "UTF-8"),
+                StandardCharsets.UTF_8, "stderr");
+        byte[] info = "10:00:00.002 [main] INFO  a.B - fine\n".getBytes(StandardCharsets.UTF_8);
+        tee.write(info, 0, info.length); // Logback writes one event in one call
+        new IllegalStateException("x").printStackTrace(tee);
+        List<RunResult.LogHit> hits = obs.takeHits(Long.MIN_VALUE, Long.MAX_VALUE);
+        assertEquals(1, hits.size());
+        assertEquals("java.lang.IllegalStateException: x", hits.get(0).line);
+        assertTrue(hits.get(0).text, hits.get(0).text.contains("\tat smoker.agent.ObservationsTest."));
+    }
+
+    @Test
+    public void logbackErrorWithTraceInOneWriteIsOneEvent() throws Exception {
+        final List<LogEvent> events = new ArrayList<LogEvent>();
+        ConsoleTee tee = new ConsoleTee(new PrintStream(new ByteArrayOutputStream(), true, "UTF-8"),
+                StandardCharsets.UTF_8, new EventJoiner("stdout", LogPattern.compile(LogPattern.DEFAULT), false,
+                new Consumer<LogEvent>() {
+                    @Override
+                    public void accept(LogEvent e) {
+                        events.add(e);
+                    }
+                }));
+        byte[] event = ("10:00:00.001 [main] ERROR a.B - failed\r\njava.lang.IllegalStateException: x\r\n"
+                + "\tat a.B.m(B.java:1)\r\n").getBytes(StandardCharsets.UTF_8);
+        tee.write(event, 0, event.length);
+        tee.drain();
+        assertEquals(1, events.size());
+        assertEquals(3, events.get(0).lines.size());
+        assertEquals(LogEvent.Kind.LOGBACK, events.get(0).kind);
+    }
+
+    @Test
+    public void takeHitsKeeps200HitsAndCountsTheRest() {
+        Observations obs = new Observations(new AgentConfig());
+        for (int i = 0; i < 500; i++) obs.accept(event(i, 1, "ERROR " + i));
+        List<RunResult.LogHit> hits = obs.takeHits(Long.MIN_VALUE, Long.MAX_VALUE);
+        assertEquals(201, hits.size());
+        assertEquals("ERROR 199", hits.get(199).line);
+        RunResult.LogHit more = hits.get(200);
+        assertEquals("smoker", more.source);
+        assertEquals("300 more hits not shown", more.line);
+        obs.accept(event(600, 1, "ERROR next"));
+        List<RunResult.LogHit> next = obs.takeHits(Long.MIN_VALUE, Long.MAX_VALUE);
+        assertEquals(1, next.size());
+        assertEquals("ERROR next", next.get(0).line);
     }
 }

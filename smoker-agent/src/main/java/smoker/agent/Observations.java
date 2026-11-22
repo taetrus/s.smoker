@@ -31,10 +31,14 @@ import java.util.regex.Pattern;
 public final class Observations {
 
     private static final int MAX_LINE = 2000;
+    /** At most this many hits wait for a step: an error flood must not fill the memory of the application. */
+    static final int MAX_HITS = 200;
 
     private final Object lock = new Object();
     /** Guarded by {@link #lock}. */
     private final List<Collected> hits = new ArrayList<Collected>();
+    /** Hits dropped since the last take because the list was full. Guarded by {@link #lock}. */
+    private int dropped;
     private final LogPattern pattern;
     private final FailRule rule;
     private final List<LogTailer> tailers = new ArrayList<LogTailer>();
@@ -152,7 +156,8 @@ public final class Observations {
         h.line = line.length() > MAX_LINE ? line.substring(0, MAX_LINE) + "…" : line;
         h.text = e.text();
         synchronized (lock) {
-            hits.add(new Collected(h, e.precisionMs));
+            if (hits.size() < MAX_HITS) hits.add(new Collected(h, e.precisionMs));
+            else dropped++;
         }
     }
 
@@ -175,10 +180,17 @@ public final class Observations {
      * A hit before the window (from, to] gets the source prefix {@code late:}. With second precision the window
      * starts at the start of the second of {@code from}. {@code Long.MIN_VALUE} means no lower limit.
      * A plain file line has the time of reading: call {@link #drain()} before you read the clock for {@code to}.
+     * When hits were dropped since the last take, the last entry has source {@code smoker} and gives their number.
      */
     public List<RunResult.LogHit> takeHits(long from, long to) {
         drain();
+        return takeHitsNoDrain(from, to);
+    }
+
+    /** As {@link #takeHits}, but without the drain: for a caller that cannot wait for the console locks. */
+    List<RunResult.LogHit> takeHitsNoDrain(long from, long to) {
         List<RunResult.LogHit> out = new ArrayList<RunResult.LogHit>();
+        int more;
         synchronized (lock) {
             for (Iterator<Collected> it = hits.iterator(); it.hasNext(); ) {
                 Collected c = it.next();
@@ -187,6 +199,8 @@ public final class Observations {
                 if (from != Long.MIN_VALUE && isLate(c, from)) c.hit.source = "late:" + c.hit.source;
                 out.add(c.hit);
             }
+            more = dropped;
+            dropped = 0;
         }
         Collections.sort(out, new Comparator<RunResult.LogHit>() {
             @Override
@@ -194,6 +208,14 @@ public final class Observations {
                 return Long.compare(a.timestamp, b.timestamp);
             }
         });
+        if (more > 0) {
+            RunResult.LogHit h = new RunResult.LogHit();
+            h.timestamp = to == Long.MAX_VALUE ? System.currentTimeMillis() : to;
+            h.source = "smoker";
+            h.line = more + " more hits not shown";
+            h.text = h.line;
+            out.add(h);
+        }
         return out;
     }
 

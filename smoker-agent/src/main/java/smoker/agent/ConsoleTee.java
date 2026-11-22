@@ -15,6 +15,12 @@ final class ConsoleTee extends PrintStream {
     private final Charset cs;
     private final EventJoiner joiner;
     private final ByteArrayOutputStream line = new ByteArrayOutputStream();
+    /** Number of the current write call. Guarded by the lock of this stream, as all fields below. */
+    private long write;
+    /** The write call that gave the first byte of the current line, or -1 before its first byte. */
+    private long lineStart = -1;
+    /** The write call that ended the line before. */
+    private long lastEnd = -2;
 
     /** The tee encodes text with {@code cs}: give the charset of the real stream. */
     ConsoleTee(PrintStream real, Charset cs, EventJoiner joiner) throws UnsupportedEncodingException {
@@ -41,6 +47,7 @@ final class ConsoleTee extends PrintStream {
     public void write(int b) {
         synchronized (this) {
             super.write(b);
+            write++;
             see(b);
         }
     }
@@ -49,6 +56,7 @@ final class ConsoleTee extends PrintStream {
     public void write(byte[] buf, int off, int len) {
         synchronized (this) {
             super.write(buf, off, len);
+            write++;
             for (int i = off; i < off + len; i++) see(buf[i]);
         }
     }
@@ -62,6 +70,7 @@ final class ConsoleTee extends PrintStream {
 
     /** Caller holds the lock of this stream. Never throws into the print call of the application. */
     private void see(int b) {
+        if (lineStart < 0) lineStart = write;
         if (b != '\n') {
             line.write(b);
             if (line.size() >= EventJoiner.MAX_LINE_BYTES) emit(); // a long line goes in parts
@@ -74,6 +83,9 @@ final class ConsoleTee extends PrintStream {
         String text = new String(line.toByteArray(), cs);
         line.reset();
         if (text.endsWith("\r")) text = text.substring(0, text.length() - 1);
-        joiner.lineSafely(text, System.currentTimeMillis());
+        boolean sameWrite = lineStart == lastEnd;
+        lastEnd = write;
+        lineStart = -1;
+        joiner.lineSafely(text, System.currentTimeMillis(), sameWrite);
     }
 }

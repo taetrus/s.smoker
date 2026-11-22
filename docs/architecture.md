@@ -73,7 +73,7 @@ sequenceDiagram
   P->>E: invokeAndWait(SnapshotTaker.take())
   P->>P: Screenshots.capture() (evidence)
   P->>P: SnapshotDiff.diff(expected, actual, ignore)
-  P->>O: drain(), then hitsBetween(t0, now) → log/console/JUL/uncaught hits
+  P->>O: drain(), then takeHits(lastEnd, now) → log/console/JUL/uncaught hits
   Note over P: PASS · FAIL (diff or hits) · ERROR (not found / exception) · NO_GOLDEN
 ```
 
@@ -95,7 +95,7 @@ which a modal dialog's secondary loop services. Only true silence is a hang.
 | Log files | `LogTailer`: tail from the current end (a new file from 0), rotation-aware, `drain()` reads to the end before each step closes; `EventJoiner` and `FailRule` make the hits | **Yes** — primary mechanism |
 | Uncaught exceptions | `Thread.setDefaultUncaughtExceptionHandler` + `sun.awt.exception.handler` (Java 8 EDT) | n/a |
 | stdout, stderr | `ConsoleTee` on `System.out` and `System.err` | catches `printStackTrace()` and Equinox console errors (F-22) |
-| java.util.logging | root `Handler`, WARNING+ | only JUL users |
+| java.util.logging | root `Handler`: level ≥ `failLevel` or a thrown exception | only JUL users |
 | Phase 2: in-JVM Logback events | fragment bundle `Fragment-Host: ch.qos.logback.classic` with an `AppenderBase` that pushes `(level, logger, message)` into a `java.util.function.Consumer<String>` stored in `System.getProperties()` (bootstrap-visible type, no class sharing needed); configured in `logback.xml` | Yes, with the fragment deployed in the test product |
 
 Tailing is enough for a smoke tester and keeps the agent free of any classloader coupling; phase 2 adds

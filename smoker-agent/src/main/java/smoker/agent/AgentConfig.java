@@ -63,11 +63,19 @@ public final class AgentConfig {
         LogPattern.compile(c.logPattern); // an unsupported pattern stops the agent at start
         if (kv.get("failLevel") != null) c.failLevel = LogLevel.parse(kv.get("failLevel"));
         if (kv.get("failRegex") != null) c.failRegex = kv.get("failRegex");
-        if (kv.get("logCharset") != null) c.logCharset = Charset.forName(kv.get("logCharset"));
+        if (kv.get("logCharset") != null) c.logCharset = charset(kv.get("logCharset"));
         if (kv.get("allowRegex") != null) c.allowRegex = kv.get("allowRegex");
         if (kv.get("screenshots") != null) c.screenshots = !"off".equalsIgnoreCase(kv.get("screenshots"));
         if (kv.get("edtHangMs") != null) c.edtHangMs = Long.parseLong(kv.get("edtHangMs"));
         if (kv.get("exitWhenDone") != null) c.exitWhenDone = Boolean.parseBoolean(kv.get("exitWhenDone"));
         return c;
+    }
+
+    private static Charset charset(String name) {
+        try {
+            return Charset.forName(name);
+        } catch (IllegalArgumentException e) { // the name is illegal or the charset is not supported
+            throw new IllegalArgumentException("smoker: logCharset: '" + name + "' is not supported");
+        }
     }
 }

@@ -2,12 +2,16 @@ package smoker.agent;
 
 import org.junit.Test;
 
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 /** Run also with -Plocale-tr: values must parse the same in the Turkish locale (F-16). */
 public class AgentConfigTest {
@@ -70,5 +74,32 @@ public class AgentConfigTest {
     @Test(expected = IllegalArgumentException.class)
     public void emptyArgumentsAreRefused() {
         AgentConfig.parse(" ");
+    }
+
+    @Test
+    public void unknownLogCharsetHasAClearMessage() {
+        try {
+            AgentConfig.parse("scenario=a.json;logCharset=no-such-cs");
+            fail();
+        } catch (IllegalArgumentException e) {
+            assertEquals("smoker: logCharset: 'no-such-cs' is not supported", e.getMessage());
+        }
+    }
+
+    @Test
+    public void badConfigPrintsOneFatalLine() throws Exception {
+        PrintStream before = System.err;
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        System.setErr(new PrintStream(bytes, true, "UTF-8"));
+        try {
+            SmokerAgent.parseConfig("scenario=a.json;logPattern=%xyz");
+            fail();
+        } catch (IllegalArgumentException e) {
+            // expected
+        } finally {
+            System.setErr(before);
+        }
+        assertEquals("[smoker] fatal: smoker: logPattern: conversion word %xyz is not supported"
+                + System.getProperty("line.separator"), new String(bytes.toByteArray(), StandardCharsets.UTF_8));
     }
 }

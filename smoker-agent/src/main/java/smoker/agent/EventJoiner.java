@@ -24,9 +24,12 @@ final class EventJoiner {
     private static final Pattern SESSION = Pattern.compile(
             "^!SESSION\\s+(\\d{4}-\\d\\d-\\d\\d \\d\\d:\\d\\d:\\d\\d\\.\\d{3})");
     private static final Pattern EQUINOX_PART = Pattern.compile("^!(MESSAGE|SUBENTRY|STACK)\\b");
+    private static final Pattern EQUINOX_STACK = Pattern.compile("^!STACK\\b");
     private static final Pattern AT_LINE = Pattern.compile("^\\s+at ");
     private static final Pattern CONTINUATION = Pattern.compile(
             "^(\\s.*|Caused by:.*|Suppressed:.*|\\.\\.\\. \\d+ more.*)$");
+    /** SGR escape codes: Logback {@code %highlight}, {@code %red} etc. write them also on Windows. */
+    private static final Pattern ANSI = Pattern.compile("\u001B\\[[0-9;]*m");
     private static final Pattern EXCEPTION_NAME = Pattern.compile("^[\\w.$]+(Exception|Error|Throwable)\\b.*");
 
     private final String source;
@@ -39,6 +42,8 @@ final class EventJoiner {
     private boolean inSession;
     /** An empty line that waits for the next line. */
     private boolean heldEmpty;
+    /** True when the line before joined an Equinox event as {@code !STACK}: the exception name follows it. */
+    private boolean afterStack;
 
     EventJoiner(String source, LogPattern pattern, boolean useLineTime, Consumer<LogEvent> sink) {
         this.source = source;
@@ -47,7 +52,21 @@ final class EventJoiner {
         this.sink = sink;
     }
 
+    /** A line of a file: Logback wrote it, so an exception name joins the open event. */
     void line(String line, long arrivedAt) {
+        line(line, arrivedAt, true);
+    }
+
+    /**
+     * Gives one line without its line feed. {@code sameWrite} is true when one write call gave this line and the
+     * end of the line before it: Logback writes an event in one call, {@code printStackTrace} writes each line in
+     * its own calls. Only a line of the same write, or the line after an Equinox {@code !STACK} line, joins an
+     * open event by the exception-name rule.
+     */
+    void line(String line, long arrivedAt, boolean sameWrite) {
+        if (line.indexOf('\u001B') >= 0) line = ANSI.matcher(line).replaceAll("");
+        boolean stackBefore = afterStack;
+        afterStack = false;
         if (line.startsWith(SMOKER_PREFIX)) {
             close();
             return;
@@ -74,6 +93,7 @@ final class EventJoiner {
         if (match == null && open != null && open.kind == LogEvent.Kind.EQUINOX
                 && (inSession || EQUINOX_PART.matcher(line).find())) {
             join(line);
+            afterStack = !inSession && EQUINOX_STACK.matcher(line).find();
             return;
         }
         if (match != null) {
@@ -94,7 +114,7 @@ final class EventJoiner {
             }
             return;
         }
-        if (open != null && EXCEPTION_NAME.matcher(line).matches()) {
+        if (open != null && (sameWrite || stackBefore) && EXCEPTION_NAME.matcher(line).matches()) {
             heldEmpty = false; // an empty line joins only before a continuation line
             join(line);
             return;
@@ -106,9 +126,9 @@ final class EventJoiner {
      * Gives one line, as {@link #line}, for a source that runs in a thread of the application (WP-04, F-08).
      * An exception or error of the pattern drops the line and never reaches the caller (see {@link #rethrowFatal}).
      */
-    void lineSafely(String line, long arrivedAt) {
+    void lineSafely(String line, long arrivedAt, boolean sameWrite) {
         try {
-            line(line, arrivedAt);
+            line(line, arrivedAt, sameWrite);
         } catch (RuntimeException e) {
             // drop the line
         } catch (Error e) {
@@ -126,6 +146,7 @@ final class EventJoiner {
     /** Closes the open event and drops a held empty line. */
     void close() {
         heldEmpty = false;
+        afterStack = false;
         inSession = false;
         if (open != null) {
             LogEvent done = open;

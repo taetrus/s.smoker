@@ -217,6 +217,57 @@ public class EventJoinerTest {
         assertTrue(events.get(1).hasStackTrace);
     }
 
+    @Test
+    public void ansiColorCodesAreRemovedBeforeThePattern() {
+        LogPattern colored = LogPattern.compile("%d{HH:mm:ss.SSS} %highlight(%-5level) %logger - %msg%n");
+        List<LogEvent> got = new ArrayList<LogEvent>();
+        EventJoiner j = new EventJoiner("s", colored, false, collect(got));
+        j.line("10:00:00.000 \u001b[31mERROR\u001b[0;39m a.B - failed", 5L);
+        j.line("10:00:00.001 \u001b[34mINFO \u001b[0;39m a.B - fine", 6L);
+        j.close();
+        assertEquals(2, got.size());
+        assertEquals(LogEvent.Kind.LOGBACK, got.get(0).kind);
+        assertEquals(LogLevel.ERROR, got.get(0).level);
+        assertEquals("10:00:00.000 ERROR a.B - failed", got.get(0).firstLine());
+        assertEquals(LogLevel.INFO, got.get(1).level);
+    }
+
+    @Test
+    public void exceptionNameOfAnotherWriteStartsAPlainEvent() {
+        joiner.line(INFO_LINE, 1L, false);
+        joiner.line("java.lang.IllegalStateException: x", 2L, false);
+        joiner.line("\tat a.B.m(B.java:1)", 3L, false);
+        joiner.close();
+        assertEquals(2, events.size());
+        assertEquals(LogEvent.Kind.LOGBACK, events.get(0).kind);
+        assertEquals(1, events.get(0).lines.size());
+        assertEquals(LogEvent.Kind.PLAIN, events.get(1).kind);
+        assertTrue(events.get(1).hasStackTrace);
+    }
+
+    @Test
+    public void exceptionNameOfTheSameWriteJoins() {
+        joiner.line(ERROR_LINE, 1L, false);
+        joiner.line("java.lang.IllegalStateException: x", 1L, true);
+        joiner.line("\tat a.B.m(B.java:1)", 1L, true);
+        joiner.close();
+        assertEquals(1, events.size());
+        assertEquals(3, events.get(0).lines.size());
+    }
+
+    @Test
+    public void exceptionNameAfterEquinoxStackJoinsInAnyWrite() {
+        String[] lines = {"!ENTRY org.eclipse.osgi 4 0 2026-11-14 22:51:28.788", "!MESSAGE FrameworkEvent ERROR",
+                "!STACK 0", "org.osgi.framework.BundleException: Could not resolve module: a [23]",
+                "  Unresolved requirement: Require-Capability: osgi.ee", "", "\tat a.B.m(B.java:1)"};
+        for (String line : lines) joiner.line(line, 1L, false);
+        joiner.close();
+        assertEquals(1, events.size());
+        assertEquals(LogEvent.Kind.EQUINOX, events.get(0).kind);
+        assertEquals(7, events.get(0).lines.size());
+        assertTrue(events.get(0).hasStackTrace);
+    }
+
     private static Consumer<LogEvent> collect(final List<LogEvent> into) {
         return new Consumer<LogEvent>() {
             @Override

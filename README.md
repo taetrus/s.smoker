@@ -118,7 +118,8 @@ The CLI refuses it with exit code 2.
 | `edtHangMs` | EDT blocked longer than this → HANG + thread dump | 5000 |
 | `exitWhenDone` | play: `System.exit` after writing results | true |
 
-An unknown `failLevel`, an unknown `logCharset` or an unsupported part of `logPattern` stops the agent at start.
+An unknown `failLevel`, an unknown `logCharset` or an unsupported part of `logPattern` stops the application at
+start with exit code 2. System.err then has one line `[smoker] fatal: <message>`.
 The agent arguments use `;` as the separator: a value cannot contain `;`.
 
 ### Log rules
@@ -127,9 +128,22 @@ The agent reads these sources: the files of `log`, `System.out`, `System.err`, `
 exceptions. It decodes `System.out` and `System.err` with the charset of the stream, and the files with `logCharset`.
 Lines that start with `[smoker] ` are the output of the agent. They are not events.
 
-The agent joins the lines of one source into events. A line that agrees with `logPattern` starts a Logback event.
-An `!ENTRY` line starts an Equinox event. A stack trace line (`at …`, `Caused by:`, `... N more`) joins the open
-event. Each other line starts a plain event. The fail rule runs once for each event:
+The agent removes ANSI color codes (`ESC[...m`, from Logback `%highlight`, `%red` and others) from each line first.
+Then it joins the lines of one source into events:
+
+1. A line that agrees with `logPattern` starts a Logback event.
+2. An `!ENTRY` line or a `!SESSION` line starts an Equinox event. The header of a `!SESSION` event ends at its
+   first empty line. `!MESSAGE`, `!SUBENTRY` and `!STACK` lines join an open Equinox event.
+3. A continuation line joins the open event: a line that starts with whitespace (`\tat …`), `Caused by:`,
+   `Suppressed:` or `... N more`. With no open event, a continuation line starts a plain event.
+4. An exception name line (for example `java.lang.IllegalStateException: x`) joins the open event. On the console
+   it joins only when the same write call gave it and the line before it. Logback writes an event in one call.
+   `printStackTrace` writes each line in a separate call, so its trace after a Logback line is a new plain event.
+   The exception name line after the `!STACK` line of an Equinox event always joins that event.
+5. An empty line joins the open event only when a continuation line follows it.
+6. Each other line starts a plain event.
+
+The fail rule runs once for each event:
 
 | Event | Hit when |
 |---|---|
@@ -141,10 +155,15 @@ event. Each other line starts a plain event. The fail rule runs once for each ev
 
 `allowRegex` applies to the full text of the event and wins over all other rules.
 A hit keeps the first line in `line` and the full text in `text` (at most 50 lines and 8000 characters).
+At most 200 hits wait for a step. The agent counts the hits after that and does not keep them. The step then
+gets one more hit with source `smoker` and the line `<N> more hits not shown`.
 
 Before a step closes, the agent reads each log file to its end. Each step gets the hits in (end of the last step,
 now]. A hit between two steps goes to the next step. A file event has the time of its log line. A file event with
 a time before the window of the step goes to the current step, with the prefix `late:` in `source`.
+
+An event that the application still writes at the end of a step can go into two parts in two steps. This is rare:
+it occurs only for Equinox output and for output in more than one write call.
 
 A file that exists when the agent starts is read from its end. A file that appears later is read from its start.
 

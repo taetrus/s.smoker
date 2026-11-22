@@ -107,6 +107,6 @@ final class LogTailer extends Thread {
         String line = new String(partial.toByteArray(), cs);
         partial.reset();
         if (line.endsWith("\r")) line = line.substring(0, line.length() - 1);
-        joiner.lineSafely(line, now);
+        joiner.lineSafely(line, now, true); // a file holds Logback output
     }
 }

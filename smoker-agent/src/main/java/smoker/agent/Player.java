@@ -14,7 +14,6 @@ import java.awt.Frame;
 import java.awt.Window;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
@@ -210,7 +209,8 @@ final class Player implements Runnable {
 
     /**
      * The hits after {@code from}, taken on a helper thread: the drain takes the console stream locks, which an
-     * application thread can hold. Gives no hits when the drain does not end within {@code maxWaitMs}.
+     * application thread can hold. When the drain does not end within {@code maxWaitMs}, gives the hits
+     * collected so far without a drain.
      */
     private List<RunResult.LogHit> hitsWithin(final long from, long maxWaitMs) throws InterruptedException {
         final AtomicReference<List<RunResult.LogHit>> hits = new AtomicReference<List<RunResult.LogHit>>();
@@ -224,7 +224,7 @@ final class Player implements Runnable {
         t.start();
         t.join(maxWaitMs);
         List<RunResult.LogHit> got = hits.get();
-        return got != null ? got : Collections.<RunResult.LogHit>emptyList();
+        return got != null ? got : obs.takeHitsNoDrain(from, Long.MAX_VALUE);
     }
 
     /** Order ERROR > HANG > FAIL > NO_GOLDEN > PASS. */

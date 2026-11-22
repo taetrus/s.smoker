@@ -168,7 +168,8 @@ public class PlayerExitTest {
         assertEquals("the application exited during step s001", r.error);
         assertEquals(1, r.steps.size());
         assertEquals("s001", r.steps.get(0).stepId);
-        assertTrue(r.steps.get(0).logHits.isEmpty());
+        assertEquals(1, r.steps.get(0).logHits.size()); // collected before the block: no drain needed
+        assertEquals("12:00:00.000 [main] ERROR demo - crashing on purpose", r.steps.get(0).logHits.get(0).line);
     }
 
     @Test(timeout = 30000)
