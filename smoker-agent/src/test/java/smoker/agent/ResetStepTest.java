@@ -86,6 +86,9 @@ public class ResetStepTest {
         cfg = new AgentConfig();
         cfg.out = tmp.newFolder("out").toPath();
         cfg.exitWhenDone = false;
+        // No screenshots: on macOS a capture takes 1 s while the display sleeps, and 31 s after the JVM made about
+        // 70 windows (the full module run). The scenarios here do not check screenshots.
+        cfg.screenshots = false;
         obs = new Observations(cfg);
         watchdog = new EdtWatchdog(5000);
     }
