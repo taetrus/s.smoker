@@ -14,6 +14,7 @@ import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import java.util.logging.Handler;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
@@ -103,10 +104,15 @@ public final class Observations {
         }
     }
 
-    /** Wraps one console stream; its own joiner reads the lines (source {@code stdout} or {@code stderr}). */
-    ConsoleTee tee(PrintStream real, Charset cs, String source) {
+    /** Wraps one console stream (source {@code stdout} or {@code stderr}); each writing thread gets its own joiner. */
+    ConsoleTee tee(PrintStream real, Charset cs, final String source) {
         try {
-            ConsoleTee tee = new ConsoleTee(real, cs, new EventJoiner(source, pattern, false, sink));
+            ConsoleTee tee = new ConsoleTee(real, cs, new Supplier<EventJoiner>() {
+                @Override
+                public EventJoiner get() {
+                    return new EventJoiner(source, pattern, false, sink);
+                }
+            });
             synchronized (tees) {
                 tees.add(tee);
             }

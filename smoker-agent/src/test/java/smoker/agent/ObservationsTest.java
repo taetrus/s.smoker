@@ -13,6 +13,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -25,6 +26,16 @@ public class ObservationsTest {
     private static LogEvent event(long time, int precisionMs, String line) {
         return new LogEvent("t", LogEvent.Kind.PLAIN, time, precisionMs, null,
                 new ArrayList<String>(Collections.singletonList(line)));
+    }
+
+    /** A new stdout joiner with the default pattern for each thread of the tee. */
+    private static Supplier<EventJoiner> joiners(final Consumer<LogEvent> sink) {
+        return new Supplier<EventJoiner>() {
+            @Override
+            public EventJoiner get() {
+                return new EventJoiner("stdout", LogPattern.compile(LogPattern.DEFAULT), false, sink);
+            }
+        };
     }
 
     private static List<String> describe(List<RunResult.LogHit> hits) {
@@ -132,7 +143,7 @@ public class ObservationsTest {
             };
             ByteArrayOutputStream bytes = new ByteArrayOutputStream();
             ConsoleTee tee = new ConsoleTee(new PrintStream(bytes, true, "UTF-8"), StandardCharsets.UTF_8,
-                    new EventJoiner("stdout", LogPattern.compile(LogPattern.DEFAULT), false, sink));
+                    joiners(sink));
             tee.println("ERROR one");
             tee.println("ERROR two"); // closes "ERROR one": the sink throws
             tee.drain();              // closes "ERROR two": the sink throws
@@ -221,8 +232,7 @@ public class ObservationsTest {
     public void logbackErrorWithTraceInOneWriteIsOneEvent() throws Exception {
         final List<LogEvent> events = new ArrayList<LogEvent>();
         ConsoleTee tee = new ConsoleTee(new PrintStream(new ByteArrayOutputStream(), true, "UTF-8"),
-                StandardCharsets.UTF_8, new EventJoiner("stdout", LogPattern.compile(LogPattern.DEFAULT), false,
-                new Consumer<LogEvent>() {
+                StandardCharsets.UTF_8, joiners(new Consumer<LogEvent>() {
                     @Override
                     public void accept(LogEvent e) {
                         events.add(e);
