@@ -55,6 +55,9 @@ java -jar smoker-cli.jar run --agent smoker-agent.jar --app "java -jar myapp.jar
 java -jar smoker-cli.jar approve --run out/orders-create --scenario scenarios/orders-create.json
 
 # 4. run again → PASS / FAIL; out/junit.xml + out/report.html
+
+# 5. many scenarios in one application start, with a simulator and a reset (see "Suite file")
+java -jar smoker-cli.jar run --agent smoker-agent.jar --suite suite.json --out out/
 ```
 
 `--app` is the full command line. The agent option is inserted after the first word, or where you put the
@@ -134,11 +137,11 @@ Format rules:
 | `screenshots` | `evidence` / `off` | evidence |
 | `edtHangMs` | EDT blocked longer than this → HANG + thread dump | 5000 |
 | `exitWhenDone` | play: stop the application after writing results | true |
-| `resetCommand.1`, `resetCommand.2`, ... | command to reset the application state (read now, used by suite mode later) | — |
+| `resetCommand.1`, `resetCommand.2`, ... | command that resets the application state between two scenarios (see "Suite file") | — |
 | `resetTimeoutS.N` | time limit of `resetCommand.N` in seconds | 60 |
-| `resetScenario` | scenario that resets the application (read now, used by suite mode later) | — |
+| `resetScenario` | scenario that the agent replays between two scenarios, without a snapshot (see "Suite file") | — |
 | `stopTimeoutMs` | time to wait after each stage of the stop of the application, in ms (see "Stop of the application") | 10000 |
-| `aliveFile` | file of the alive signal (read now, used by suite mode later) | — |
+| `aliveFile` | file that the CLI touches each second; the agent stops the application when the file is older than 10 s (see "Suite file") | — |
 
 An unknown `failLevel`, an unknown `logCharset`, an unsupported part of `logPattern` or a wrong key stops the
 application at start with exit code 2. System.err then has one line `[smoker] fatal: <message>`.
@@ -157,6 +160,109 @@ After stages 1 and 2, the agent waits `stopTimeoutMs`.
 
 The agent writes one line `[smoker] stop: ...` for each stage to the console. The stop does not change the result file:
 the agent writes it before stage 1. When the application exits itself in stage 1, the exit code is the code of the application.
+
+### Suite file
+
+`run --suite <file>` runs many scenarios in one application start. It also runs commands around them: a simulator
+before the scenarios, a reset between them, a clean-up after them. The demo has an example:
+`smoker-demo/suite/suite.json`.
+
+```json
+{
+  "app": "java -Ddemo.simPort=5555 -Ddemo.log=demo.log -jar ../target/smoker-demo.jar",
+  "workDir": ".",
+  "agentConfig": { "log": "demo.log", "failLevel": "ERROR", "stopTimeoutMs": 10000 },
+  "before": [
+    { "command": "sh ../sim/start-sim.sh ../target/smoker-demo.jar 5555", "background": true, "readyPort": 5555, "readyTimeoutS": 30 }
+  ],
+  "reset": [ { "command": "java -cp ../target/smoker-demo.jar smoker.demo.DemoSimulator --send 5555 RESET", "timeoutS": 20 } ],
+  "resetScenario": "reset.json",
+  "after": [ { "command": "java -cp ../target/smoker-demo.jar smoker.demo.DemoSimulator --send 5555 QUIT", "timeoutS": 20 } ],
+  "scenarios": ["sim-a.json", "sim-b.json"]
+}
+```
+
+| field | meaning | default |
+|---|---|---|
+| `app` | command line of the application, as `--app`, with the token `{agent}` | required |
+| `workDir` | working directory of the application and of all commands | the current directory of the CLI |
+| `agentConfig` | agent keys: `log` (a string or an array of strings), `logPattern`, `failLevel`, `failRegex`, `allowRegex`, `logCharset`, `screenshots`, `edtHangMs`, `stopTimeoutMs` | none |
+| `before` | commands that run before the first application start, in sequence | none |
+| `reset` | commands that run between two scenarios and before each later application start | none |
+| `resetScenario` | scenario that the agent replays between two scenarios, without a snapshot | none |
+| `after` | commands that run at the end of the suite, always | none |
+| `scenarios` | scenario files and folders in run sequence; a folder gives its `*.json` files in name sequence, without golden files | required |
+
+A command is an object:
+
+| field | meaning | default |
+|---|---|---|
+| `command` | command line; the CLI splits it as it splits `--app` | required |
+| `timeoutS` | time limit of a command that the CLI waits for | 60 |
+| `background` | `true`: the CLI keeps the process in operation and does not wait for its end; only in `before` | false |
+| `readyPort` | the CLI waits until `127.0.0.1:<port>` accepts a TCP connection; only with `background` | none |
+| `readyTimeoutS` | time limit of the wait for `readyPort` | 60 |
+
+Rules:
+
+- A relative path in `scenarios`, `resetScenario` and `workDir` is relative to the folder of the suite file.
+- A relative path in a command or in `agentConfig.log` is relative to `workDir`.
+- The file names of the scenarios, without the extension, must be different. Each name is the name of a result folder.
+- The CLI checks the suite file, each scenario file and each golden file before it runs the first command.
+  An unknown field, an unknown `agentConfig` key or a wrong file gives a message and exit code 2.
+- `run --suite` permits only `--agent`, `--out`, `--strict` and `--timeout`. Each other option gives
+  `run: --<option> is not permitted with --suite; put it in the suite file` and exit code 2.
+- The CLI puts the agent option at the token `{agent}` in `app`, or after the first word. A fixed `-javaagent` line
+  in `eclipse.ini` does not operate with `run`: each application start has its own configuration file.
+  For a launcher, write `myapp.exe -vmargs {agent}`.
+- `--timeout <s>` replaces the time limit of each scenario (the time limit of the stop is added).
+
+Sequence:
+
+1. The CLI runs the `before` commands. The output of command *n* goes to `<out>/before-<n>.log`.
+   A command that fails, or a `readyPort` that does not open, gives exit code 2 and no scenario runs.
+2. The CLI starts the application with the scenarios that have no verdict. The agent runs them one after the other.
+3. Between two scenarios the agent does the reset step. It closes the dialogs, runs the `reset` commands
+   (output in `<out>/<next scenario>/reset-command.log`) and replays `resetScenario`. The result of the step has the
+   step id `reset`. A step of the reset that is not PASS gives that status to the next scenario.
+4. The agent stops the application after a scenario with the status FAIL, HANG or ERROR. It does not run the scenarios that remain.
+5. The CLI runs the `reset` commands, and starts the application again for the scenarios that have no verdict.
+6. The CLI runs the `after` commands, also after an error and after Ctrl+C. A failed `after` command does not stop the others.
+   Then it stops each background process. On Java 9 or later, this includes the child processes. On Java 8, only the
+   process stops: the CLI prints `cannot stop child processes on Java 8: use an 'after' command` and the exit code is 2.
+   Stop the simulator with an `after` command in this case.
+7. The CLI writes `junit.xml`, `report.html` and `suite-result.json` and prints `application starts: <n>`.
+
+Retry rule. A scenario that is the first of a launch runs in a new JVM. Its result is its verdict.
+A scenario that runs later in a shared JVM and gets FAIL, HANG or ERROR has no verdict yet.
+The CLI moves its result folder to `<out>/<name>.shared/` and runs the scenario first in the next launch.
+The result of that launch is the verdict. The verdict has a note in the reports and in `suite-result.json`:
+
+- `failed in a shared JVM, passed in a new JVM`: the reset is not complete. The verdict is PASS.
+- `failed in a shared JVM and in a new JVM`: the verdict is the result of the new JVM.
+- `failed in a shared JVM; the application did not start for the retry`: the result of the shared JVM stays.
+
+A failed `startup` step is not a verdict. After 3 failed starts in sequence, each scenario without a verdict gets
+ERROR `not run: the application did not start 3 times`, and the reports have the entry `(application start)`.
+`approve` on a result from a shared JVM prints a warning: the golden then holds the state after other scenarios.
+Approve a golden from a result that ran first in its JVM, or from a run of the scenario alone.
+
+`suite-result.json` has `applicationStarts`, `scenarios` (each with `name`, `status`, `attempts` and `note`) and
+`commandErrors`. Exit code: 2 when a `before`, `reset` or `after` command failed or a background process did not
+stop; else 1 when a verdict is not PASS (NO_GOLDEN counts as PASS without `--strict`); else 0.
+
+Time limit. The CLI polls the result files two times each second. The limit of the scenario in work is its `budgetMs`
+(without the startup part when it is not the first), the limits of the `reset` commands and of the reset scenario, and
+3 times `stopTimeoutMs`. Past the limit, the CLI stops the application with force. The scenario in work gets HANG.
+
+Hard stop of the CLI. The CLI writes the time to `<out>/cli-alive` each second while an application runs.
+A hard stop (a cancelled pipeline job on Windows) runs no shutdown hook. The agent then sees that the file is older
+than 10 s, prints `[smoker] the CLI stopped; stopping the application`, and stops the application after the scenario
+in work. The tool cannot stop the simulator in this case. The `before` script must tolerate, or stop, a simulator
+that an earlier job left.
+
+Screenshots. Set `"screenshots": "off"` in `agentConfig` when a suite does not need them. On macOS, a screenshot takes
+about 1 s while the display sleeps, and much longer in a JVM that made many windows.
 
 ### Log rules
 

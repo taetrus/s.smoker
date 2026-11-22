@@ -54,8 +54,17 @@ Three decisions carry the design:
 | smoker-agent | `smoker.agent` | `SmokerAgent` (premain), `AgentConfig`, `Observations`, `LogTailer`, `LogPattern`, `LogLevel`, `LogEvent`, `EventJoiner`, `FailRule`, `ConsoleTee`, `EdtWatchdog`, `Quiescence`, `Locators`, `SnapshotTaker`, `ActionExecutor`, `Player`, `Recorder`, `RecorderToolbar`, `Screenshots` |
 | | `smoker.agent` | `WindowKeys` — applies the `WindowKey` rules to window titles |
 | | `smoker.agent` | `LogPattern` — converts the Logback `logPattern` into one regex (time, level, logger, thread, message).<br>`LogLevel` — the log levels in Logback order, for `failLevel`.<br>`LogEvent` — one log event: the lines of one entry, joined.<br>`EventJoiner` — joins the lines of one log source into events. A stack trace gives one hit.<br>`FailRule` — decides once for each closed event whether it is a hit (level, `failRegex`, allow rules).<br>`ConsoleTee` — wraps `System.out` and `System.err`. It passes the bytes unchanged. It keeps one line and one joiner for each writing thread, and gives each decoded line to the joiner of its thread. |
-| smoker-cli | `smoker.cli` | `Main` — `run` / `record` / `approve` |
+| | `smoker.core.io` | `ConfigFile` — reads and writes the agent configuration file (`key=value`, numbered keys) |
+| | `smoker.core.proc` | `Processes` — runs commands and background processes; `stopTree` stops the descendants on Java 9+ (reflection on `ProcessHandle`) |
+| smoker-agent | `smoker.agent` | `Session` — runs the scenarios of one launch list in one JVM: result file per scenario, `reset` step between two scenarios, stop after FAIL/HANG/ERROR |
+| | `smoker.agent` | `AppStopper` — the stop in three stages (`WINDOW_CLOSING`, OSGi system bundle, `System.exit` with the `smoker-halt` thread as safety) |
+| | `smoker.agent` | `DialogCloser` — closes the dialogs that do not belong to the tool, for the reset step |
+| smoker-cli | `smoker.cli` | `Main` — `run` / `run --suite` / `record` / `approve` |
+| | `smoker.cli` | `SuiteFile` — reads and checks the suite file (fields, commands, scenarios, golden files) |
+| | `smoker.cli` | `SuitePlan` — pure logic: launch lists, verdicts, the retry rule and its notes, the count of failed starts |
+| | `smoker.cli` | `SuiteRunner` — `before` / `reset` / `after` commands, application starts, the watch of the result files, time limits, `cli-alive`, the one-time cleanup, `suite-result.json` |
 | smoker-demo | `smoker.demo` | `DemoApp` + `scenarios/` (`greet.json`, `wait.json`, ...) + `scenarios-failing/` |
+| | `smoker.demo` | `DemoSimulator` — TCP simulator for the suite checks (`PING`, `INC`, `GET`, `RESET`, `QUIT`); `sim/start-sim.*` start it; `suite/` has the suite example and its scenarios |
 
 Gson is relocated to `smoker.shaded.gson` in both shaded jars (R-03). The agent jar has no other dependency.
 
@@ -89,6 +98,25 @@ which a modal dialog's secondary loop services. Only true silence is a hang.
 **Stop.** `AppStopper` ends the application after the final result (F-10, R-38): `WINDOW_CLOSING` to the main frames on the EDT (skipped on HANG), `stop()` of the OSGi system bundle by reflection (no OSGi type at compile time), then `System.exit(code)`. Each of the first two stages waits `stopTimeoutMs`. The daemon thread `smoker-halt` calls `Runtime.halt` when `System.exit` does not return. The class does not depend on `Player`. When the application exits itself in stage 1 (for example `EXIT_ON_CLOSE`), the exit code is the code of the application, and the shutdown hook of `Player` does nothing because `finished` is set.
 
 **Startup** is a pseudo-step: first `Frame` showing within `startupTimeoutMs`, quiet, no log hits (R-14).
+
+## 3a. Suite mode (WP-05)
+
+`run --suite` is the CLI side, `Session` is the agent side. The CLI writes one configuration file for each application
+start (`<out>/agent-<k>.cfg`) with the launch list (`scenario.1`, `scenario.2`, ...), the reset commands and the reset scenario.
+
+- **Session.** The agent runs the launch list in one JVM. The first scenario has the `startup` step. A scenario that
+  follows gets the `reset` step as its first step: close the dialogs (`DialogCloser`), run the `reset` commands
+  (`Processes.run`), replay the reset scenario without a snapshot, read the logs. A `reset` step that is not PASS gives
+  its status to the next scenario. After FAIL, HANG or ERROR, the session stops: the scenarios that remain have no result file.
+- **Stop.** After the last result, `AppStopper` stops the application in three stages. The exit code is then not
+  a source of the verdict: the CLI reads the result files.
+- **Verdicts and retry.** `SuitePlan` takes the results of a launch. The first scenario of a launch ran in a new JVM:
+  its result is the verdict. A later scenario with FAIL, HANG or ERROR ran in a shared JVM: the CLI moves its folder to
+  `<name>.shared/` and puts it first in the next launch (`SuiteRunner`). The retry gives the note on the verdict.
+- **Time limits.** `SuiteRunner` polls the result files, computes the limit of the scenario in work, and stops the JVM
+  with force when the limit passes.
+- **Cleanup.** The `after` commands and the stop of the background processes run one time (`cleanup`), also after an
+  exception and on Ctrl+C. For a hard stop of the CLI, the agent reads `aliveFile` before each scenario and each reset step.
 
 ## 4. Observing logs inside OSGi (R-10, R-15)
 

@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 2,
+  "name": "short",
+  "description": "Type a name and clear it again: the application ends where it started.",
+  "startupTimeoutMs": 30000,
+  "quietMs": 300,
+  "stepTimeoutMs": 10000,
+  "ignore": { "paths": [], "attributes": [], "valuePatterns": [] },
+  "steps": [
+    { "id": "s001", "name": "enter name", "action": { "type": "SET_TEXT", "locator": { "name": "demo.name" }, "value": "Kerem" } },
+    { "id": "s002", "name": "clear name", "action": { "type": "SET_TEXT", "locator": { "name": "demo.name" }, "value": "" } }
+  ]
+}

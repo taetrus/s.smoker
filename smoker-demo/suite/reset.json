@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 2,
+  "name": "reset",
+  "description": "Clear the name field: the reset scenario of a suite.",
+  "startupTimeoutMs": 30000,
+  "quietMs": 300,
+  "stepTimeoutMs": 10000,
+  "ignore": {
+    "paths": [],
+    "attributes": [],
+    "valuePatterns": []
+  },
+  "steps": [
+    {
+      "id": "s001",
+      "name": "clear name",
+      "action": {
+        "type": "SET_TEXT",
+        "locator": {
+          "name": "demo.name"
+        },
+        "value": ""
+      }
+    }
+  ]
+}

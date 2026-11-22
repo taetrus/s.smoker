@@ -48,6 +48,13 @@ It checks the WP-03 criterion on `wait.json`: run1 s001 PASS without a snapshot,
 It checks the WP-04 criterion with `-Ddemo.logPanel=true` (`scenarios-log/`): `log.json` s001 FAIL with one `file:demo.log` hit
 of 40 `\tat` lines, s002 no hit, s003 FAIL with one `stderr` hit; `exit.json` gives ERROR, `currentStep` s001, CLI exit code 1.
 With `-Ddemo.equinoxError=true`, `greet.json` gives FAIL of `startup` with 4 `stdout` hits. `approve` without `run-result.json` gives exit code 2.
+It checks the WP-05 criterion with `run --suite` (suite files written at run time from `smoker-demo/suite/`, `screenshots` off):
+20 copies of a short scenario and a reset scenario give NO_GOLDEN, then PASS, `applicationStarts` 1 and `application starts: 1`.
+Scenario `a` (leaves a name) before `b` (golden of an empty name) gives `b` PASS with attempts 2, the note
+`failed in a shared JVM, passed in a new JVM`, `applicationStarts` 2 and the folder `b.shared`.
+With `DemoSimulator` (`-Ddemo.simPort`): `before` starts it, the `reset` command resets it, `sim-a` and `sim-b` PASS in one JVM,
+`bad` FAIL with `failed in a shared JVM and in a new JVM`, exit code 1, the `after` marker exists and the port is closed.
+A `before` command with exit code 1 gives exit code 2, no `agent-1.cfg`, and the `after` marker exists.
 Run `mvn -B verify` and `mvn -B verify -Plocale-tr`
 after every change to `smoker-agent` or `smoker-core`.
 
@@ -60,7 +67,7 @@ after every change to `smoker-agent` or `smoker-core`.
 - WP-04 (log analysis) is complete; F-08, F-09, F-22 and F-24 are closed. Merged in PR #11; PR #13 keeps the console
   lines of each thread apart. Demo checks pass (SelfTestIT). The Windows check on the pilot (2026-11-22, after PR #13):
   5 of 5 runs pass, and 3 of 3 `jre8` runs give 28 hits. See `docs/wp-04-windows-report.md`.
-- Tests: 68 in `smoker-core`, 234 in `smoker-agent`, 29 in `smoker-cli`, 9 IT. They pass on macOS (JDK 27 default
+- Tests: 83 in `smoker-core`, 268 in `smoker-agent`, 70 in `smoker-cli`, 16 IT. They pass on macOS (JDK 27 default
   locale and `-Plocale-tr`) and in the Windows CI (JDK 25: default, `-Plocale-tr`, tr_TR with JRE 8u341 as test JVM).
 - The record log and `app-output.log` are in the console charset of the application (Cp1252 on Windows), not UTF-8.
   PR #8 (merged 2026-11-19) makes the `[smoker]` texts ASCII and documents this in `README.md`.

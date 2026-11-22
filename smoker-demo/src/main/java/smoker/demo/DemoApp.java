@@ -48,6 +48,9 @@ public class DemoApp {
     // -Ddemo.ignoreClose=true: the main frame ignores WINDOW_CLOSING and deletes no lock file.
     private static final boolean IGNORE_CLOSE = Boolean.getBoolean("demo.ignoreClose");
 
+    // -Ddemo.simPort=<port>: a row with the button demo.sim.count (sends INC to the simulator) and the label demo.sim.value (WP-05, R-37).
+    private static final String SIM_PORT = System.getProperty("demo.simPort");
+
     public static void main(String[] args) throws IOException {
         FileHandler fh = new FileHandler(System.getProperty("demo.log", "demo.log"), true);
         fh.setFormatter(new PilotFormatter());
@@ -121,6 +124,29 @@ public class DemoApp {
         p.add(print);
         p.add(exit);
         return p;
+    }
+
+    private static JPanel simRow(final int port) {
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        JButton count = new JButton("Count");
+        count.setName("demo.sim.count");
+        final JLabel value = new JLabel("-");
+        value.setName("demo.sim.value");
+        count.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                // A local socket answers at once; the call has a time limit of 5 s.
+                try {
+                    value.setText(DemoSimulator.ask(port, "INC"));
+                } catch (IOException ex) {
+                    value.setText("error");
+                    LOG.info("simulator: " + ex);
+                }
+            }
+        });
+        row.add(count);
+        row.add(value);
+        return row;
     }
 
     static void build() {
@@ -263,7 +289,14 @@ public class DemoApp {
         queryRow.add(answer);
         JPanel southAll = new JPanel(new BorderLayout());
         southAll.add(south, BorderLayout.CENTER);
-        southAll.add(queryRow, BorderLayout.SOUTH);
+        if (SIM_PORT != null) {
+            JPanel both = new JPanel(new BorderLayout());
+            both.add(queryRow, BorderLayout.CENTER);
+            both.add(simRow(Integer.parseInt(SIM_PORT)), BorderLayout.SOUTH);
+            southAll.add(both, BorderLayout.SOUTH);
+        } else {
+            southAll.add(queryRow, BorderLayout.SOUTH);
+        }
         f.getContentPane().add(southAll, BorderLayout.SOUTH);
         f.setSize(640, 400);
         f.setLocation(100, 100);
