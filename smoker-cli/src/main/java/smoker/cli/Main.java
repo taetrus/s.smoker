@@ -34,6 +34,7 @@ import java.util.concurrent.TimeUnit;
  * <pre>
  * java -jar smoker-cli.jar run     --agent smoker-agent.jar --app "java -jar app.jar" --scenarios scenarios/ --out out/ [--log app.log] [--screenshots off] [--strict]
  *     [--failRegex r] [--allowRegex r] [--logPattern p] [--failLevel L] [--logCharset c]
+ * java -jar smoker-cli.jar run     --agent smoker-agent.jar --suite suite.json [--out out/] [--strict] [--timeout s]
  * java -jar smoker-cli.jar record  --agent smoker-agent.jar --app "java -jar app.jar" --scenario scenarios/new.json [--log app.log]
  *     [--logPattern p] [--failLevel L] [--logCharset c]
  * java -jar smoker-cli.jar approve --run out/greet --scenario scenarios/greet.json [--steps s001,s002]
@@ -69,7 +70,37 @@ public final class Main {
         return ms;
     }
 
+    private static final java.util.Collection<String> SUITE_OPTIONS = Arrays.asList("suite", "agent", "out", "strict", "timeout");
+
+    /** {@code run --suite}: the suite file holds everything else (WP-05). */
+    static int runSuite(Map<String, String> o) throws Exception {
+        for (String k : o.keySet()) {
+            if (!SUITE_OPTIONS.contains(k)) {
+                System.err.println("run: --" + k + " is not permitted with --suite; put it in the suite file");
+                return 2;
+            }
+        }
+        Path agent = Paths.get(req(o, "agent")).toAbsolutePath();
+        Path out = Paths.get(o.containsKey("out") ? o.get("out") : "smoker-out").toAbsolutePath();
+        Long timeoutS = null;
+        try {
+            if (o.containsKey("timeout")) timeoutS = Long.valueOf(o.get("timeout"));
+        } catch (NumberFormatException e) {
+            System.err.println("run: --timeout must be a whole number of seconds");
+            return 2;
+        }
+        SuiteFile suite;
+        try {
+            suite = SuiteFile.read(Paths.get(o.get("suite")));
+        } catch (IllegalArgumentException e) {
+            System.err.println(e.getMessage());
+            return 2;
+        }
+        return new SuiteRunner(suite, agent, out, o.containsKey("strict"), timeoutS).run();
+    }
+
     static int run(Map<String, String> o) throws Exception {
+        if (o.containsKey("suite")) return runSuite(o);
         Path agent = Paths.get(req(o, "agent")).toAbsolutePath();
         Path out = Paths.get(o.containsKey("out") ? o.get("out") : "smoker-out").toAbsolutePath();
         List<Path> scenarios = scenarios(req(o, "scenarios"));
@@ -111,19 +142,24 @@ public final class Main {
             results.add(r);
             boolean ok = r.status == RunResult.Status.PASS || (!strict && r.status == RunResult.Status.NO_GOLDEN);
             if (!ok) failures++;
-            System.out.println("   " + r.status + (r.error != null ? " — " + r.error : ""));
-            for (RunResult.StepResult s : r.steps) {
-                if (s.status != RunResult.Status.PASS) {
-                    System.out.println("   " + s.stepId + " " + s.status + (s.error != null ? ": " + s.error : ""));
-                    for (String d : s.differences) System.out.println("      " + d);
-                    for (RunResult.LogHit h : s.logHits) System.out.println("      [" + h.source + "] " + h.line);
-                }
-            }
+            printResult(r);
         }
         JUnitXmlWriter.write(out.resolve("junit.xml"), results);
         HtmlReportWriter.write(out.resolve("report.html"), results);
         System.out.println("\n" + results.size() + " scenario(s), " + failures + " failed. Report: " + out.resolve("report.html"));
         return failures == 0 ? 0 : 1;
+    }
+
+    /** Prints the verdict of one scenario: status, error and each step that did not pass. */
+    static void printResult(RunResult r) {
+        System.out.println("   " + r.status + (r.error != null ? " \u2014 " + r.error : ""));
+        for (RunResult.StepResult s : r.steps) {
+            if (s.status != RunResult.Status.PASS) {
+                System.out.println("   " + s.stepId + " " + s.status + (s.error != null ? ": " + s.error : ""));
+                for (String d : s.differences) System.out.println("      " + d);
+                for (RunResult.LogHit h : s.logHits) System.out.println("      [" + h.source + "] " + h.line);
+            }
+        }
     }
 
     /**
@@ -335,9 +371,9 @@ public final class Main {
         return sc;
     }
 
-    /** @return exit code, or -999 if killed on timeout. */
-    static int launch(String appCmd, Path agentJar, Path configFile, Path workDir, Path outputLog, long budgetMs)
-            throws IOException, InterruptedException {
+    /** Starts the application with the agent option. Its output goes to {@code outputLog}. */
+    static Process start(String appCmd, Path agentJar, Path configFile, Path workDir, Path outputLog)
+            throws IOException {
         String javaagent = "-javaagent:" + agentJar + "=config=" + configFile.toAbsolutePath();
         List<String> cmd = new ArrayList<String>(Processes.split(appCmd));
         int at = cmd.indexOf("{agent}");
@@ -348,7 +384,13 @@ public final class Main {
         if (workDir != null) pb.directory(workDir.toFile());
         pb.redirectErrorStream(true);
         pb.redirectOutput(outputLog.toFile());
-        Process p = pb.start();
+        return pb.start();
+    }
+
+    /** @return exit code, or -999 if killed on timeout. */
+    static int launch(String appCmd, Path agentJar, Path configFile, Path workDir, Path outputLog, long budgetMs)
+            throws IOException, InterruptedException {
+        Process p = start(appCmd, agentJar, configFile, workDir, outputLog);
         if (budgetMs == Long.MAX_VALUE) return p.waitFor();
         if (!p.waitFor(budgetMs, TimeUnit.MILLISECONDS)) {
             p.destroyForcibly();
@@ -411,6 +453,8 @@ public final class Main {
         System.err.println("usage:\n"
                 + "  run     --agent smoker-agent.jar --app \"<cmd>\" --scenarios <dir|file> --out <dir> [--log <file>] [--screenshots off] [--strict] [--timeout <s>]\n"
                 + "          [--failRegex <r>] [--allowRegex <r>] [--logPattern <p>] [--failLevel <L>] [--logCharset <c>]\n"
+                + "  run     --agent smoker-agent.jar --suite <suite.json> [--out <dir>] [--strict] [--timeout <s>]\n"
+                + "          (the suite file holds the application, the commands, the log files and the scenarios)\n"
                 + "  record  --agent smoker-agent.jar --app \"<cmd>\" --scenario <file> [--log <file>]\n"
                 + "          [--logPattern <p>] [--failLevel <L>] [--logCharset <c>]\n"
                 + "  approve --run <out/scenario-dir> --scenario <file> [--steps s001,s002]\n"
