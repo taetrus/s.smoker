@@ -43,12 +43,21 @@ public class DemoApp {
     // -Ddemo.equinoxError=true: the application prints an Equinox start error to System.out before the UI (F-22).
     private static final boolean EQUINOX_ERROR = Boolean.getBoolean("demo.equinoxError");
 
+    // -Ddemo.lockFile=<file>: created at start, deleted when the main frame closes (test of the clean stop, WP-05).
+    private static final String LOCK_FILE = System.getProperty("demo.lockFile");
+    // -Ddemo.ignoreClose=true: the main frame ignores WINDOW_CLOSING and deletes no lock file.
+    private static final boolean IGNORE_CLOSE = Boolean.getBoolean("demo.ignoreClose");
+
+    // -Ddemo.simPort=<port>: a row with the button demo.sim.count (sends INC to the simulator) and the label demo.sim.value (WP-05, R-37).
+    private static final String SIM_PORT = System.getProperty("demo.simPort");
+
     public static void main(String[] args) throws IOException {
         FileHandler fh = new FileHandler(System.getProperty("demo.log", "demo.log"), true);
         fh.setFormatter(new PilotFormatter());
         LOG.addHandler(fh);
         LOG.setUseParentHandlers(false);
         if (EQUINOX_ERROR) printEquinoxError();
+        if (LOCK_FILE != null) java.nio.file.Files.write(java.nio.file.Paths.get(LOCK_FILE), new byte[0]);
         SwingUtilities.invokeLater(new Runnable() {
             @Override
             public void run() {
@@ -117,10 +126,41 @@ public class DemoApp {
         return p;
     }
 
+    private static JPanel simRow(final int port) {
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        JButton count = new JButton("Count");
+        count.setName("demo.sim.count");
+        final JLabel value = new JLabel("-");
+        value.setName("demo.sim.value");
+        count.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                // A local socket answers at once; the call has a time limit of 5 s.
+                try {
+                    value.setText(DemoSimulator.ask(port, "INC"));
+                } catch (IOException ex) {
+                    value.setText("error");
+                    LOG.info("simulator: " + ex);
+                }
+            }
+        });
+        row.add(count);
+        row.add(value);
+        return row;
+    }
+
     static void build() {
         final JFrame f = new JFrame("Smoker Demo");
         f.setName("demo.frame");
-        f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        f.setDefaultCloseOperation(IGNORE_CLOSE ? JFrame.DO_NOTHING_ON_CLOSE : JFrame.EXIT_ON_CLOSE);
+        if (LOCK_FILE != null && !IGNORE_CLOSE) {
+            f.addWindowListener(new java.awt.event.WindowAdapter() {
+                @Override
+                public void windowClosing(java.awt.event.WindowEvent e) {
+                    new java.io.File(LOCK_FILE).delete();
+                }
+            });
+        }
 
         JMenuBar mb = new JMenuBar();
         JMenu help = new JMenu("Help");
@@ -249,7 +289,14 @@ public class DemoApp {
         queryRow.add(answer);
         JPanel southAll = new JPanel(new BorderLayout());
         southAll.add(south, BorderLayout.CENTER);
-        southAll.add(queryRow, BorderLayout.SOUTH);
+        if (SIM_PORT != null) {
+            JPanel both = new JPanel(new BorderLayout());
+            both.add(queryRow, BorderLayout.CENTER);
+            both.add(simRow(Integer.parseInt(SIM_PORT)), BorderLayout.SOUTH);
+            southAll.add(both, BorderLayout.SOUTH);
+        } else {
+            southAll.add(queryRow, BorderLayout.SOUTH);
+        }
         f.getContentPane().add(southAll, BorderLayout.SOUTH);
         f.setSize(640, 400);
         f.setLocation(100, 100);

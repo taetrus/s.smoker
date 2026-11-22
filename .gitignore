@@ -2,3 +2,4 @@ target/
 .m2/
 *.record.log
 smoker-out/
+.DS_Store

@@ -1,6 +1,7 @@
 package smoker.cli;
 
 import smoker.core.diff.SnapshotDiff;
+import smoker.core.io.ConfigFile;
 import smoker.core.io.Json;
 import smoker.core.io.ScenarioFiles;
 import smoker.core.model.Action;
@@ -9,6 +10,7 @@ import smoker.core.model.RunResult;
 import smoker.core.model.Scenario;
 import smoker.core.model.Snapshot;
 import smoker.core.model.Step;
+import smoker.core.proc.Processes;
 import smoker.core.report.HtmlReportWriter;
 import smoker.core.report.JUnitXmlWriter;
 
@@ -32,6 +34,7 @@ import java.util.concurrent.TimeUnit;
  * <pre>
  * java -jar smoker-cli.jar run     --agent smoker-agent.jar --app "java -jar app.jar" --scenarios scenarios/ --out out/ [--log app.log] [--screenshots off] [--strict]
  *     [--failRegex r] [--allowRegex r] [--logPattern p] [--failLevel L] [--logCharset c]
+ * java -jar smoker-cli.jar run     --agent smoker-agent.jar --suite suite.json [--out out/] [--strict] [--timeout s]
  * java -jar smoker-cli.jar record  --agent smoker-agent.jar --app "java -jar app.jar" --scenario scenarios/new.json [--log app.log]
  *     [--logPattern p] [--failLevel L] [--logCharset c]
  * java -jar smoker-cli.jar approve --run out/greet --scenario scenarios/greet.json [--steps s001,s002]
@@ -67,7 +70,37 @@ public final class Main {
         return ms;
     }
 
+    private static final java.util.Collection<String> SUITE_OPTIONS = Arrays.asList("suite", "agent", "out", "strict", "timeout");
+
+    /** {@code run --suite}: the suite file holds everything else (WP-05). */
+    static int runSuite(Map<String, String> o) throws Exception {
+        for (String k : o.keySet()) {
+            if (!SUITE_OPTIONS.contains(k)) {
+                System.err.println("run: --" + k + " is not permitted with --suite; put it in the suite file");
+                return 2;
+            }
+        }
+        Path agent = Paths.get(req(o, "agent")).toAbsolutePath();
+        Path out = Paths.get(o.containsKey("out") ? o.get("out") : "smoker-out").toAbsolutePath();
+        Long timeoutS = null;
+        try {
+            if (o.containsKey("timeout")) timeoutS = Long.valueOf(o.get("timeout"));
+        } catch (NumberFormatException e) {
+            System.err.println("run: --timeout must be a whole number of seconds");
+            return 2;
+        }
+        SuiteFile suite;
+        try {
+            suite = SuiteFile.read(Paths.get(o.get("suite")));
+        } catch (IllegalArgumentException e) {
+            System.err.println(e.getMessage());
+            return 2;
+        }
+        return new SuiteRunner(suite, agent, out, o.containsKey("strict"), timeoutS).run();
+    }
+
     static int run(Map<String, String> o) throws Exception {
+        if (o.containsKey("suite")) return runSuite(o);
         Path agent = Paths.get(req(o, "agent")).toAbsolutePath();
         Path out = Paths.get(o.containsKey("out") ? o.get("out") : "smoker-out").toAbsolutePath();
         List<Path> scenarios = scenarios(req(o, "scenarios"));
@@ -82,18 +115,18 @@ public final class Main {
             System.err.println(e.getMessage());
             return 2;
         }
-        if (o.containsKey("logPattern") && o.get("logPattern").indexOf(';') >= 0) {
-            System.err.println(SEMICOLON.replace("<cmd>", "run"));
-            return 2;
-        }
         Files.createDirectories(out);
         List<RunResult> results = new ArrayList<RunResult>();
         int failures = 0;
-        for (Path sc : scenarios) {
+        for (int index = 0; index < scenarios.size(); index++) {
+            Path sc = scenarios.get(index);
             String name = stripExt(sc.getFileName().toString());
             Path runDir = out.resolve(name);
             Files.createDirectories(runDir);
-            String agentArgs = agentArgs(o, sc, runDir);
+            LinkedHashMap<String, String> cfg = agentConfig(o, Arrays.asList(sc.toAbsolutePath()), out);
+            cfg.put("mode", "play");
+            Path cfgFile = out.resolve("agent-" + (index + 1) + ".cfg");
+            ConfigFile.write(cfgFile, cfg);
             Scenario scenario = parsed.get(sc);
             long budgetMs = budgetMs(scenario);
             if (o.containsKey("timeout")) budgetMs = Long.parseLong(o.get("timeout")) * 1000;
@@ -101,22 +134,15 @@ public final class Main {
             System.out.println("== " + name);
             // An old result must not look like the result of this run.
             Files.deleteIfExists(runDir.resolve("run-result.json"));
-            int exit = launch(req(o, "app"), agent, agentArgs, runDir.resolve("app-output.log"), budgetMs);
+            int exit = launch(req(o, "app"), agent, cfgFile, null, runDir.resolve("app-output.log"), budgetMs);
 
-            RunResult r = resultOf(runDir, name, sc, exit, budgetMs);
+            RunResult r = resultOf(runDir, name, sc, exit, budgetMs, "app-output.log");
             // make screenshot paths relative to the report
             for (RunResult.StepResult s : r.steps) if (s.screenshot != null) s.screenshot = name + "/" + s.screenshot;
             results.add(r);
             boolean ok = r.status == RunResult.Status.PASS || (!strict && r.status == RunResult.Status.NO_GOLDEN);
             if (!ok) failures++;
-            System.out.println("   " + r.status + (r.error != null ? " — " + r.error : ""));
-            for (RunResult.StepResult s : r.steps) {
-                if (s.status != RunResult.Status.PASS) {
-                    System.out.println("   " + s.stepId + " " + s.status + (s.error != null ? ": " + s.error : ""));
-                    for (String d : s.differences) System.out.println("      " + d);
-                    for (RunResult.LogHit h : s.logHits) System.out.println("      [" + h.source + "] " + h.line);
-                }
-            }
+            printResult(r);
         }
         JUnitXmlWriter.write(out.resolve("junit.xml"), results);
         HtmlReportWriter.write(out.resolve("report.html"), results);
@@ -124,24 +150,43 @@ public final class Main {
         return failures == 0 ? 0 : 1;
     }
 
-    private static final String SEMICOLON = "<cmd>: logPattern must not contain ';' "
-            + "(agent arguments use ';'; WP-05 adds a configuration file)";
-
-    /** The agent arguments of one {@code run}. */
-    static String agentArgs(Map<String, String> o, Path scenario, Path runDir) {
-        StringBuilder a = new StringBuilder("mode=play;scenario=").append(scenario.toAbsolutePath())
-                .append(";out=").append(runDir);
-        for (String k : new String[] {"log", "screenshots", "failRegex", "allowRegex", "logPattern", "failLevel", "logCharset"}) {
-            if (o.containsKey(k)) a.append(';').append(k).append('=').append(o.get(k));
+    /** Prints the verdict of one scenario: status, error and each step that did not pass. */
+    static void printResult(RunResult r) {
+        System.out.println("   " + r.status + (r.error != null ? " \u2014 " + r.error : ""));
+        for (RunResult.StepResult s : r.steps) {
+            if (s.status != RunResult.Status.PASS) {
+                System.out.println("   " + s.stepId + " " + s.status + (s.error != null ? ": " + s.error : ""));
+                for (String d : s.differences) System.out.println("      " + d);
+                for (RunResult.LogHit h : s.logHits) System.out.println("      [" + h.source + "] " + h.line);
+            }
         }
-        return a.toString();
     }
 
     /**
-     * The result of one run. The file of the agent has a step in {@code currentStep} and {@code finishedAt} 0 when the
+     * The agent configuration of one application run: the scenarios, the root folder of the results and the options
+     * that pass through. {@code out} null leaves the key {@code out} out. The caller adds {@code mode}.
+     */
+    static LinkedHashMap<String, String> agentConfig(Map<String, String> o, List<Path> scenarios, Path out) {
+        LinkedHashMap<String, String> c = new LinkedHashMap<String, String>();
+        if (out != null) c.put("out", out.toString());
+        for (int i = 0; i < scenarios.size(); i++) c.put("scenario." + (i + 1), scenarios.get(i).toAbsolutePath().toString());
+        if (o.containsKey("log")) {
+            String[] files = o.get("log").split(",");
+            for (int i = 0; i < files.length; i++) c.put("log." + (i + 1), files[i].trim());
+        }
+        for (String k : new String[] {"screenshots", "failRegex", "allowRegex", "logPattern", "failLevel", "logCharset",
+                "stopTimeoutMs"}) {
+            if (o.containsKey(k)) c.put(k, o.get(k));
+        }
+        return c;
+    }
+
+    /**
+     * The result of one run. {@code outputLog} is the name of the output file of the application. The file of the agent has a step in {@code currentStep} and {@code finishedAt} 0 when the
      * application stopped before the end of the run (F-22). The CLI adds the exit code to the error of the exit hook.
      */
-    static RunResult resultOf(Path runDir, String name, Path scenario, int exit, long budgetMs) throws IOException {
+    static RunResult resultOf(Path runDir, String name, Path scenario, int exit, long budgetMs, String outputLog)
+            throws IOException {
         Path resultFile = runDir.resolve("run-result.json");
         if (!Files.exists(resultFile)) {
             RunResult r = new RunResult();
@@ -149,7 +194,7 @@ public final class Main {
             r.scenarioFile = scenario.toString();
             r.status = exit == -999 ? RunResult.Status.HANG : RunResult.Status.ERROR;
             r.error = exit == -999 ? "application did not exit within " + budgetMs + " ms (killed)"
-                    : "no run-result.json produced; app exit code " + exit + " \u2014 see app-output.log";
+                    : "no run-result.json produced; app exit code " + exit + " \u2014 see " + outputLog;
             r.startedAt = r.finishedAt = System.currentTimeMillis();
             return r;
         }
@@ -184,16 +229,17 @@ public final class Main {
                 return 2;
             }
         }
-        if (o.containsKey("logPattern") && o.get("logPattern").indexOf(';') >= 0) {
-            System.err.println(SEMICOLON.replace("<cmd>", "record"));
-            return 2;
-        }
-        StringBuilder agentArgs = new StringBuilder("mode=record;scenario=").append(scenario);
-        for (String k : new String[] {"log", "logPattern", "failLevel", "logCharset"}) {
-            if (o.containsKey(k)) agentArgs.append(';').append(k).append('=').append(o.get(k));
-        }
+        LinkedHashMap<String, String> cfg = agentConfig(o, Arrays.asList(scenario), null);
+        cfg.put("mode", "record");
         Path log = scenario.getParent().resolve(stripExt(scenario.getFileName().toString()) + ".record.log");
-        int exit = launch(req(o, "app"), agent, agentArgs.toString(), log, Long.MAX_VALUE);
+        Path cfgFile = Files.createTempFile("smoker-agent-", ".cfg");
+        int exit;
+        try {
+            ConfigFile.write(cfgFile, cfg);
+            exit = launch(req(o, "app"), agent, cfgFile, null, log, Long.MAX_VALUE);
+        } finally {
+            Files.deleteIfExists(cfgFile);
+        }
         System.out.println("application exited with " + exit + "; scenario file: " + scenario);
         return 0;
     }
@@ -208,6 +254,9 @@ public final class Main {
             return 2;
         }
         RunResult r = Json.read(runDir.resolve("run-result.json"), RunResult.class);
+        if (r.sharedJvm) {
+            System.err.println("approve: warning: the run used a shared JVM; the golden holds the state after other scenarios");
+        }
         Scenario sc;
         LinkedHashMap<String, Snapshot> old;
         try {
@@ -323,18 +372,26 @@ public final class Main {
         return sc;
     }
 
-    /** @return exit code, or -999 if killed on timeout. */
-    static int launch(String appCmd, Path agentJar, String agentArgs, Path outputLog, long budgetMs) throws IOException, InterruptedException {
-        String javaagent = "-javaagent:" + agentJar + "=" + agentArgs;
-        List<String> cmd = new ArrayList<String>(splitCommand(appCmd));
+    /** Starts the application with the agent option. Its output goes to {@code outputLog}. */
+    static Process start(String appCmd, Path agentJar, Path configFile, Path workDir, Path outputLog)
+            throws IOException {
+        String javaagent = "-javaagent:" + agentJar + "=config=" + configFile.toAbsolutePath();
+        List<String> cmd = new ArrayList<String>(Processes.split(appCmd));
         int at = cmd.indexOf("{agent}");
         if (at >= 0) cmd.set(at, javaagent);
         else cmd.add(1, javaagent);
         System.out.println("   $ " + join(cmd));
         ProcessBuilder pb = new ProcessBuilder(cmd);
+        if (workDir != null) pb.directory(workDir.toFile());
         pb.redirectErrorStream(true);
         pb.redirectOutput(outputLog.toFile());
-        Process p = pb.start();
+        return pb.start();
+    }
+
+    /** @return exit code, or -999 if killed on timeout. */
+    static int launch(String appCmd, Path agentJar, Path configFile, Path workDir, Path outputLog, long budgetMs)
+            throws IOException, InterruptedException {
+        Process p = start(appCmd, agentJar, configFile, workDir, outputLog);
         if (budgetMs == Long.MAX_VALUE) return p.waitFor();
         if (!p.waitFor(budgetMs, TimeUnit.MILLISECONDS)) {
             p.destroyForcibly();
@@ -344,34 +401,25 @@ public final class Main {
         return p.exitValue();
     }
 
-    /** Minimal shell-like splitting: whitespace separated, double quotes group. */
-    static List<String> splitCommand(String s) {
-        List<String> out = new ArrayList<String>();
-        StringBuilder cur = new StringBuilder();
-        boolean q = false;
-        for (char c : s.toCharArray()) {
-            if (c == '"') q = !q;
-            else if (Character.isWhitespace(c) && !q) { if (cur.length() > 0) { out.add(cur.toString()); cur.setLength(0); } }
-            else cur.append(c);
-        }
-        if (cur.length() > 0) out.add(cur.toString());
-        return out;
-    }
-
     static List<Path> scenarios(String spec) throws IOException {
         List<Path> out = new ArrayList<Path>();
         for (String s : spec.split(File.pathSeparator)) {
             Path p = Paths.get(s);
-            if (Files.isDirectory(p)) {
-                DirectoryStream<Path> ds = Files.newDirectoryStream(p, "*.json");
-                try {
-                    for (Path f : ds) if (!ScenarioFiles.isGoldenFile(f)) out.add(f);
-                } finally {
-                    ds.close();
-                }
-            } else {
-                out.add(p);
-            }
+            if (Files.isDirectory(p)) out.addAll(scenariosIn(p));
+            else out.add(p);
+        }
+        java.util.Collections.sort(out);
+        return out;
+    }
+
+    /** The scenario files of one folder: {@code *.json} without golden files, sorted. */
+    static List<Path> scenariosIn(Path dir) throws IOException {
+        List<Path> out = new ArrayList<Path>();
+        DirectoryStream<Path> ds = Files.newDirectoryStream(dir, "*.json");
+        try {
+            for (Path f : ds) if (!ScenarioFiles.isGoldenFile(f)) out.add(f);
+        } finally {
+            ds.close();
         }
         java.util.Collections.sort(out);
         return out;
@@ -410,7 +458,9 @@ public final class Main {
     static void usage(int code) {
         System.err.println("usage:\n"
                 + "  run     --agent smoker-agent.jar --app \"<cmd>\" --scenarios <dir|file> --out <dir> [--log <file>] [--screenshots off] [--strict] [--timeout <s>]\n"
-                + "          [--failRegex <r>] [--allowRegex <r>] [--logPattern <p>] [--failLevel <L>] [--logCharset <c>]\n"
+                + "          [--failRegex <r>] [--allowRegex <r>] [--logPattern <p>] [--failLevel <L>] [--logCharset <c>] [--stopTimeoutMs <ms>]\n"
+                + "  run     --agent smoker-agent.jar --suite <suite.json> [--out <dir>] [--strict] [--timeout <s>]\n"
+                + "          (the suite file holds the application, the commands, the log files and the scenarios)\n"
                 + "  record  --agent smoker-agent.jar --app \"<cmd>\" --scenario <file> [--log <file>]\n"
                 + "          [--logPattern <p>] [--failLevel <L>] [--logCharset <c>]\n"
                 + "  approve --run <out/scenario-dir> --scenario <file> [--steps s001,s002]\n"

@@ -1,5 +1,8 @@
 package smoker.it;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import smoker.core.io.Json;
@@ -14,6 +17,9 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import java.awt.GraphicsEnvironment;
 import java.io.File;
 import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -25,6 +31,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -409,6 +416,50 @@ public class SelfTestIT {
         for (RunResult.StepResult s : r.steps) assertFalse("s001 ran", "s001".equals(s.stepId));
     }
 
+    /** R-39: the configuration file carries a folder name with ';', ' ' and '='. The compare itself is not the point. */
+    @Test
+    public void outFolderWithSemicolonAndSpacesWorks() throws Exception {
+        Path dir = Files.createDirectories(work.resolve("odd-out"));
+        Path scenario = dir.resolve("greet.json");
+        Files.copy(demoDir.resolve("scenarios/greet.json"), scenario);
+        Path out = dir.resolve("out;1 a=b");
+        Cli run1 = run(scenario, out, dir.resolve("demo.log"));
+        Path resultFile = out.resolve("greet/run-result.json");
+        assertTrue(run1.output, Files.exists(resultFile));
+        assertTrue(run1.output, Files.exists(out.resolve("agent-1.cfg")));
+        RunResult.Status status = result(out.resolve("greet")).status;
+        assertTrue(run1.output, status == RunResult.Status.PASS || status == RunResult.Status.NO_GOLDEN);
+    }
+
+    /** WP-05, F-10: the stage 1 closes the frame, the demo deletes its lock file, and the stop ends without System.exit. */
+    @Test
+    public void cleanStopRemovesTheLockFile() throws Exception {
+        Path dir = Files.createDirectories(work.resolve("stop-clean"));
+        Path scenario = dir.resolve("greet.json");
+        Files.copy(demoDir.resolve("scenarios/greet.json"), scenario);
+        Path lock = dir.resolve("lock");
+        Cli run1 = run(scenario, dir.resolve("run1"), dir.resolve("demo.log"), "-Ddemo.lockFile=" + quote(lock.toString()));
+        assertFalse(run1.output, Files.exists(lock));
+        String appOutput = read(dir.resolve("run1/greet/app-output.log"));
+        assertTrue(appOutput, appOutput.contains("[smoker] stop: closing the windows"));
+        assertFalse(appOutput, appOutput.contains("stop: System.exit"));
+    }
+
+    /** WP-05, F-10: the application ignores WINDOW_CLOSING. The stop ends with System.exit, and the result stays complete. */
+    @Test
+    public void blockedCloseEndsWithExit() throws Exception {
+        Path dir = Files.createDirectories(work.resolve("stop-blocked"));
+        Path scenario = dir.resolve("greet.json");
+        Files.copy(demoDir.resolve("scenarios/greet.json"), scenario);
+        Path lock = dir.resolve("lock");
+        Cli run1 = runWithStopTimeout("1000", scenario, dir.resolve("run1"), dir.resolve("demo.log"),
+                "-Ddemo.lockFile=" + quote(lock.toString()), "-Ddemo.ignoreClose=true");
+        assertTrue(run1.output, Files.exists(lock));
+        assertTrue(run1.output, result(dir.resolve("run1/greet")).finishedAt > 0);
+        String appOutput = read(dir.resolve("run1/greet/app-output.log"));
+        assertTrue(appOutput, appOutput.contains("[smoker] stop: System.exit("));
+    }
+
     @Test
     public void approveWithoutRunResultGivesExitCode2() throws Exception {
         Path dir = Files.createDirectories(work.resolve("approve-empty"));
@@ -417,6 +468,277 @@ public class SelfTestIT {
         Path empty = Files.createDirectories(dir.resolve("empty-run"));
         Cli approve = cli("approve", "--run", empty.toString(), "--scenario", scenario.toString());
         assertEquals(approve.output, 2, approve.exit);
+    }
+
+
+    // ---- WP-05: suite mode (R-36, R-37) -------------------------------------------------------
+
+    /** R-36: 20 scenarios run in one application start; a reset scenario puts the state back between them. */
+    @Test
+    public void suiteOfTwentyUsesOneStart() throws Exception {
+        Path dir = Files.createDirectories(work.resolve("suite-twenty"));
+        Path scenarios = Files.createDirectories(dir.resolve("scenarios"));
+        List<String> names = new ArrayList<String>();
+        for (int i = 1; i <= 20; i++) {
+            String name = String.format(Locale.ROOT, "copy-%02d", i);
+            names.add(name);
+            String text = read(demoDir.resolve("suite/short.json")).replace("\"name\": \"short\"", "\"name\": \"" + name + "\"");
+            Files.write(scenarios.resolve(name + ".json"), text.getBytes(StandardCharsets.UTF_8));
+        }
+        Path reset = dir.resolve("reset.json");
+        Files.copy(demoDir.resolve("suite/reset.json"), reset);
+        Map<String, Object> suite = suiteBase(dir, suiteApp(dir), "screenshots", "off");
+        suite.put("resetScenario", reset.toString());
+        suite.put("scenarios", Arrays.asList(scenarios.toString()));
+        Path suiteFile = writeSuite(dir.resolve("suite.json"), suite);
+
+        long t0 = System.currentTimeMillis();
+        Cli run1 = cli("run", "--agent", agentJar.toString(), "--suite", suiteFile.toString(), "--out", dir.resolve("out").toString());
+        assertEquals(run1.output, 0, run1.exit);
+        JsonObject r1 = suiteResult(dir.resolve("out"));
+        assertEquals(run1.output, 1, r1.get("applicationStarts").getAsInt());
+        for (String n : names) assertEntry(run1.output, r1, n, "NO_GOLDEN", 1, null);
+        for (String n : names) {
+            Cli approve = cli("approve", "--run", dir.resolve("out").resolve(n).toString(), "--scenario", scenarios.resolve(n + ".json").toString());
+            assertEquals(approve.output, 0, approve.exit);
+        }
+
+        Cli run2 = cli("run", "--agent", agentJar.toString(), "--suite", suiteFile.toString(), "--out", dir.resolve("out").toString());
+        assertEquals(run2.output, 0, run2.exit);
+        JsonObject r2 = suiteResult(dir.resolve("out"));
+        assertEquals(run2.output, 1, r2.get("applicationStarts").getAsInt());
+        for (String n : names) assertEntry(run2.output, r2, n, "PASS", 1, null);
+        assertTrue(run2.output, run2.output.contains("application starts: 1"));
+        System.out.println("suiteOfTwentyUsesOneStart: " + (System.currentTimeMillis() - t0) + " ms");
+    }
+
+    /** F-03: a scenario that fails in a shared JVM runs again in a new JVM; the PASS there is the verdict, with a note. */
+    @Test
+    public void sharedFailureIsRetriedInANewJvm() throws Exception {
+        Path dir = Files.createDirectories(work.resolve("suite-retry"));
+        Path a = dir.resolve("a.json");
+        Path b = dir.resolve("b.json");
+        Files.copy(demoDir.resolve("suite/shared-a.json"), a);
+        Files.copy(demoDir.resolve("suite/shared-b.json"), b);
+        // The golden of b comes from a run of b alone: the name field is empty.
+        Cli alone = run(b, dir.resolve("alone"), dir.resolve("alone.log"));
+        assertEquals(alone.output, 0, alone.exit);
+        Cli approve = cli("approve", "--run", dir.resolve("alone/b").toString(), "--scenario", b.toString());
+        assertEquals(approve.output, 0, approve.exit);
+
+        Map<String, Object> suite = suiteBase(dir, suiteApp(dir), "screenshots", "off");
+        suite.put("scenarios", Arrays.asList(a.toString(), b.toString()));
+        Path suiteFile = writeSuite(dir.resolve("suite.json"), suite);
+        long t0 = System.currentTimeMillis();
+        Cli run = cli("run", "--agent", agentJar.toString(), "--suite", suiteFile.toString(), "--out", dir.resolve("out").toString());
+        assertEquals(run.output, 0, run.exit);
+        JsonObject r = suiteResult(dir.resolve("out"));
+        assertEquals(run.output, 2, r.get("applicationStarts").getAsInt());
+        assertEntry(run.output, r, "a", "NO_GOLDEN", 1, null);
+        assertEntry(run.output, r, "b", "PASS", 2, "failed in a shared JVM, passed in a new JVM");
+        assertTrue(run.output, Files.isDirectory(dir.resolve("out/b.shared")));
+        assertEquals(RunResult.Status.FAIL, result(dir.resolve("out/b.shared")).status);
+        assertEquals(RunResult.Status.PASS, result(dir.resolve("out/b")).status);
+        assertTrue(run.output, run.output.contains("application starts: 2"));
+        System.out.println("sharedFailureIsRetriedInANewJvm: " + (System.currentTimeMillis() - t0) + " ms");
+    }
+
+    /** R-37: the simulator starts before the scenarios, the reset command resets it, the after commands end it. */
+    @Test
+    public void simulatorRunsBeforeResetAndAfter() throws Exception {
+        List<Integer> ports = new ArrayList<Integer>();
+        try {
+            simulatorCheck(ports);
+        } finally {
+            // A CLI timeout must not leave the simulator JVM: it locks smoker-demo.jar on the Windows runner.
+            for (int port : ports) quitSimulator(port);
+        }
+    }
+
+    private void simulatorCheck(List<Integer> ports) throws Exception {
+        Path dir = Files.createDirectories(work.resolve("suite-sim"));
+        Path scenarios = Files.createDirectories(dir.resolve("scenarios"));
+        Files.copy(demoDir.resolve("suite/sim-a.json"), scenarios.resolve("sim-a.json"));
+        Files.copy(demoDir.resolve("suite/sim-b.json"), scenarios.resolve("sim-b.json"));
+        Files.write(scenarios.resolve("bad.json"),
+                read(demoDir.resolve("suite/sim-a.json")).replace("\"name\": \"sim-a\"", "\"name\": \"bad\"").getBytes(StandardCharsets.UTF_8));
+        Path marker = dir.resolve("after-marker");
+        Path out = dir.resolve("out");
+
+        // run1: no golden. The counter is 1 for each scenario, because the reset command runs between them.
+        int port1 = freePort();
+        ports.add(port1);
+        Cli run1 = cli("run", "--agent", agentJar.toString(), "--suite", simSuite(dir, scenarios, port1, marker).toString(), "--out", out.toString());
+        assertEquals(run1.output, 0, run1.exit);
+        assertEquals(run1.output, 1, suiteResult(out).get("applicationStarts").getAsInt());
+        for (String n : Arrays.asList("sim-a", "sim-b", "bad")) {
+            assertEntry(run1.output, suiteResult(out), n, "NO_GOLDEN", 1, null);
+            Cli approve = cli("approve", "--run", out.resolve(n).toString(), "--scenario", scenarios.resolve(n + ".json").toString());
+            assertEquals(approve.output, 0, approve.exit);
+        }
+        assertTrue("after marker of run1", Files.exists(marker));
+        assertSimulatorStopped(port1);
+        // The golden of bad expects the counter 9: the scenario fails in each JVM.
+        Path badGolden = ScenarioFiles.goldenPath(scenarios.resolve("bad.json"));
+        String golden = read(badGolden);
+        String changed = golden.replaceFirst("\"text\": \"1\"", "\"text\": \"9\"");
+        assertFalse("golden of bad has no text 1: " + golden, changed.equals(golden));
+        Files.write(badGolden, changed.getBytes(StandardCharsets.UTF_8));
+        Files.delete(marker);
+
+        long t0 = System.currentTimeMillis();
+        int port2 = freePort();
+        ports.add(port2);
+        Cli run2 = cli("run", "--agent", agentJar.toString(), "--suite", simSuite(dir, scenarios, port2, marker).toString(), "--out", out.toString());
+        assertEquals(run2.output, 1, run2.exit);
+        JsonObject r = suiteResult(out);
+        assertEntry(run2.output, r, "sim-a", "PASS", 1, null);
+        assertEntry(run2.output, r, "bad", "FAIL", 2, "failed in a shared JVM and in a new JVM");
+        assertEntry(run2.output, r, "sim-b", "PASS", 1, null);
+        // Start 1: sim-a, bad (fails). Start 2: the retry of bad (fails again). Start 3: sim-b. The CLI resets the
+        // simulator before starts 2 and 3: without it sim-b would read the counter 2 and fail.
+        assertEquals(run2.output, 3, r.get("applicationStarts").getAsInt());
+        assertEquals(run2.output, 0, r.getAsJsonArray("commandErrors").size());
+        assertTrue("after marker of run2", Files.exists(marker));
+        assertSimulatorStopped(port2);
+        System.out.println("simulatorRunsBeforeResetAndAfter run2: " + (System.currentTimeMillis() - t0) + " ms");
+    }
+
+    /** A before command with exit code 1 stops the suite with exit code 2. The after commands still run. */
+    @Test
+    public void failingBeforeGivesExitCode2() throws Exception {
+        Path dir = Files.createDirectories(work.resolve("suite-before"));
+        Path a = dir.resolve("a.json");
+        Files.copy(demoDir.resolve("suite/shared-a.json"), a);
+        Path marker = dir.resolve("after-marker");
+        Map<String, Object> suite = suiteBase(dir, suiteApp(dir), "screenshots", "off");
+        suite.put("before", Arrays.asList(command(simulator("--exit 1"))));
+        suite.put("after", Arrays.asList(command(simulator("--touch " + quote(marker.toString())))));
+        suite.put("scenarios", Arrays.asList(a.toString()));
+        Path out = dir.resolve("out");
+        Cli run = cli("run", "--agent", agentJar.toString(), "--suite", writeSuite(dir.resolve("suite.json"), suite).toString(), "--out", out.toString());
+        assertEquals(run.output, 2, run.exit);
+        assertFalse(run.output, Files.exists(out.resolve("agent-1.cfg")));
+        assertTrue(run.output, Files.exists(marker));
+        assertEquals(run.output, 0, suiteResult(out).get("applicationStarts").getAsInt());
+        assertTrue(run.output, suiteResult(out).getAsJsonArray("commandErrors").toString().contains("before[1]"));
+    }
+
+    // ---- helpers for the suite checks ---------------------------------------------------------
+
+    /** The application command line of a suite: the CLI puts the agent option after the first word. */
+    private static String suiteApp(Path dir, String... demoOptions) {
+        StringBuilder extra = new StringBuilder();
+        for (String o : demoOptions) extra.append(o).append(' ');
+        return quote(java) + " " + localeArgs() + " " + extra + "-Ddemo.log=" + quote(dir.resolve("demo.log").toString())
+                + " -jar " + quote(demoJar.toString());
+    }
+
+    private static Map<String, Object> suiteBase(Path dir, String app, String... agentConfig) {
+        Map<String, Object> suite = new LinkedHashMap<String, Object>();
+        suite.put("app", app);
+        suite.put("workDir", dir.toString());
+        Map<String, Object> cfg = new LinkedHashMap<String, Object>();
+        cfg.put("log", dir.resolve("demo.log").toString());
+        for (int i = 0; i + 1 < agentConfig.length; i += 2) cfg.put(agentConfig[i], agentConfig[i + 1]);
+        suite.put("agentConfig", cfg);
+        return suite;
+    }
+
+    private static Path writeSuite(Path file, Map<String, Object> suite) throws IOException {
+        Json.write(file, suite);
+        return file;
+    }
+
+    private static Map<String, Object> command(String command) {
+        Map<String, Object> c = new LinkedHashMap<String, Object>();
+        c.put("command", command);
+        c.put("timeoutS", 30);
+        return c;
+    }
+
+    /** A command line of the demo simulator class, with the JVM of this test. */
+    private static String simulator(String args) {
+        return quote(java) + " -cp " + quote(demoJar.toString()) + " smoker.demo.DemoSimulator " + args;
+    }
+
+    /** The suite of the simulator check: the script starts the simulator, the reset command resets it. */
+    private static Path simSuite(Path dir, Path scenarios, int port, Path marker) throws IOException {
+        Map<String, Object> suite = suiteBase(dir, suiteApp(dir, "-Ddemo.simPort=" + port), "screenshots", "off");
+        String script = demoDir.resolve(WINDOWS ? "sim/start-sim.bat" : "sim/start-sim.sh").toString();
+        Map<String, Object> before = command((WINDOWS ? "" : "sh ") + quote(script) + " " + quote(demoJar.toString()) + " " + port);
+        before.put("background", true);
+        before.put("readyPort", port);
+        before.put("readyTimeoutS", 30);
+        suite.put("before", Arrays.asList(before));
+        suite.put("reset", Arrays.asList(command(simulator("--send " + port + " RESET"))));
+        suite.put("after", Arrays.asList(command(simulator("--touch " + quote(marker.toString()))),
+                command(simulator("--send " + port + " QUIT"))));
+        // The order matters: a scenario that fails first in a JVM is not retried, and sim-b after bad needs a retry launch.
+        suite.put("scenarios", Arrays.asList(scenarios.resolve("sim-a.json").toString(),
+                scenarios.resolve("bad.json").toString(), scenarios.resolve("sim-b.json").toString()));
+        return writeSuite(dir.resolve("suite-" + port + ".json"), suite);
+    }
+
+    /** Sends QUIT to the simulator. Errors are ignored: the simulator is usually stopped already. */
+    private static void quitSimulator(int port) {
+        try {
+            java.net.Socket sock = new java.net.Socket();
+            try {
+                sock.connect(new java.net.InetSocketAddress("127.0.0.1", port), 1000);
+                sock.getOutputStream().write("QUIT\n".getBytes(StandardCharsets.US_ASCII));
+                sock.getOutputStream().flush();
+            } finally {
+                sock.close();
+            }
+        } catch (IOException e) {
+            // ignored
+        }
+    }
+
+    private static int freePort() throws IOException {
+        ServerSocket s = new ServerSocket(0);
+        try {
+            return s.getLocalPort();
+        } finally {
+            s.close();
+        }
+    }
+
+    private static void assertSimulatorStopped(int port) throws Exception {
+        long end = System.currentTimeMillis() + 5000;
+        while (true) {
+            Socket s = new Socket();
+            try {
+                s.connect(new InetSocketAddress("127.0.0.1", port), 500);
+            } catch (IOException e) {
+                return; // nobody listens
+            } finally {
+                s.close();
+            }
+            if (System.currentTimeMillis() > end) fail("the simulator still listens on port " + port);
+            Thread.sleep(200);
+        }
+    }
+
+    private static JsonObject suiteResult(Path out) throws IOException {
+        Path f = out.resolve("suite-result.json");
+        assertTrue("missing " + f, Files.isRegularFile(f));
+        return Json.readTree(f).getAsJsonObject();
+    }
+
+    private static void assertEntry(String output, JsonObject suiteResult, String name, String status, int attempts, String note) {
+        JsonArray list = suiteResult.getAsJsonArray("scenarios");
+        for (JsonElement e : list) {
+            JsonObject o = e.getAsJsonObject();
+            if (!name.equals(o.get("name").getAsString())) continue;
+            assertEquals(output + name, status, o.get("status").getAsString());
+            assertEquals(output + name, attempts, o.get("attempts").getAsInt());
+            String actual = o.has("note") && !o.get("note").isJsonNull() ? o.get("note").getAsString() : null;
+            assertEquals(output + name, note, actual);
+            return;
+        }
+        fail(output + "suite-result.json has no scenario " + name + ": " + list);
     }
 
     private static int countTraceLines(String text) {
@@ -438,11 +760,19 @@ public class SelfTestIT {
 
     /** Runs the CLI command {@code run} with the demo application. */
     private static Cli run(Path scenarios, Path out, Path log, String... demoOptions) throws Exception {
+        return runWithStopTimeout(null, scenarios, out, log, demoOptions);
+    }
+
+    /** As {@link #run}; a non-null {@code stopTimeoutMs} goes to the CLI as {@code --stopTimeoutMs}. */
+    private static Cli runWithStopTimeout(String stopTimeoutMs, Path scenarios, Path out, Path log, String... demoOptions)
+            throws Exception {
         StringBuilder extra = new StringBuilder();
         for (String o : demoOptions) extra.append(o).append(' ');
         String app = quote(java) + " " + localeArgs() + " " + extra + "-Ddemo.log=" + quote(log.toString()) + " -jar " + quote(demoJar.toString());
-        return cli("run", "--agent", agentJar.toString(), "--app", app, "--scenarios", scenarios.toString(),
-                "--out", out.toString(), "--log", log.toString());
+        List<String> args = new ArrayList<String>(Arrays.asList("run", "--agent", agentJar.toString(), "--app", app,
+                "--scenarios", scenarios.toString(), "--out", out.toString(), "--log", log.toString()));
+        if (stopTimeoutMs != null) args.addAll(Arrays.asList("--stopTimeoutMs", stopTimeoutMs));
+        return cli(args.toArray(new String[0]));
     }
 
     private static Cli cli(String... args) throws Exception {
@@ -455,6 +785,7 @@ public class SelfTestIT {
         File outFile = Files.createTempFile(work, "cli-", ".log").toFile();
         ProcessBuilder pb = new ProcessBuilder(cmd).redirectErrorStream(true).redirectOutput(outFile);
         pb.environment().remove("JAVA_TOOL_OPTIONS");
+        pb.environment().put("SMOKER_JAVA", java); // start-sim.sh and start-sim.bat use the JVM of this test
         Process p = pb.start();
         Cli c = new Cli();
         if (!p.waitFor(PROCESS_TIMEOUT_S, TimeUnit.SECONDS)) {

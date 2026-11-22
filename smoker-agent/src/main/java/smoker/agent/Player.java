@@ -8,6 +8,7 @@ import smoker.core.model.RunResult;
 import smoker.core.model.Scenario;
 import smoker.core.model.Snapshot;
 import smoker.core.model.Step;
+import smoker.core.proc.Processes;
 
 import javax.swing.SwingUtilities;
 import java.awt.Frame;
@@ -25,20 +26,27 @@ import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Replays a scenario inside the app's JVM (R-30, R-35) and writes {@code run-result.json} into the out dir.
- * Runs on its own daemon thread; every UI touch goes through the EDT.
+ * The {@link Session} calls it on its thread and owns the shutdown hook and the stop. Every UI touch goes through the EDT.
  */
-final class Player implements Runnable {
+final class Player {
+
+    /** The first step of a scenario: the start of the application, or the reset after an earlier scenario (WP-05). */
+    enum First { STARTUP, RESET }
 
     private final AgentConfig cfg;
+    private final Path scenarioFile;
+    private final Path outDir;
     private final Scenario scenario;
     private final Map<String, Snapshot> golden;
     private final Observations obs;
     private final EdtWatchdog watchdog;
+    private final boolean sharedJvm;
     private final SnapshotTaker taker;
     private final Screenshots shots = new Screenshots();
     private final RunResult result = new RunResult();
     /** End of the last step window: each step takes the hits in (lastEnd, now] (WP-04, F-08). The hook reads it. */
     private volatile long lastEnd = Long.MIN_VALUE;
+    private Scenario resetScenario;
     /** Guards {@link #result} and the file, {@link #finished} and {@link #exiting}: the player and the hook (F-22). */
     final ReentrantLock resultLock = new ReentrantLock();
     /** The player wrote its final result. Guarded by {@link #resultLock}. */
@@ -48,7 +56,22 @@ final class Player implements Runnable {
 
     /** @param golden golden snapshot per step id, from the golden file; a step without an entry gives NO_GOLDEN */
     Player(AgentConfig cfg, Scenario scenario, Map<String, Snapshot> golden, Observations obs, EdtWatchdog watchdog) {
+        this(cfg, cfg.scenarios.isEmpty() ? null : cfg.scenarios.get(0), scenario, golden, obs, watchdog, cfg.out);
+    }
+
+    /** @param outDir the folder of the result file and the screenshots of this scenario */
+    Player(AgentConfig cfg, Path scenarioFile, Scenario scenario, Map<String, Snapshot> golden, Observations obs,
+            EdtWatchdog watchdog, Path outDir) {
+        this(cfg, scenarioFile, scenario, golden, obs, watchdog, outDir, false);
+    }
+
+    /** @param sharedJvm true when an earlier scenario ran in this JVM */
+    Player(AgentConfig cfg, Path scenarioFile, Scenario scenario, Map<String, Snapshot> golden, Observations obs,
+            EdtWatchdog watchdog, Path outDir, boolean sharedJvm) {
+        this.sharedJvm = sharedJvm;
         this.cfg = cfg;
+        this.scenarioFile = scenarioFile;
+        this.outDir = outDir;
         this.scenario = scenario;
         this.golden = golden;
         this.taker = new SnapshotTaker(scenario.maxRows, "named".equals(scenario.compare));
@@ -56,26 +79,32 @@ final class Player implements Runnable {
         this.watchdog = watchdog;
     }
 
-    @Override
-    public void run() {
+    /** Sets the header of the result and writes the first progress, before the hook can need it (F-22). */
+    void begin(First first) {
         result.scenarioName = scenario.name;
         result.compare = scenario.compare;
-        result.scenarioFile = cfg.scenario.toString();
+        result.scenarioFile = scenarioFile == null ? null : scenarioFile.toString();
         result.startedAt = System.currentTimeMillis();
         result.javaVersion = System.getProperty("java.version");
         result.os = System.getProperty("os.name") + " " + System.getProperty("os.version");
-        writeProgress("startup"); // before the hook: the hook always has a currentStep
-        Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
-            @Override
-            public void run() {
-                onExit();
-            }
-        }, "smoker-exit"));
+        result.sharedJvm = sharedJvm;
+        writeProgress(first == First.STARTUP ? "startup" : "reset");
+    }
+
+    /**
+     * Runs the first step and the steps, and writes the final result. Does not register a hook and does not stop
+     * the JVM.
+     *
+     * @param lastEnd end of the log window of the player before; the window of the first step starts there
+     * @return the status of the scenario
+     */
+    RunResult.Status play(First first, long lastEnd) {
+        this.lastEnd = lastEnd;
         Throwable failure = null;
         try {
-            startup();
-            for (int i = 0; i < scenario.steps.size(); i++) {
-                RunResult.StepResult sr = runStep(scenario.steps.get(i), !skipsSnapshot(scenario, i));
+            boolean go = first == First.STARTUP ? startup() : reset();
+            for (int i = 0; go && i < scenario.steps.size(); i++) {
+                RunResult.StepResult sr = runStep(scenario.steps.get(i), !skipsSnapshot(scenario, i), scenario.steps.get(i).id, scenario);
                 addStep(sr);
                 // Continue after FAIL, so that one approve covers all steps (F-21).
                 // After HANG or ERROR the state of the UI is not known: stop (R-35).
@@ -86,17 +115,17 @@ final class Player implements Runnable {
         } finally {
             writeFinal(failure);
             SmokerAgent.log("scenario '" + scenario.name + "' " + result.status + " (" + (result.finishedAt - result.startedAt) + " ms)");
-            obs.stop();
-            watchdog.shutdown();
-            if (cfg.exitWhenDone) {
-                int code = result.status == RunResult.Status.PASS || result.status == RunResult.Status.NO_GOLDEN ? 0 : 1;
-                System.exit(code);
-            }
         }
+        return result.status;
+    }
+
+    /** End of the last log window of this player. The next player starts its window there. */
+    long lastEnd() {
+        return lastEnd;
     }
 
     private Path resultFile() {
-        return cfg.out.resolve("run-result.json");
+        return outDir.resolve("run-result.json");
     }
 
     /** Adds a closed step and its status to the result. Ignored after the hook took the result. */
@@ -243,7 +272,7 @@ final class Player implements Runnable {
     }
 
     /** R-14: main window within startupTimeoutMs, no fail-rule hits meanwhile. */
-    private void startup() throws Exception {
+    private boolean startup() throws Exception {
         long t0 = System.currentTimeMillis();
         long deadline = t0 + scenario.startupTimeoutMs;
         while (System.currentTimeMillis() < deadline && !mainWindowShowing()) {
@@ -260,7 +289,7 @@ final class Player implements Runnable {
         }
         Quiescence.await(scenario.quietMs, scenario.stepTimeoutMs);
         // before the hits, as in runStep: no gap between takeHits and addStep where an exit loses the hits
-        if (cfg.screenshots) sr.screenshot = shots.capture(cfg.out, "startup");
+        if (cfg.screenshots) sr.screenshot = shots.capture(outDir, "startup");
         obs.drain(); // a plain file line gets the time of reading: read before the end of the window
         long now = System.currentTimeMillis();
         sr.durationMs = now - t0;
@@ -270,6 +299,92 @@ final class Player implements Runnable {
         addStep(sr);
         if (sr.status != RunResult.Status.PASS) {
             throw new IllegalStateException("startup failed: " + (sr.error != null ? sr.error : "log hits during startup"));
+        }
+        return true;
+    }
+
+    /** The scenario that the reset step replays between two scenarios (WP-05, F-04); null for none. */
+    void setResetScenario(Scenario resetScenario) {
+        this.resetScenario = resetScenario;
+    }
+
+    /**
+     * The first step of a scenario after an earlier one (WP-05, F-04, R-37): closes the dialogs, runs the reset
+     * commands, replays the reset scenario, waits for a quiet EDT and takes the log hits since the end of the
+     * player before. Any problem gives the step a status that is not PASS, and the steps do not run.
+     */
+    private boolean reset() throws Exception {
+        long t0 = System.currentTimeMillis();
+        RunResult.StepResult sr = new RunResult.StepResult();
+        sr.stepId = "reset";
+        sr.stepName = "reset between scenarios";
+        watchdog.reset(); // a flag from a step before must not give a false HANG here
+        String dialog = DialogCloser.closeAll(10, scenario.stepTimeoutMs);
+        if (DialogCloser.EDT_SILENT.equals(dialog)) return resetEnds(hang(sr, t0, "reset: the EDT does not answer"));
+        if (dialog != null) return resetEnds(resetError(sr, t0, "reset: a dialog stays open: " + dialog));
+        for (int k = 0; k < cfg.resetCommands.size(); k++) {
+            String error = runResetCommand(k);
+            if (error != null) return resetEnds(resetError(sr, t0, error));
+        }
+        if (resetScenario != null) {
+            Locators.useWindowKeys(new WindowKeys(resetScenario.windowKeys));
+            AutoNames.enable(resetScenario.autoNames);
+            try {
+                for (Step step : resetScenario.steps) {
+                    RunResult.StepResult inner = runStep(step, false, "reset", resetScenario);
+                    if (inner.status == RunResult.Status.PASS) continue;
+                    sr.status = inner.status;
+                    String why = inner.error != null ? inner.error
+                            : !inner.differences.isEmpty() ? inner.differences.get(0) : "log hit";
+                    sr.error = "reset scenario: step " + step.id + ": " + why;
+                    sr.differences.addAll(inner.differences);
+                    sr.logHits.addAll(inner.logHits);
+                    sr.threadDump = inner.threadDump;
+                    sr.durationMs = System.currentTimeMillis() - t0;
+                    return resetEnds(sr);
+                }
+            } finally {
+                Locators.useWindowKeys(new WindowKeys(scenario.windowKeys));
+                AutoNames.enable(scenario.autoNames);
+            }
+        }
+        boolean quiet = Quiescence.await(scenario.quietMs, scenario.stepTimeoutMs);
+        if (!quiet && watchdog.hangDetected()) return resetEnds(hang(sr, t0, "reset: EDT blocked"));
+        finish(sr, t0);
+        if (!sr.logHits.isEmpty()) sr.status = RunResult.Status.FAIL;
+        return resetEnds(sr);
+    }
+
+    private boolean resetEnds(RunResult.StepResult sr) {
+        addStep(sr);
+        return sr.status == RunResult.Status.PASS;
+    }
+
+    private RunResult.StepResult resetError(RunResult.StepResult sr, long t0, String error) {
+        sr.status = RunResult.Status.ERROR;
+        sr.error = error;
+        finish(sr, t0);
+        return sr;
+    }
+
+    /** @return the error text of reset command k (0 based), or null when the command ended with exit code 0 */
+    private String runResetCommand(int k) {
+        int n = k + 1;
+        try {
+            Process p = Processes.startForeground(Processes.split(cfg.resetCommands.get(k)), null,
+                    outDir.resolve("reset-command.log"));
+            if (p.waitFor(cfg.resetTimeoutS.get(k) * 1000, TimeUnit.MILLISECONDS)) {
+                return p.exitValue() == 0 ? null : "reset command " + n + " failed: exit code " + p.exitValue();
+            }
+            boolean tree = Processes.stopTree(p);
+            p.waitFor(10, TimeUnit.SECONDS);
+            return "reset command " + n + " timed out"
+                    + (tree ? "" : "; child processes can remain");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return "reset command " + n + " failed: interrupted";
+        } catch (java.io.IOException e) {
+            return "reset command " + n + " failed: " + e;
         }
     }
 
@@ -352,11 +467,16 @@ final class Player implements Runnable {
         }
     }
 
-    private RunResult.StepResult runStep(final Step step, boolean takeSnapshot) {
+    /**
+     * @param progressId the id that {@code currentStep} shows during the step
+     * @param owner the scenario that holds the step: its {@code stepTimeoutMs} and {@code quietMs} apply
+     */
+    private RunResult.StepResult runStep(final Step step, boolean takeSnapshot, String progressId,
+            Scenario owner) {
         RunResult.StepResult sr = new RunResult.StepResult();
         sr.stepId = step.id;
         sr.stepName = step.name;
-        writeProgress(step.id); // a System.exit or a crash in the action leaves a file that names the step
+        writeProgress(progressId); // a System.exit or a crash in the action leaves a file that names the step
         long t0 = System.currentTimeMillis();
         watchdog.reset();
         SmokerAgent.log("step " + step.id + " " + step.action);
@@ -393,8 +513,8 @@ final class Player implements Runnable {
             });
             // A ping posted after the action is serviced when the action has finished OR when it opened a
             // modal dialog (nested event loop). Both mean "the UI is alive again"; only silence means a hang.
-            if (!Quiescence.edtResponds(scenario.stepTimeoutMs)) {
-                return hang(sr, t0, "action did not complete within " + scenario.stepTimeoutMs + " ms");
+            if (!Quiescence.edtResponds(owner.stepTimeoutMs)) {
+                return hang(sr, t0, "action did not complete within " + owner.stepTimeoutMs + " ms");
             }
             done.await(50, TimeUnit.MILLISECONDS);
             if (failure[0] != null) {
@@ -405,7 +525,7 @@ final class Player implements Runnable {
             }
 
             // 2. settle
-            boolean quiet = Quiescence.await(scenario.quietMs, scenario.stepTimeoutMs);
+            boolean quiet = Quiescence.await(owner.quietMs, owner.stepTimeoutMs);
             if (!quiet && watchdog.hangDetected()) return hang(sr, t0, "EDT blocked after action");
 
             if (!takeSnapshot) {
@@ -422,7 +542,7 @@ final class Player implements Runnable {
                     return taker.take();
                 }
             });
-            if (cfg.screenshots) sr.screenshot = shots.capture(cfg.out, step.id);
+            if (cfg.screenshots) sr.screenshot = shots.capture(outDir, step.id);
 
             // 4. compare
             Snapshot expected = golden.get(step.id);
@@ -430,7 +550,7 @@ final class Player implements Runnable {
             sr.status = afterCompare(sr.status, expected != null, !sr.differences.isEmpty());
             finish(sr, t0);
             if (!sr.logHits.isEmpty() && sr.status != RunResult.Status.ERROR) sr.status = RunResult.Status.FAIL;
-            if (!quiet && sr.status == RunResult.Status.PASS) sr.differences.add("WARN UI did not become quiet within " + scenario.stepTimeoutMs + " ms");
+            if (!quiet && sr.status == RunResult.Status.PASS) sr.differences.add("WARN UI did not become quiet within " + owner.stepTimeoutMs + " ms");
         } catch (Throwable t) {
             sr.status = RunResult.Status.ERROR;
             sr.error = String.valueOf(t);
@@ -456,6 +576,6 @@ final class Player implements Runnable {
     }
 
     Path outDir() {
-        return cfg.out;
+        return outDir;
     }
 }

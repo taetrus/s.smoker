@@ -1,0 +1,21 @@
+{
+  "app": "java -Ddemo.simPort=5555 -Ddemo.log=demo.log -jar ../target/smoker-demo.jar",
+  "workDir": ".",
+  "agentConfig": {
+    "log": "demo.log",
+    "failLevel": "ERROR",
+    "screenshots": "evidence",
+    "stopTimeoutMs": 10000
+  },
+  "before": [
+    { "command": "sh ../sim/start-sim.sh ../target/smoker-demo.jar 5555", "background": true, "readyPort": 5555, "readyTimeoutS": 30 }
+  ],
+  "reset": [
+    { "command": "java -cp ../target/smoker-demo.jar smoker.demo.DemoSimulator --send 5555 RESET", "timeoutS": 20 }
+  ],
+  "resetScenario": "reset.json",
+  "after": [
+    { "command": "java -cp ../target/smoker-demo.jar smoker.demo.DemoSimulator --send 5555 QUIT", "timeoutS": 20 }
+  ],
+  "scenarios": ["sim-a.json", "sim-b.json"]
+}

@@ -33,11 +33,13 @@ public final class HtmlReportWriter {
                 w.write("<tr class='" + r.status + "'><td><a href='#" + id(r.scenarioName) + "'>" + e(r.scenarioName) + "</a></td><td>" + r.status
                         + "</td><td>" + r.steps.size() + "</td><td>" + e(r.javaVersion) + "</td><td>" + e(r.os) + "</td><td>"
                         + (r.finishedAt - r.startedAt) + " ms</td></tr>");
+                if (r.note != null) w.write("<tr class='" + r.status + "'><td colspan='6'><p class='note'>" + e(r.note) + "</p></td></tr>");
             }
             w.write("</table>");
             for (RunResult r : runs) {
                 w.write("<h2 id='" + id(r.scenarioName) + "'>" + e(r.scenarioName) + " — " + r.status
                         + " <small>(compare: " + e(r.compare == null ? "all" : r.compare) + ")</small></h2>");
+                if (r.note != null) w.write("<p class='note'>" + e(r.note) + "</p>");
                 if (r.error != null) w.write("<pre class='ERROR'>" + e(r.error) + "</pre>");
                 if (!r.unnamedComponents.isEmpty()) {
                     w.write("<details><summary>Locator lint: " + r.unnamedComponents.size()

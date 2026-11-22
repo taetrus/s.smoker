@@ -101,4 +101,16 @@ public class HtmlReportWriterTest {
         assertTrue(html, html.contains("[stdout] ERROR first &lt;b&gt;\nCaused by: second\n\tat third\n"));
         assertTrue(html, html.contains("[stderr] ERROR only line\n"));
     }
+
+    @Test
+    public void noteShowsUnderTheScenario() throws Exception {
+        RunResult r = new RunResult();
+        r.scenarioName = "orders";
+        r.note = "failed <in> a shared JVM";
+        Path f = tmp.getRoot().toPath().resolve("report.html");
+        HtmlReportWriter.write(f, Collections.singletonList(r));
+        String html = new String(Files.readAllBytes(f), StandardCharsets.UTF_8);
+        assertTrue(html, html.contains("<p class='note'>failed &lt;in&gt; a shared JVM</p>"));
+        assertTrue(html, html.indexOf("<p class='note'>") < html.indexOf("<table><tr><th style='width:160px'>"));
+    }
 }

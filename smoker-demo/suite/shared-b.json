@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 2,
+  "name": "b",
+  "description": "Select a language. The golden has an empty name field: the scenario fails after scenario a in a shared JVM.",
+  "startupTimeoutMs": 30000,
+  "quietMs": 300,
+  "stepTimeoutMs": 10000,
+  "ignore": { "paths": [], "attributes": [], "valuePatterns": [] },
+  "steps": [
+    { "id": "s001", "name": "choose German", "action": { "type": "SELECT", "locator": { "name": "demo.lang" }, "value": "de" } }
+  ]
+}

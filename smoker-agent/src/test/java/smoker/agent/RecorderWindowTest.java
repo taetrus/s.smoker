@@ -77,6 +77,13 @@ public class RecorderWindowTest {
     private RecorderToolbar toolbar;
     private final AtomicInteger dialogsShown = new AtomicInteger();
 
+    private static AgentConfig recordConfig() {
+        Map<String, String> m = new java.util.LinkedHashMap<String, String>();
+        m.put("mode", "record");
+        m.put("scenario.1", "target/recorder-window-test.json");
+        return AgentConfig.fromMap(m, "test");
+    }
+
     @Before
     public void showFrame() throws Exception {
         Assume.assumeFalse("needs a display", GraphicsEnvironment.isHeadless());
@@ -143,7 +150,7 @@ public class RecorderWindowTest {
         // DirectFocus lets them go to the component, through the AWT event listeners, as real focus events do.
         previousFocusManager = KeyboardFocusManager.getCurrentKeyboardFocusManager();
         KeyboardFocusManager.setCurrentKeyboardFocusManager(new DirectFocus());
-        recorder = new Recorder(AgentConfig.parse("mode=record;scenario=target/recorder-window-test.json"), new Scenario(),
+        recorder = new Recorder(recordConfig(), new Scenario(),
                 new HashMap<String, Snapshot>());
         recorder.start();
     }

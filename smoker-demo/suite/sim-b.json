@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 2,
+  "name": "sim-b",
+  "description": "Click Count once. The simulator answers 1 after a reset (-Ddemo.simPort).",
+  "startupTimeoutMs": 30000,
+  "quietMs": 300,
+  "stepTimeoutMs": 10000,
+  "ignore": { "paths": [], "attributes": [], "valuePatterns": [] },
+  "steps": [
+    { "id": "s001", "name": "count", "action": { "type": "CLICK", "locator": { "name": "demo.sim.count" } } }
+  ]
+}
