@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 2,
+  "name": "exit",
+  "description": "The application exits in step s001 with exit code 7 (F-22). Needs -Ddemo.logPanel=true.",
+  "startupTimeoutMs": 30000,
+  "quietMs": 300,
+  "stepTimeoutMs": 10000,
+  "ignore": { "paths": [], "attributes": [], "valuePatterns": [] },
+  "steps": [
+    { "id": "s001", "name": "exit the application", "action": { "type": "CLICK", "locator": { "name": "demo.exit" } } }
+  ]
+}

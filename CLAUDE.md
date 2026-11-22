@@ -44,6 +44,9 @@ It also checks the WP-02 criterion on `table.json`: scenario under 80 lines, gol
 panel gives PASS (modes `all` and `named`), a wrong cell gives FAIL.
 It checks the WP-03 criterion on `wait.json`: run1 s001 PASS without a snapshot, s002 NO_GOLDEN; after `approve` PASS.
 `wait-timeout`: s002 FAIL with the last value `waiting…`.
+It checks the WP-04 criterion with `-Ddemo.logPanel=true` (`scenarios-log/`): `log.json` s001 FAIL with one `file:demo.log` hit
+of 40 `\tat` lines, s002 no hit, s003 FAIL with one `stderr` hit; `exit.json` gives ERROR, `currentStep` s001, CLI exit code 1.
+With `-Ddemo.equinoxError=true`, `greet.json` gives FAIL of `startup` with 4 `stdout` hits. `approve` without `run-result.json` gives exit code 2.
 Run `mvn -B verify` and `mvn -B verify -Plocale-tr`
 after every change to `smoker-agent` or `smoker-core`.
 

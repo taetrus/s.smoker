@@ -26,6 +26,18 @@ The integration test runs `run`, `approve`, `run`, `run` on `smoker-demo/scenari
 It also adds a step, removes a step and approves one step, and checks the golden file after each change.
 It copies the scenarios to `smoker-it/target/it-work` and does not change the files in the repository.
 The CLI and the demo application use the JVM and the locale of the test.
+The demo application has two system properties for the log analysis (WP-04).
+`-Ddemo.logPanel=true` shows a "Log" panel with the buttons `demo.logTrace`, `demo.logInfoError`, `demo.printTrace` and `demo.exit`.
+The panel is off by default, so the goldens of the other scenarios do not change.
+`-Ddemo.equinoxError=true` prints an Equinox start error to `System.out` before the UI is built.
+`smoker-demo/scenarios-log/` holds `log.json` and `exit.json`. Both need `-Ddemo.logPanel=true`.
+The integration test checks these results:
+a JUL error with a 40-line stack trace gives one hit in s001 (`log.json`);
+`Error count 0 of 3` and `Exception handler ready` give no hit;
+`printStackTrace` gives one `stderr` hit;
+`System.exit(7)` in a step gives ERROR with `during step s001` and exit code 1 of the CLI (`exit.json`);
+the Equinox error gives FAIL of the step `startup` with 4 `stdout` hits and no run of s001;
+`approve` without `run-result.json` gives exit code 2.
 Without a display the integration test fails, and `LocatorsWindowTest` is skipped.
 
 Windows (PowerShell): `mvn -B verify` then run the commands below; no Xvfb needed on a logged-in desktop.

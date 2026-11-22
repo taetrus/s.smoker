@@ -348,6 +348,83 @@ public class SelfTestIT {
         assertTrue(read(patch), read(patch).contains("saveButton.setName(\"notes.btn.save\");"));
     }
 
+    @Test
+    public void logScenarioGivesOneHitForEachEvent() throws Exception {
+        Path dir = Files.createDirectories(work.resolve("log"));
+        Path scenario = dir.resolve("log.json");
+        Files.copy(demoDir.resolve("scenarios-log/log.json"), scenario);
+        Cli run1 = run(scenario, dir.resolve("run1"), dir.resolve("demo.log"), "-Ddemo.logPanel=true");
+        RunResult r = result(dir.resolve("run1/log"));
+        // R-12a: a JUL error with a 40-line stack trace is one hit with the whole text.
+        RunResult.StepResult s001 = assertStepStatus(r, "s001", RunResult.Status.FAIL);
+        assertEquals(run1.output + s001.logHits, 1, s001.logHits.size());
+        RunResult.LogHit h = s001.logHits.get(0);
+        assertEquals("file:demo.log", h.source);
+        assertTrue(h.text, h.text.contains("trace demo"));
+        assertEquals(h.text, 40, countTraceLines(h.text));
+        // R-10a: "Error count 0 of 3" and "Exception handler ready" are no hits.
+        RunResult.StepResult s002 = assertStepStatus(r, "s002", RunResult.Status.NO_GOLDEN);
+        assertEquals(String.valueOf(s002.logHits), 0, s002.logHits.size());
+        // printStackTrace writes to stderr: one hit for the whole trace.
+        RunResult.StepResult s003 = assertStepStatus(r, "s003", RunResult.Status.FAIL);
+        assertEquals(run1.output + s003.logHits, 1, s003.logHits.size());
+        assertEquals("stderr", s003.logHits.get(0).source);
+    }
+
+    @Test
+    public void exitInAStepNamesTheStep() throws Exception {
+        Path dir = Files.createDirectories(work.resolve("exit"));
+        Path scenario = dir.resolve("exit.json");
+        Files.copy(demoDir.resolve("scenarios-log/exit.json"), scenario);
+        Cli run1 = run(scenario, dir.resolve("run1"), dir.resolve("demo.log"), "-Ddemo.logPanel=true");
+        assertEquals(run1.output, 1, run1.exit);
+        assertTrue(run1.output, run1.output.contains("exit code 7"));
+        RunResult r = result(dir.resolve("run1/exit"));
+        assertEquals(run1.output, RunResult.Status.ERROR, r.status);
+        assertEquals("s001", r.currentStep);
+        assertTrue(r.error, r.error.contains("during step s001"));
+        RunResult.StepResult s001 = assertStepStatus(r, "s001", RunResult.Status.ERROR);
+        boolean found = false;
+        for (RunResult.LogHit h : s001.logHits) {
+            if (h.source.endsWith("file:demo.log") && h.text.contains("exit on purpose")) found = true;
+        }
+        assertTrue(String.valueOf(s001.logHits), found);
+    }
+
+    @Test
+    public void equinoxErrorAtStartupGivesFail() throws Exception {
+        Path dir = Files.createDirectories(work.resolve("equinox"));
+        Path scenario = dir.resolve("greet.json");
+        Files.copy(demoDir.resolve("scenarios/greet.json"), scenario);
+        Cli run1 = run(scenario, dir.resolve("run1"), dir.resolve("demo.log"), "-Ddemo.equinoxError=true");
+        RunResult r = result(dir.resolve("run1/greet"));
+        RunResult.StepResult startup = assertStepStatus(r, "startup", RunResult.Status.FAIL);
+        assertEquals(run1.output + startup.logHits, 4, startup.logHits.size());
+        int frameworkEvents = 0;
+        for (RunResult.LogHit h : startup.logHits) {
+            assertEquals("stdout", h.source);
+            if (h.text.contains("FrameworkEvent ERROR")) frameworkEvents++;
+        }
+        assertEquals(String.valueOf(startup.logHits), 2, frameworkEvents);
+        for (RunResult.StepResult s : r.steps) assertFalse("s001 ran", "s001".equals(s.stepId));
+    }
+
+    @Test
+    public void approveWithoutRunResultGivesExitCode2() throws Exception {
+        Path dir = Files.createDirectories(work.resolve("approve-empty"));
+        Path scenario = dir.resolve("greet.json");
+        Files.copy(demoDir.resolve("scenarios/greet.json"), scenario);
+        Path empty = Files.createDirectories(dir.resolve("empty-run"));
+        Cli approve = cli("approve", "--run", empty.toString(), "--scenario", scenario.toString());
+        assertEquals(approve.output, 2, approve.exit);
+    }
+
+    private static int countTraceLines(String text) {
+        int n = 0;
+        for (String l : text.split("\n")) if (l.startsWith("\tat ")) n++;
+        return n;
+    }
+
     private static long lines(Path f) throws IOException {
         return Files.readAllLines(f, StandardCharsets.UTF_8).size();
     }
