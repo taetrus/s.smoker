@@ -172,7 +172,7 @@ State on 2026-11-19: WP-03 is complete. It was merged on 2026-11-17 (PR #5). R-2
 
 Completion criterion: R-10a and R-12a pass. An unresolved bundle at startup gives FAIL. After `System.exit` in a step, `run-result.json` names that step. `approve` without `run-result.json` gives exit code 2.
 
-State on 2026-11-22: WP-04 is implemented on the branch `wp-04-log-analysis`. It is not merged. On the demo, `SelfTestIT` shows that R-10a and R-12a pass, that the Equinox startup gives FAIL, that the report names the step after `System.exit`, and that `approve` without `run-result.json` gives exit code 2. The Windows check on the pilot applications is open.
+State on 2026-11-22: WP-04 is merged (PR #11). On the demo, `SelfTestIT` shows that R-10a and R-12a pass, that the Equinox startup gives FAIL, that the report names the step after `System.exit`, and that `approve` without `run-result.json` gives exit code 2. WP-04 is complete; F-08, F-09, F-22 and F-24 are closed. The first Windows check on the pilot applications found a problem: an interleaved Equinox `!ENTRY` line lost its entry. PR #13 corrected it. The second Windows check passed: 5 of 5 runs, and 3 of 3 `jre8` runs give 28 hits (`docs/wp-04-windows-report.md`).
 
 **WP-05 Suite mode and lifecycle (8 pd)**
 

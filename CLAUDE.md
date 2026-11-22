@@ -9,6 +9,7 @@ compares semantic component snapshots with golden snapshots, and reads the appli
 2. `docs/wp-01-handoff.md` — WP-01 state and the commands that operated on Windows.
 3. `docs/wp-01-pilot-report.md` — WP-01 test report (pilot on Windows). Reports stay in `docs/` (decision 6).
    `docs/wp-03-windows-report.md` — WP-03 test report (Windows).
+   `docs/wp-04-windows-report.md` — WP-04 test report (Windows, pilot applications).
 4. `docs/architecture.md` — design decisions and class map of the current skeleton.
 5. `docs/requirements.md` — original requirements. The development plan wins where they differ.
 6. `README.md` — build and CLI usage.
@@ -52,14 +53,15 @@ after every change to `smoker-agent` or `smoker-core`.
 
 ## State on 2026-11-22
 
-- `master` holds WP-01, WP-02, WP-09 and WP-03. All four work packages are complete; their completion criteria passed.
+- `master` holds WP-01, WP-02, WP-09, WP-03 and WP-04. All five work packages are complete; their completion criteria passed.
 - WP-03 (`WAIT_FOR`, F-02, R-23a) was merged on 2026-11-17 (PR #5). R-23a passes on the demo (`wait.json`, SelfTestIT).
   Windows run and manual walkthrough of `Wait for…`: pass (`docs/wp-03-windows-report.md`). Follow-ups from the
   walkthrough: the toolbar writes what it shows to the record log (PR #6), the picker gives no border to a `JViewport` (PR #7).
-- WP-04 (log analysis) is implemented on branch `wp-04-log-analysis`. It is not merged. Demo checks pass (SelfTestIT).
-  The Windows check on the pilot is open (then `docs/wp-04-windows-report.md`).
-- Tests: 68 in `smoker-core`, 219 in `smoker-agent`, 29 in `smoker-cli`, 9 IT. They pass on macOS (JDK 27 default
-  locale and `-Plocale-tr`). The last Windows 11 run (before WP-04): JDK 25 default, `-Plocale-tr`, tr_TR with JRE 8u341 as test JVM.
+- WP-04 (log analysis) is complete; F-08, F-09, F-22 and F-24 are closed. Merged in PR #11; PR #13 keeps the console
+  lines of each thread apart. Demo checks pass (SelfTestIT). The Windows check on the pilot (2026-11-22, after PR #13):
+  5 of 5 runs pass, and 3 of 3 `jre8` runs give 28 hits. See `docs/wp-04-windows-report.md`.
+- Tests: 68 in `smoker-core`, 234 in `smoker-agent`, 29 in `smoker-cli`, 9 IT. They pass on macOS (JDK 27 default
+  locale and `-Plocale-tr`) and in the Windows CI (JDK 25: default, `-Plocale-tr`, tr_TR with JRE 8u341 as test JVM).
 - The record log and `app-output.log` are in the console charset of the application (Cp1252 on Windows), not UTF-8.
   PR #8 (merged 2026-11-19) makes the `[smoker]` texts ASCII and documents this in `README.md`.
   Windows record session: the record log has no non-ASCII byte (PR #8 comment).
@@ -69,14 +71,15 @@ after every change to `smoker-agent` or `smoker-core`.
   checks wait in the queue. Do not type on the PC while a job runs. Follow-up: move `actions/checkout@v4` to v5 (Node.js 20 warning).
 - Pilot goldens approved again on Windows on 2026-11-16 (`docs/wp-01-handoff.md` section 5).
 - Decision 6 (2026-11-15): test reports go into `docs/` on GitHub, not Confluence.
-- Open findings: F-02 fixed in the tool, untested on a product with the simulator. F-08, F-09, F-22, F-24 implemented in WP-04, Windows check open.
+- Open findings: F-02 fixed in the tool, untested on a product with the simulator. F-08, F-09, F-22, F-24 are closed (WP-04).
 - SelfTestIT startup failure of 2026-11-15: root cause fixed in 7c7458c (the startup check read `Window.isShowing()`
   off the EDT and could see a frame inside its constructor). 2 of 100 demo starts failed before, 0 of 100 after.
   If a failure recurs, keep `smoker-it/target/failsafe-reports` and `smoker-it/target/it-work`.
 - Do not type into the demo windows while SelfTestIT runs on a desktop: they take the focus, and a key press changes a text field.
 - Test isolation: a test must not leave a window that reports "showing". `Window.getWindows()` keeps it for later test classes.
-- Next work package in plan order: WP-05 (after WP-04 is merged).
-- Not verified: JRE 11 and JRE 17 at run time on a target application, a product with the hardware simulator.
+- Next work package in plan order: WP-05.
+- Not verified: JRE 11 at run time on a target application, a product with the hardware simulator.
+  JRE 17 (Temurin 17.0.5) operates on spike.master (WP-04 Windows check).
 
 ## Decisions already made
 
