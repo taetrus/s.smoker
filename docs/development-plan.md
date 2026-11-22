@@ -188,6 +188,8 @@ State on 2026-11-22: WP-04 is merged (PR #11). On the demo, `SelfTestIT` shows t
 
 Completion criterion: R-36, R-37, R-38 and R-39 pass. 20 scenarios on the pilot application use one startup.
 
+State on 2026-11-22: WP-05 is on branch `wp-05-suite-mode` (PR #15). On the demo, `SelfTestIT` shows that 20 scenarios use one startup, that a failure in a shared JVM runs again in a new JVM, and that `before`, `reset` and `after` operate with `DemoSimulator` (R-37, also in the Windows CI). The Windows check on `p2.product` passed: 20 scenarios use one startup (R-36), 20 stops end without `System.exit` (R-38), and an `out` path with `;` and a space operates (R-39) (`docs/wp-05-windows-report.md`). WP-05 is complete; F-03, F-04, F-10 and F-11 are closed. `p2.product` does not stop Equinox when its windows close, so each stop ends at stage 2. F-04 is not tested with the hardware simulator.
+
 **Milestone 1: version 1.0.** One team uses the tool on one application in its merge request pipeline for two weeks. Measure the false failures. The target is fewer than 2 % of the runs.
 
 **WP-06 Recorder (10 pd)**
