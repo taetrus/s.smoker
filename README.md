@@ -127,6 +127,8 @@ The agent arguments use `;` as the separator: a value cannot contain `;`.
 The agent reads these sources: the files of `log`, `System.out`, `System.err`, `java.util.logging` and uncaught
 exceptions. It decodes `System.out` and `System.err` with the charset of the stream, and the files with `logCharset`.
 Lines that start with `[smoker] ` are the output of the agent. They are not events.
+The agent assembles the console lines of each writing thread apart, so the output of two threads does not mix in
+the hits. The console itself can show mixed lines.
 
 The agent removes ANSI color codes (`ESC[...m`, from Logback `%highlight`, `%red` and others) from each line first.
 Then it joins the lines of one source into events:
