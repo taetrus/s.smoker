@@ -78,11 +78,47 @@ Scenario, golden and `run-result.json` files are always UTF-8.
 | `scenario` | scenario JSON (play: input, record: output) | required |
 | `out` | run directory (run-result.json, screenshots) | smoker-out |
 | `log` | comma-separated log files to tail (Logback/Log4j output) | — |
-| `failRegex` | regex; a matching log line fails the step | `\bERROR\b|\bSEVERE\b|Exception|\bError\b` |
-| `allowRegex` | regex; matching lines are ignored | — |
+| `logPattern` | Logback pattern of the log lines (the text of `<pattern>` in `logback.xml`) | `%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n` |
+| `failLevel` | `TRACE` / `DEBUG` / `INFO` / `WARN` / `ERROR`; a Logback event at this level or higher fails the step | ERROR |
+| `failRegex` | regex for plain events (not Logback, not Equinox); a match on the first line fails the step | `\b(ERROR\|SEVERE\|FATAL)\b` |
+| `allowRegex` | regex on the full text of an event; a matching event is never a hit | — |
+| `logCharset` | charset of the log files | the platform charset (Cp1252 on a Windows with English settings) |
 | `screenshots` | `evidence` / `off` | evidence |
 | `edtHangMs` | EDT blocked longer than this → HANG + thread dump | 5000 |
 | `exitWhenDone` | play: `System.exit` after writing results | true |
+
+An unknown `failLevel`, an unknown `logCharset` or an unsupported part of `logPattern` stops the agent at start.
+The agent arguments use `;` as the separator: a value cannot contain `;`.
+
+### Log rules
+
+The agent reads these sources: the files of `log`, `System.out`, `System.err`, `java.util.logging` and uncaught
+exceptions. It decodes `System.out` and `System.err` with the charset of the stream, and the files with `logCharset`.
+Lines that start with `[smoker] ` are the output of the agent. They are not events.
+
+The agent joins the lines of one source into events. A line that agrees with `logPattern` starts a Logback event.
+An `!ENTRY` line starts an Equinox event. A stack trace line (`at …`, `Caused by:`, `... N more`) joins the open
+event. Each other line starts a plain event. The fail rule runs once for each event:
+
+| Event | Hit when |
+|---|---|
+| Logback | level ≥ `failLevel` |
+| Equinox | severity 4 or 8, or severity 2 when `failLevel` ≤ `WARN` |
+| plain | the event has a stack trace, or the first line matches `failRegex` |
+| `java.util.logging` | the record has an exception, or level ≥ `failLevel` (SEVERE is ERROR, WARNING is WARN) |
+| uncaught exception | always |
+
+`allowRegex` applies to the full text of the event and wins over all other rules.
+A hit keeps the first line in `line` and the full text in `text` (at most 50 lines and 8000 characters).
+
+Before a step closes, the agent reads each log file to its end. Each step gets the hits in (end of the last step,
+now]. A hit between two steps goes to the next step. A file event has the time of its log line. A file event with
+a time before the window of the step goes to the current step, with the prefix `late:` in `source`.
+
+A file that exists when the agent starts is read from its end. A file that appears later is read from its start.
+
+Duplicate hits: when the application writes the same Logback lines to the console and to a file, each ERROR gives
+two hits. Do not use `log` for a product that logs to the console.
 
 ### Scenario file
 

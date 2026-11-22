@@ -32,6 +32,8 @@ final class Player implements Runnable {
     private final SnapshotTaker taker;
     private final Screenshots shots = new Screenshots();
     private final RunResult result = new RunResult();
+    /** End of the last step window: each step takes the hits in (lastEnd, now] (WP-04, F-08). */
+    private long lastEnd;
 
     /** @param golden golden snapshot per step id, from the golden file; a step without an entry gives NO_GOLDEN */
     Player(AgentConfig cfg, Scenario scenario, Map<String, Snapshot> golden, Observations obs, EdtWatchdog watchdog) {
@@ -122,8 +124,11 @@ final class Player implements Runnable {
             sr.error = "no frame became visible within " + scenario.startupTimeoutMs + " ms";
         }
         Quiescence.await(scenario.quietMs, scenario.stepTimeoutMs);
-        sr.durationMs = System.currentTimeMillis() - t0;
-        sr.logHits.addAll(obs.hitsBetween(t0, System.currentTimeMillis()));
+        obs.drain(); // a plain file line gets the time of reading: read before the end of the window
+        long now = System.currentTimeMillis();
+        sr.durationMs = now - t0;
+        sr.logHits.addAll(obs.takeHits(Long.MIN_VALUE, now)); // the startup window starts at the agent start
+        lastEnd = now;
         if (sr.status == RunResult.Status.PASS && !sr.logHits.isEmpty()) sr.status = RunResult.Status.FAIL;
         if (cfg.screenshots) sr.screenshot = shots.capture(cfg.out, "startup");
         result.steps.add(sr);
@@ -307,9 +312,11 @@ final class Player implements Runnable {
     }
 
     private void finish(RunResult.StepResult sr, long t0) {
+        obs.drain(); // a plain file line gets the time of reading: read before the end of the window
         long now = System.currentTimeMillis();
         sr.durationMs = now - t0;
-        sr.logHits.addAll(obs.hitsBetween(t0, now));
+        sr.logHits.addAll(obs.takeHits(lastEnd, now));
+        lastEnd = now;
     }
 
     Path outDir() {

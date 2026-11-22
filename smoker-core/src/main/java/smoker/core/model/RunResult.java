@@ -10,8 +10,11 @@ public class RunResult {
 
     public static class LogHit {
         public long timestamp;
-        public String source;   // file | stderr | jul | uncaught
+        public String source;   // file:<name> | stdout | stderr | jul | uncaught, with the prefix late: (WP-04)
+        /** First line of the event, at most 2000 characters. */
         public String line;
+        /** Full text of the event: at most 50 lines and 8000 characters (WP-04). Null in old result files. */
+        public String text;
     }
 
     public static class StepResult {

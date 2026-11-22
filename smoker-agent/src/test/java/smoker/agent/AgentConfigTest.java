@@ -2,6 +2,7 @@ package smoker.agent;
 
 import org.junit.Test;
 
+import java.nio.charset.Charset;
 import java.nio.file.Paths;
 
 import static org.junit.Assert.assertEquals;
@@ -35,6 +36,30 @@ public class AgentConfigTest {
         assertEquals("noise", c.allowRegex);
         assertEquals(900L, c.edtHangMs);
         assertFalse(c.exitWhenDone);
+    }
+
+    @Test
+    public void newKeysAndDefaults() {
+        AgentConfig d = AgentConfig.parse("scenario=a.json");
+        assertEquals("%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n", d.logPattern);
+        assertEquals(LogLevel.ERROR, d.failLevel);
+        assertEquals("\\b(ERROR|SEVERE|FATAL)\\b", d.failRegex);
+        assertEquals(Charset.defaultCharset(), d.logCharset);
+
+        AgentConfig c = AgentConfig.parse("scenario=a.json;logPattern=%d %msg%n;failLevel=warn;logCharset=windows-1252");
+        assertEquals("%d %msg%n", c.logPattern);
+        assertEquals(LogLevel.WARN, c.failLevel);
+        assertEquals(Charset.forName("windows-1252"), c.logCharset);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void unknownFailLevelIsRefused() {
+        AgentConfig.parse("scenario=a.json;failLevel=LOUD");
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void unsupportedLogPatternIsRefused() {
+        AgentConfig.parse("scenario=a.json;logPattern=%xyz");
     }
 
     @Test(expected = IllegalArgumentException.class)
