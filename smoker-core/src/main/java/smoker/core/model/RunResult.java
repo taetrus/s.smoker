@@ -33,7 +33,10 @@ public class RunResult {
     public String scenarioName;
     public String scenarioFile;
     public long startedAt;
+    /** 0 until the run ends: a file with 0 is from before an action or from an exit (WP-04, F-22). */
     public long finishedAt;
+    /** Step that runs when the file is written, {@code startup} included. Null when no step runs (WP-04, F-22). */
+    public String currentStep;
     public Status status = Status.PASS;
     public String error;
     public String javaVersion;

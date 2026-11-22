@@ -70,6 +70,11 @@ or German settings, Cp1254 on a Turkish Windows. The CLI copies the bytes and do
 The `[smoker]` lines of the agent are ASCII, except for texts of the application, for example a label text.
 Scenario, golden and `run-result.json` files are always UTF-8.
 
+The agent writes `run-result.json` before startup, before each action and at the end. Until the end, `finishedAt`
+is 0 and `currentStep` names the step that runs (`startup` included). When the application calls `System.exit`
+before the end, a shutdown hook writes the file with status ERROR, the error
+`the application exited during step <id>` and the log hits of that step.
+
 ### Agent arguments (`-javaagent:smoker-agent.jar=k=v;k=v`)
 
 | key | values | default |

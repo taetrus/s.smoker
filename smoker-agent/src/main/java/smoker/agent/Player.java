@@ -3,6 +3,7 @@ package smoker.agent;
 import smoker.core.diff.SnapshotDiff;
 import smoker.core.io.Json;
 import smoker.core.model.Action;
+import smoker.core.model.LintEntry;
 import smoker.core.model.RunResult;
 import smoker.core.model.Scenario;
 import smoker.core.model.Snapshot;
@@ -12,11 +13,16 @@ import javax.swing.SwingUtilities;
 import java.awt.Frame;
 import java.awt.Window;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Replays a scenario inside the app's JVM (R-30, R-35) and writes {@code run-result.json} into the out dir.
@@ -32,8 +38,14 @@ final class Player implements Runnable {
     private final SnapshotTaker taker;
     private final Screenshots shots = new Screenshots();
     private final RunResult result = new RunResult();
-    /** End of the last step window: each step takes the hits in (lastEnd, now] (WP-04, F-08). */
-    private long lastEnd;
+    /** End of the last step window: each step takes the hits in (lastEnd, now] (WP-04, F-08). The hook reads it. */
+    private volatile long lastEnd = Long.MIN_VALUE;
+    /** Guards {@link #result} and the file, {@link #finished} and {@link #exiting}: the player and the hook (F-22). */
+    private final ReentrantLock resultLock = new ReentrantLock();
+    /** The player wrote its final result. Guarded by {@link #resultLock}. */
+    private boolean finished;
+    /** The shutdown hook took the result. Guarded by {@link #resultLock}. */
+    private boolean exiting;
 
     /** @param golden golden snapshot per step id, from the golden file; a step without an entry gives NO_GOLDEN */
     Player(AgentConfig cfg, Scenario scenario, Map<String, Snapshot> golden, Observations obs, EdtWatchdog watchdog) {
@@ -53,35 +65,27 @@ final class Player implements Runnable {
         result.startedAt = System.currentTimeMillis();
         result.javaVersion = System.getProperty("java.version");
         result.os = System.getProperty("os.name") + " " + System.getProperty("os.version");
+        Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
+            @Override
+            public void run() {
+                onExit();
+            }
+        }, "smoker-exit"));
+        Throwable failure = null;
         try {
+            writeProgress("startup");
             startup();
             for (int i = 0; i < scenario.steps.size(); i++) {
                 RunResult.StepResult sr = runStep(scenario.steps.get(i), !skipsSnapshot(scenario, i));
-                result.steps.add(sr);
-                result.status = worse(result.status, sr.status);
+                addStep(sr);
                 // Continue after FAIL, so that one approve covers all steps (F-21).
                 // After HANG or ERROR the state of the UI is not known: stop (R-35).
                 if (sr.status == RunResult.Status.HANG || sr.status == RunResult.Status.ERROR) break;
             }
         } catch (Throwable t) {
-            result.status = RunResult.Status.ERROR;
-            result.error = String.valueOf(t);
+            failure = t;
         } finally {
-            result.finishedAt = System.currentTimeMillis();
-            try {
-                result.unnamedComponents.addAll(taker.unnamedInteractive());
-                result.duplicateNames.addAll(taker.duplicateNames());
-                result.lint.addAll(taker.lintEntries());
-                result.autoNames.addAll(taker.autoNamesUsed());
-            } catch (RuntimeException e) {
-                // The lint is optional: the result file must still be written.
-                SmokerAgent.log("cannot collect the lint: " + e);
-            }
-            try {
-                Json.write(cfg.out.resolve("run-result.json"), result);
-            } catch (Exception e) {
-                System.err.println("smoker: cannot write result: " + e);
-            }
+            writeFinal(failure);
             SmokerAgent.log("scenario '" + scenario.name + "' " + result.status + " (" + (result.finishedAt - result.startedAt) + " ms)");
             obs.stop();
             watchdog.shutdown();
@@ -90,6 +94,137 @@ final class Player implements Runnable {
                 System.exit(code);
             }
         }
+    }
+
+    private Path resultFile() {
+        return cfg.out.resolve("run-result.json");
+    }
+
+    /** Adds a closed step and its status to the result. Ignored after the hook took the result. */
+    void addStep(RunResult.StepResult sr) {
+        resultLock.lock();
+        try {
+            if (exiting) return;
+            result.steps.add(sr);
+            result.status = worse(result.status, sr.status);
+        } finally {
+            resultLock.unlock();
+        }
+    }
+
+    /** Writes the result with the closed steps and {@code currentStep}, before startup and each action (F-22). */
+    void writeProgress(String stepId) {
+        Exception failed = null;
+        resultLock.lock();
+        try {
+            if (exiting || finished) return;
+            result.currentStep = stepId;
+            Json.writeAtomic(resultFile(), result);
+        } catch (Exception e) {
+            failed = e;
+        } finally {
+            resultLock.unlock();
+        }
+        if (failed != null) System.err.println("smoker: cannot write progress: " + failed);
+    }
+
+    /** The final write of the player. Writes nothing when the hook took the result (Review Focus 4). */
+    void writeFinal(Throwable failure) {
+        List<String> unnamed = new ArrayList<String>();
+        List<String> duplicates = new ArrayList<String>();
+        List<LintEntry> lint = new ArrayList<LintEntry>();
+        List<String> autoNames = new ArrayList<String>();
+        try {
+            unnamed.addAll(taker.unnamedInteractive());
+            duplicates.addAll(taker.duplicateNames());
+            lint.addAll(taker.lintEntries());
+            autoNames.addAll(taker.autoNamesUsed());
+        } catch (RuntimeException e) {
+            // The lint is optional: the result file must still be written.
+            SmokerAgent.log("cannot collect the lint: " + e);
+        }
+        Exception failed = null;
+        resultLock.lock();
+        try {
+            if (exiting) return;
+            finished = true; // before the System.exit of the player: the hook then does nothing
+            if (failure != null) {
+                result.status = RunResult.Status.ERROR;
+                result.error = String.valueOf(failure);
+            }
+            result.currentStep = null;
+            result.finishedAt = System.currentTimeMillis();
+            result.unnamedComponents.addAll(unnamed);
+            result.duplicateNames.addAll(duplicates);
+            result.lint.addAll(lint);
+            result.autoNames.addAll(autoNames);
+            Json.writeAtomic(resultFile(), result);
+        } catch (Exception e) {
+            failed = e;
+        } finally {
+            resultLock.unlock();
+        }
+        if (failed != null) System.err.println("smoker: cannot write result: " + failed);
+    }
+
+    /**
+     * Body of the shutdown hook: the application called {@code System.exit} before the player finished (F-22).
+     * Waits at most 1 s for the lock and at most 1 s for the hits. Does not touch Swing and does not print: a print
+     * can block on the lock of a console stream that an application thread holds.
+     */
+    void onExit() {
+        try {
+            if (!resultLock.tryLock(1, TimeUnit.SECONDS)) return;
+        } catch (InterruptedException e) {
+            return;
+        }
+        try {
+            if (finished || exiting) return;
+            exiting = true;
+            String stepId = result.currentStep;
+            RunResult.StepResult sr = null;
+            if (!result.steps.isEmpty()) {
+                RunResult.StepResult last = result.steps.get(result.steps.size() - 1);
+                if (last.stepId != null && last.stepId.equals(stepId)) sr = last; // the step closed: no second entry
+            }
+            if (sr == null) {
+                sr = new RunResult.StepResult();
+                sr.stepId = stepId;
+                for (Step s : scenario.steps) if (s.id != null && s.id.equals(stepId)) sr.stepName = s.name;
+                result.steps.add(sr);
+            }
+            String error = "the application exited during step " + stepId;
+            sr.status = RunResult.Status.ERROR;
+            sr.error = error;
+            sr.logHits.addAll(hitsWithin(lastEnd, 1000));
+            result.status = RunResult.Status.ERROR;
+            result.error = error;
+            result.finishedAt = System.currentTimeMillis();
+            Json.writeAtomic(resultFile(), result);
+        } catch (Throwable ignored) {
+            // The JVM stops: nothing to report to. The file from before the action still names the step.
+        } finally {
+            resultLock.unlock();
+        }
+    }
+
+    /**
+     * The hits after {@code from}, taken on a helper thread: the drain takes the console stream locks, which an
+     * application thread can hold. Gives no hits when the drain does not end within {@code maxWaitMs}.
+     */
+    private List<RunResult.LogHit> hitsWithin(final long from, long maxWaitMs) throws InterruptedException {
+        final AtomicReference<List<RunResult.LogHit>> hits = new AtomicReference<List<RunResult.LogHit>>();
+        Thread t = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                hits.set(obs.takeHits(from, Long.MAX_VALUE)); // the application stops: every hit is of this step
+            }
+        }, "smoker-exit-drain");
+        t.setDaemon(true);
+        t.start();
+        t.join(maxWaitMs);
+        List<RunResult.LogHit> got = hits.get();
+        return got != null ? got : Collections.<RunResult.LogHit>emptyList();
     }
 
     /** Order ERROR > HANG > FAIL > NO_GOLDEN > PASS. */
@@ -131,9 +266,8 @@ final class Player implements Runnable {
         lastEnd = now;
         if (sr.status == RunResult.Status.PASS && !sr.logHits.isEmpty()) sr.status = RunResult.Status.FAIL;
         if (cfg.screenshots) sr.screenshot = shots.capture(cfg.out, "startup");
-        result.steps.add(sr);
+        addStep(sr);
         if (sr.status != RunResult.Status.PASS) {
-            result.status = sr.status;
             throw new IllegalStateException("startup failed: " + (sr.error != null ? sr.error : "log hits during startup"));
         }
     }
@@ -221,6 +355,7 @@ final class Player implements Runnable {
         RunResult.StepResult sr = new RunResult.StepResult();
         sr.stepId = step.id;
         sr.stepName = step.name;
+        writeProgress(step.id); // a System.exit or a crash in the action leaves a file that names the step
         long t0 = System.currentTimeMillis();
         watchdog.reset();
         SmokerAgent.log("step " + step.id + " " + step.action);
