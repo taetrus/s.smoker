@@ -71,4 +71,21 @@ public class JUnitXmlWriterTest {
         org.junit.Assert.assertTrue(body, body.contains("[log:stdout] ERROR first\nCaused by: second\n"));
         org.junit.Assert.assertTrue(body, body.contains("[log:stderr] ERROR only line\n"));
     }
+
+    @Test
+    public void noteGoesToSystemOut() throws Exception {
+        RunResult r = new RunResult();
+        r.scenarioName = "greet";
+        r.note = "failed in a shared JVM <&> x";
+        RunResult.StepResult s = new RunResult.StepResult();
+        s.stepId = "s001";
+        s.stepName = "one";
+        r.steps.add(s);
+        Path f = tmp.getRoot().toPath().resolve("junit.xml");
+        JUnitXmlWriter.write(f, Arrays.asList(r));
+        Document doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(f.toFile());
+        NodeList out = doc.getElementsByTagName("system-out");
+        assertEquals(1, out.getLength());
+        assertEquals("failed in a shared JVM <&> x", out.item(0).getTextContent());
+    }
 }

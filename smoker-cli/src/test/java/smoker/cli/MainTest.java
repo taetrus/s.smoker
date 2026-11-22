@@ -169,6 +169,17 @@ public class MainTest {
     }
 
     @Test
+    public void approveWarnsOnASharedJvmResult() throws Exception {
+        Path sc = scenario("all");
+        Path run = run("all", snap(node("[W]/#a", "a")), snap(node("[W]/#a", "b")));
+        RunResult r = Json.read(run.resolve("run-result.json"), RunResult.class);
+        r.sharedJvm = true;
+        Json.write(run.resolve("run-result.json"), r);
+        assertEquals(0, Main.approve(options("run", run.toString(), "scenario", sc.toString())));
+        assertTrue(err(), err().contains("approve: warning: the run used a shared JVM; the golden holds the state after other scenarios"));
+    }
+
+    @Test
     public void approveWarnsForAStepThatIsNotInTheRun() throws Exception {
         Path sc = scenario("all");
         Path run = run("all", snap(node("[W]/#a", "a")), snap(node("[W]/#a", "b")));

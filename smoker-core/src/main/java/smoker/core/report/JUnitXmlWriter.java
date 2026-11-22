@@ -59,6 +59,7 @@ public final class JUnitXmlWriter {
                     }
                     w.write("    </testcase>\n");
                 }
+                if (r.note != null) w.write("    <system-out>" + esc(r.note) + "</system-out>\n");
                 w.write("  </testsuite>\n");
             }
             w.write("</testsuites>\n");

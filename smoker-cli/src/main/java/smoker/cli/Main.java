@@ -217,6 +217,9 @@ public final class Main {
             return 2;
         }
         RunResult r = Json.read(runDir.resolve("run-result.json"), RunResult.class);
+        if (r.sharedJvm) {
+            System.err.println("approve: warning: the run used a shared JVM; the golden holds the state after other scenarios");
+        }
         Scenario sc;
         LinkedHashMap<String, Snapshot> old;
         try {
