@@ -201,8 +201,11 @@ The spike.master startup therefore gives FAIL with 28 hits (one for each entry).
 The samples move to `smoker-agent/src/test/resources/wp04/` as test fixtures. The demo fixture of section 6.8 uses a
 part of `spike-crash-app-output.log` (two entries of each kind).
 
-**Pilot (owner, 2026-11-22):** unresolved bundles at startup give FAIL. No allow list for them. The Windows check
-expects startup FAIL for spike.master (`hang.json`, `crash.json`) and PASS for `pilot.json`. WP-04 updates
+**Pilot (owner, 2026-11-22):** unresolved bundles at startup give FAIL. No allow list for them. A correct product has
+no bundle errors: the 28 entries of spike.master come from JRE 8, and 4 platform bundles need JavaSE-17. A startup FAIL
+stops the player before s001. The Windows check therefore runs spike.master twice: on JRE 8 it expects startup FAIL
+(F-22, unresolved bundles), and on JRE 17 it runs `hang.json` and `crash.json` (HANG, and the step name after
+`System.exit`). `pilot.json` on p2.product expects PASS. WP-04 updates
 `docs/wp-01-handoff.md` and `docs/wp-01-pilot-report.md`.
 
 **Duplicate hits on the pilot:** the pilot runs with `--log logs\smoker.log`, and the same Logback lines are on the
@@ -263,7 +266,7 @@ console. Each ERROR then gives two hits. `README.md` recommends no `--log` for a
 - **R-12a:** `log.json` in `SelfTestIT`: `logTrace` gives exactly one hit with 40 trace lines in `text`;
   `logInfoError` gives no hit; `printTrace` gives one `stderr` hit.
 - **F-22:** `exit.json`: `run-result.json` has `currentStep` s001, status ERROR, the error names s001 and exit code 7,
-  and s001 has the ERROR hit. Startup with `demo.equinoxError`: startup FAIL with one hit.
+  and s001 has the ERROR hit. Startup with `demo.equinoxError`: startup FAIL with 4 hits (the fixture has 2 entries of each kind).
 - **F-24:** CLI unit test: `approve` on an empty directory gives exit code 2 and the message.
 - `mvn -B verify` and `mvn -B verify -Plocale-tr` on macOS. On Windows: the three builds, and the pilot spike.master
   with JRE 8 (unresolved bundles give startup FAIL) and `crash.json` (names the step).
