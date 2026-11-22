@@ -54,6 +54,11 @@ public class RunResult {
     /** Compare mode of the scenario: {@code all} or {@code named}. */
     public String compare;
 
+    /** True when this scenario ran in a JVM that ran an earlier scenario (WP-05, F-03). False in old files. */
+    public boolean sharedJvm;
+    /** A remark of the tool about the run, for example that the reset gave a problem (WP-05). Null when none. */
+    public String note;
+
     public boolean passed() {
         return status == Status.PASS;
     }

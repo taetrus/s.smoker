@@ -25,9 +25,12 @@ import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Replays a scenario inside the app's JVM (R-30, R-35) and writes {@code run-result.json} into the out dir.
- * Runs on its own daemon thread; every UI touch goes through the EDT.
+ * The {@link Session} calls it on its thread and owns the shutdown hook and the stop. Every UI touch goes through the EDT.
  */
-final class Player implements Runnable {
+final class Player {
+
+    /** The first step of a scenario: the start of the application, or the reset after an earlier scenario (WP-05). */
+    enum First { STARTUP, RESET }
 
     private final AgentConfig cfg;
     private final Path scenarioFile;
@@ -36,6 +39,7 @@ final class Player implements Runnable {
     private final Map<String, Snapshot> golden;
     private final Observations obs;
     private final EdtWatchdog watchdog;
+    private final boolean sharedJvm;
     private final SnapshotTaker taker;
     private final Screenshots shots = new Screenshots();
     private final RunResult result = new RunResult();
@@ -56,6 +60,13 @@ final class Player implements Runnable {
     /** @param outDir the folder of the result file and the screenshots of this scenario */
     Player(AgentConfig cfg, Path scenarioFile, Scenario scenario, Map<String, Snapshot> golden, Observations obs,
             EdtWatchdog watchdog, Path outDir) {
+        this(cfg, scenarioFile, scenario, golden, obs, watchdog, outDir, false);
+    }
+
+    /** @param sharedJvm true when an earlier scenario ran in this JVM */
+    Player(AgentConfig cfg, Path scenarioFile, Scenario scenario, Map<String, Snapshot> golden, Observations obs,
+            EdtWatchdog watchdog, Path outDir, boolean sharedJvm) {
+        this.sharedJvm = sharedJvm;
         this.cfg = cfg;
         this.scenarioFile = scenarioFile;
         this.outDir = outDir;
@@ -66,25 +77,31 @@ final class Player implements Runnable {
         this.watchdog = watchdog;
     }
 
-    @Override
-    public void run() {
+    /** Sets the header of the result and writes the first progress, before the hook can need it (F-22). */
+    void begin(First first) {
         result.scenarioName = scenario.name;
         result.compare = scenario.compare;
         result.scenarioFile = scenarioFile == null ? null : scenarioFile.toString();
         result.startedAt = System.currentTimeMillis();
         result.javaVersion = System.getProperty("java.version");
         result.os = System.getProperty("os.name") + " " + System.getProperty("os.version");
-        writeProgress("startup"); // before the hook: the hook always has a currentStep
-        Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
-            @Override
-            public void run() {
-                onExit();
-            }
-        }, "smoker-exit"));
+        result.sharedJvm = sharedJvm;
+        writeProgress(first == First.STARTUP ? "startup" : "reset");
+    }
+
+    /**
+     * Runs the first step and the steps, and writes the final result. Does not register a hook and does not stop
+     * the JVM.
+     *
+     * @param lastEnd end of the log window of the player before; the window of the first step starts there
+     * @return the status of the scenario
+     */
+    RunResult.Status play(First first, long lastEnd) {
+        this.lastEnd = lastEnd;
         Throwable failure = null;
         try {
-            startup();
-            for (int i = 0; i < scenario.steps.size(); i++) {
+            boolean go = first == First.STARTUP ? startup() : reset();
+            for (int i = 0; go && i < scenario.steps.size(); i++) {
                 RunResult.StepResult sr = runStep(scenario.steps.get(i), !skipsSnapshot(scenario, i));
                 addStep(sr);
                 // Continue after FAIL, so that one approve covers all steps (F-21).
@@ -96,13 +113,13 @@ final class Player implements Runnable {
         } finally {
             writeFinal(failure);
             SmokerAgent.log("scenario '" + scenario.name + "' " + result.status + " (" + (result.finishedAt - result.startedAt) + " ms)");
-            obs.stop();
-            watchdog.shutdown();
-            if (cfg.exitWhenDone) {
-                int code = result.status == RunResult.Status.PASS || result.status == RunResult.Status.NO_GOLDEN ? 0 : 1;
-                new AppStopper(cfg.stopTimeoutMs, AppStopper.SYSTEM).stop(code, result.status == RunResult.Status.HANG);
-            }
         }
+        return result.status;
+    }
+
+    /** End of the last log window of this player. The next player starts its window there. */
+    long lastEnd() {
+        return lastEnd;
     }
 
     private Path resultFile() {
@@ -253,7 +270,7 @@ final class Player implements Runnable {
     }
 
     /** R-14: main window within startupTimeoutMs, no fail-rule hits meanwhile. */
-    private void startup() throws Exception {
+    private boolean startup() throws Exception {
         long t0 = System.currentTimeMillis();
         long deadline = t0 + scenario.startupTimeoutMs;
         while (System.currentTimeMillis() < deadline && !mainWindowShowing()) {
@@ -281,6 +298,23 @@ final class Player implements Runnable {
         if (sr.status != RunResult.Status.PASS) {
             throw new IllegalStateException("startup failed: " + (sr.error != null ? sr.error : "log hits during startup"));
         }
+        return true;
+    }
+
+    /**
+     * The first step of a scenario after an earlier one (WP-05, F-03): waits for a quiet EDT and takes the log
+     * hits since the end of the player before. A hit gives FAIL and the steps do not run.
+     */
+    private boolean reset() {
+        long t0 = System.currentTimeMillis();
+        RunResult.StepResult sr = new RunResult.StepResult();
+        sr.stepId = "reset";
+        sr.stepName = "reset between scenarios";
+        Quiescence.await(scenario.quietMs, scenario.stepTimeoutMs);
+        finish(sr, t0);
+        if (!sr.logHits.isEmpty()) sr.status = RunResult.Status.FAIL;
+        addStep(sr);
+        return sr.status == RunResult.Status.PASS;
     }
 
     private boolean mainWindowShowing() {

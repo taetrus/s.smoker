@@ -20,6 +20,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 /** The three stages of the stop (WP-05, F-10, R-38). The frame tests are skipped without a display. */
 public class AppStopperTest {
@@ -108,6 +109,27 @@ public class AppStopperTest {
     public void stopCallsExitWithTheCode() {
         Recorder rec = new Recorder(null);
         new AppStopper(50, rec).stop(1, false);
+        assertTrue(String.valueOf(rec.calls), rec.calls.contains("exit(1)"));
+    }
+
+    @Test
+    public void exitIsCalledAlsoWhenAnEarlierStageThrows() {
+        java.io.PrintStream saved = System.out;
+        System.setOut(new java.io.PrintStream(new java.io.OutputStream() {
+            @Override
+            public void write(int b) {
+                throw new IllegalStateException("console broken");
+            }
+        }));
+        Recorder rec = new Recorder(null);
+        try {
+            new AppStopper(50, rec).stop(1, false);
+            fail("the exception of stage 1 must reach the caller");
+        } catch (IllegalStateException expected) {
+            assertEquals("console broken", expected.getMessage());
+        } finally {
+            System.setOut(saved);
+        }
         assertTrue(String.valueOf(rec.calls), rec.calls.contains("exit(1)"));
     }
 

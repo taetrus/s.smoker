@@ -81,17 +81,8 @@ public final class SmokerAgent {
         log("agent started, mode=" + cfg.mode + ", scenario=" + cfg.scenarios.get(0));
     }
 
-    private static void play(AgentConfig cfg, Observations obs, EdtWatchdog watchdog) throws Exception {
-        Path file = cfg.scenarios.get(0);
-        Scenario sc = ScenarioFiles.readScenario(file);
-        String name = stripExt(file.getFileName().toString());
-        if (sc.name == null) sc.name = name;
-        LinkedHashMap<String, Snapshot> golden = ScenarioFiles.readGolden(file);
-        Locators.useWindowKeys(new WindowKeys(sc.windowKeys));
-        AutoNames.enable(sc.autoNames);
-        Path outDir = cfg.out.resolve(name);
-        Files.createDirectories(outDir);
-        new Player(cfg, file, sc, golden, obs, watchdog, outDir).run();
+    private static void play(AgentConfig cfg, Observations obs, EdtWatchdog watchdog) {
+        new Session(cfg, obs, watchdog, AppStopper.SYSTEM).run();
     }
 
     private static void record(final AgentConfig cfg) throws Exception {
@@ -119,7 +110,7 @@ public final class SmokerAgent {
         });
     }
 
-    private static String stripExt(String n) {
+    static String stripExt(String n) {
         int i = n.lastIndexOf('.');
         return i > 0 ? n.substring(0, i) : n;
     }

@@ -48,37 +48,52 @@ final class AppStopper {
         this.exit = exit;
     }
 
-    /** @param edtBlocked true when the EDT does not answer (status HANG): stage 1 is skipped */
+    /**
+     * @param edtBlocked true when the EDT does not answer (status HANG): stage 1 is skipped.
+     *     Stage 3 runs also when stage 1 or 2 throws.
+     */
     void stop(final int code, boolean edtBlocked) {
-        if (!edtBlocked) {
-            SmokerAgent.log("stop: closing the windows");
-            closeFrames();
-            sleep(stopTimeoutMs);
-        }
-        Object bundle = findSystemBundle();
-        if (bundle != null) {
-            SmokerAgent.log("stop: stopping the OSGi framework");
-            try {
-                invoke(bundle, "stop");
-            } catch (Throwable t) {
-                SmokerAgent.log("stop: the OSGi stop failed: " + t);
-            }
-            sleep(stopTimeoutMs);
-        } else {
-            SmokerAgent.log("stop: no OSGi framework");
-        }
-        Thread halt = new Thread(new Runnable() {
-            @Override
-            public void run() {
+        try {
+            if (!edtBlocked) {
+                SmokerAgent.log("stop: closing the windows");
+                closeFrames();
                 sleep(stopTimeoutMs);
-                SmokerAgent.log("stop: halt(" + code + ")");
-                exit.halt(code);
             }
-        }, "smoker-halt");
-        halt.setDaemon(true);
-        halt.start();
-        SmokerAgent.log("stop: System.exit(" + code + ")");
-        exit.exit(code);
+            Object bundle = findSystemBundle();
+            if (bundle != null) {
+                SmokerAgent.log("stop: stopping the OSGi framework");
+                try {
+                    invoke(bundle, "stop");
+                } catch (Throwable t) {
+                    SmokerAgent.log("stop: the OSGi stop failed: " + t);
+                }
+                sleep(stopTimeoutMs);
+            } else {
+                SmokerAgent.log("stop: no OSGi framework");
+            }
+        } finally {
+            Thread halt = new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    sleep(stopTimeoutMs);
+                    safeLog("stop: halt(" + code + ")");
+                    exit.halt(code);
+                }
+            }, "smoker-halt");
+            halt.setDaemon(true);
+            halt.start();
+            safeLog("stop: System.exit(" + code + ")");
+            exit.exit(code);
+        }
+    }
+
+    /** A log line that cannot stop the stop: a broken console stream must not keep the JVM alive. */
+    private static void safeLog(String s) {
+        try {
+            SmokerAgent.log(s);
+        } catch (Throwable ignored) {
+            // the exit follows
+        }
     }
 
     /** Posts WINDOW_CLOSING to each main frame on the EDT. Does not wait for the EDT. */
