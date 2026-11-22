@@ -179,4 +179,25 @@ public class SuiteFileTest {
         refused(suite("{'app': "), "suite:");
         refused(tmp.getRoot().toPath().resolve("absent.json"), "suite:");
     }
+
+    @Test
+    public void malformedScenarioAndGoldenFilesAreRefusedWithThePrefix() throws Exception {
+        Path bad = file("bad.json", "{'schemaVersion': 2, 'name': ");
+        refused(suite("{'app': 'x', 'scenarios': ['bad.json']}"), bad.getFileName().toString());
+        Path ok = scenario("ok.json");
+        file("ok.golden.json", "{'schemaVersion': 2, ");
+        refused(suite("{'app': 'x', 'scenarios': ['ok.json']}"), "ok");
+    }
+
+    @Test
+    public void readyPortIsRangeChecked() throws Exception {
+        scenario("a.json");
+        for (String port : new String[] {"0", "65536", "4294967297"}) {
+            refused(suite("{'app': 'x', 'scenarios': ['a.json'],"
+                    + " 'before': [{'command': 'c', 'background': true, 'readyPort': " + port + "}]}"),
+                    "before[0]: readyPort must be 1..65535");
+        }
+        assertEquals(Integer.valueOf(65535), SuiteFile.read(suite("{'app': 'x', 'scenarios': ['a.json'],"
+                + " 'before': [{'command': 'c', 'background': true, 'readyPort': 65535}]}")).before.get(0).readyPort);
+    }
 }

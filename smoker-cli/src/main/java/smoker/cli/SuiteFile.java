@@ -131,6 +131,10 @@ final class SuiteFile {
             return withGolden ? Main.validated(p) : ScenarioFiles.readScenario(p);
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("suite: " + e.getMessage(), e);
+        } catch (IOException e) {
+            throw new IllegalArgumentException("suite: " + p + ": cannot read: " + e.getMessage(), e);
+        } catch (RuntimeException e) {
+            throw new IllegalArgumentException("suite: " + p + ": " + e.getMessage(), e);
         }
     }
 
@@ -148,7 +152,11 @@ final class SuiteFile {
             c.command = string(o, "command", true, where);
             if (o.has("timeoutS")) c.timeoutS = number(o, "timeoutS", where);
             if (o.has("readyTimeoutS")) c.readyTimeoutS = number(o, "readyTimeoutS", where);
-            if (o.has("readyPort")) c.readyPort = (int) number(o, "readyPort", where);
+            if (o.has("readyPort")) {
+                long port = number(o, "readyPort", where);
+                if (port < 1 || port > 65535) throw new IllegalArgumentException("suite: " + where + ": readyPort must be 1..65535");
+                c.readyPort = (int) port;
+            }
             if (o.has("background")) {
                 JsonElement b = o.get("background");
                 if (!b.isJsonPrimitive() || !b.getAsJsonPrimitive().isBoolean()) {
