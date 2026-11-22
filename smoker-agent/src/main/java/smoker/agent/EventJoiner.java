@@ -33,7 +33,7 @@ final class EventJoiner {
     private final Consumer<LogEvent> sink;
 
     private LogEvent open;
-    /** True while the open event is !SESSION: its header lines join it. */
+    /** True while the open event is !SESSION and its header has no empty line yet: the header lines join it. */
     private boolean inSession;
     /** An empty line that waits for the next line. */
     private boolean heldEmpty;
@@ -64,11 +64,15 @@ final class EventJoiner {
             inSession = true;
             return;
         }
-        if (open != null && open.kind == LogEvent.Kind.EQUINOX && (inSession || EQUINOX_PART.matcher(line).find())) {
+        if (line.isEmpty()) {
+            inSession = false; // the header of a session ends at its empty line
+        }
+        LogPattern.Match match = pattern.match(line, arrivedAt);
+        if (match == null && open != null && open.kind == LogEvent.Kind.EQUINOX
+                && (inSession || EQUINOX_PART.matcher(line).find())) {
             join(line);
             return;
         }
-        LogPattern.Match match = pattern.match(line, arrivedAt);
         if (match != null) {
             long time = useLineTime ? match.time : arrivedAt;
             start(new LogEvent(source, LogEvent.Kind.LOGBACK, time, pattern.precisionMs(), match.level,

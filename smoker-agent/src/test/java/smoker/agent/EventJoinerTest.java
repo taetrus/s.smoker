@@ -170,6 +170,39 @@ public class EventJoinerTest {
         assertEquals(1, file.get(0).precisionMs);
     }
 
+    @Test
+    public void logbackErrorRightAfterSessionHeaderIsOwnEvent() {
+        feed("!SESSION 2026-11-14 22:51:28.581 -------", "eclipse.buildId=unknown", "java.version=1.8.0_341", ERROR_LINE);
+        joiner.close();
+        assertEquals(2, events.size());
+        assertEquals(3, events.get(0).lines.size());
+        assertEquals(LogEvent.Kind.LOGBACK, events.get(1).kind);
+        assertEquals(LogLevel.ERROR, events.get(1).level);
+    }
+
+    @Test
+    public void plainLineAfterSessionHeaderEmptyLineIsOwnEvent() {
+        feed("!SESSION 2026-11-14 22:51:28.581 -------", "eclipse.buildId=unknown", "", "ERROR boom");
+        joiner.close();
+        assertEquals(2, events.size());
+        assertEquals(2, events.get(0).lines.size());
+        assertEquals(LogEvent.Kind.PLAIN, events.get(1).kind);
+        assertEquals("ERROR boom", events.get(1).firstLine());
+    }
+
+    @Test
+    public void eventKeeps50LinesButSeesAtLineBeyondTheCap() {
+        feed(ERROR_LINE);
+        for (int i = 2; i <= 60; i++) {
+            feed(i == 55 ? "\tat a.B.m(B.java:1)" : "\tcontinued " + i);
+        }
+        feed(INFO_LINE);
+        joiner.close();
+        assertEquals(2, events.size());
+        assertEquals(50, events.get(0).lines.size());
+        assertTrue(events.get(0).hasStackTrace);
+    }
+
     private static Consumer<LogEvent> collect(final List<LogEvent> into) {
         return new Consumer<LogEvent>() {
             @Override

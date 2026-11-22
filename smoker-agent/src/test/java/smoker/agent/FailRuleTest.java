@@ -90,6 +90,15 @@ public class FailRuleTest {
     }
 
     @Test
+    public void errorsAfterSessionHeaderAreHits() {
+        List<LogEvent> a = join("!SESSION 2026-11-14 22:51:28.581 ---", "java.version=1.8", "10:00:00.001 [main] ERROR a.B - x");
+        assertFalse(rule.isHit(a.get(0)));
+        assertTrue(rule.isHit(a.get(1)));
+        List<LogEvent> b = join("!SESSION 2026-11-14 22:51:28.581 ---", "java.version=1.8", "", "ERROR boom");
+        assertTrue(rule.isHit(b.get(1)));
+    }
+
+    @Test
     public void julAndUncaught() {
         LogEvent severe = new LogEvent("jul", LogEvent.Kind.JUL, 0, 1, LogLevel.ERROR, Arrays.asList("SEVERE x"));
         LogEvent info = new LogEvent("jul", LogEvent.Kind.JUL, 0, 1, LogLevel.INFO, Arrays.asList("INFO x"));
