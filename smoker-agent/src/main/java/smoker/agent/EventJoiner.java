@@ -64,8 +64,9 @@ final class EventJoiner {
             inSession = true;
             return;
         }
-        if (line.isEmpty()) {
-            inSession = false; // the header of a session ends at its empty line
+        if (line.isEmpty() && inSession) {
+            close(); // the header of a session ends at its empty line, and so does its event
+            return;
         }
         LogPattern.Match match = pattern.match(line, arrivedAt);
         if (match == null && open != null && open.kind == LogEvent.Kind.EQUINOX

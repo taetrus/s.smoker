@@ -96,6 +96,10 @@ public class FailRuleTest {
         assertTrue(rule.isHit(a.get(1)));
         List<LogEvent> b = join("!SESSION 2026-11-14 22:51:28.581 ---", "java.version=1.8", "", "ERROR boom");
         assertTrue(rule.isHit(b.get(1)));
+        List<LogEvent> c = join("!SESSION 2026-11-14 22:51:28.581 ---", "java.version=1.8", "",
+                "java.lang.IllegalStateException: boom", "\tat a.B.m(B.java:1)");
+        assertFalse(rule.isHit(c.get(0)));
+        assertTrue(rule.isHit(c.get(1)));
     }
 
     @Test

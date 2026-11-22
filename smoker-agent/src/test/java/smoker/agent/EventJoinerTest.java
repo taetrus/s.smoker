@@ -203,6 +203,20 @@ public class EventJoinerTest {
         assertTrue(events.get(0).hasStackTrace);
     }
 
+    @Test
+    public void stackTraceAfterSessionHeaderEmptyLineIsOwnPlainEvent() {
+        feed("!SESSION 2026-11-14 22:51:28.581 -------", "eclipse.buildId=unknown", "",
+                "java.lang.IllegalStateException: boom", "\tat a.B.m(B.java:1)");
+        joiner.close();
+        assertEquals(2, events.size());
+        assertEquals(LogEvent.Kind.EQUINOX, events.get(0).kind);
+        assertNull(events.get(0).level);
+        assertEquals(2, events.get(0).lines.size());
+        assertFalse(events.get(0).hasStackTrace);
+        assertEquals(LogEvent.Kind.PLAIN, events.get(1).kind);
+        assertTrue(events.get(1).hasStackTrace);
+    }
+
     private static Consumer<LogEvent> collect(final List<LogEvent> into) {
         return new Consumer<LogEvent>() {
             @Override
