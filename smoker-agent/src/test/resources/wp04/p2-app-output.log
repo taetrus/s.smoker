@@ -1,0 +1,61 @@
+[smoker] agent started, mode=PLAY, scenario=C:\smoke\pilot.json
+22:48:04.573 [Start Level: Equinox Container: f41427cf-3b9c-43ee-9a11-3209b2eea733] INFO  com.kk.pde.ds.mcp.client.McpClient - MCP Client starting, server URL: http://localhost:8080/mcp
+22:48:04.587 [Start Level: Equinox Container: f41427cf-3b9c-43ee-9a11-3209b2eea733] INFO  com.kk.pde.ds.imp.Greet - Greet.start()
+22:48:04.589 [Start Level: Equinox Container: f41427cf-3b9c-43ee-9a11-3209b2eea733] INFO  c.k.p.ds.mcp.server.McpToolRegistry - McpToolRegistry activated
+22:48:04.589 [Start Level: Equinox Container: f41427cf-3b9c-43ee-9a11-3209b2eea733] INFO  c.kk.pde.ds.mcp.llm.OpenRouterAgent - OpenRouterAgent activated
+22:48:04.589 [Start Level: Equinox Container: f41427cf-3b9c-43ee-9a11-3209b2eea733] INFO  com.kk.pde.ds.chatbot.ChatService - ChatService: OpenRouterAgent injected
+22:48:04.590 [Start Level: Equinox Container: f41427cf-3b9c-43ee-9a11-3209b2eea733] INFO  com.kk.pde.ds.chatbot.ChatConfig - Loaded config from D:\Dev\p.osgi.ds\distribution\target\products\com.kk.pde.ds.product\win32\win32\x86_64\settings\chatbot.properties
+22:48:04.590 [Start Level: Equinox Container: f41427cf-3b9c-43ee-9a11-3209b2eea733] INFO  com.kk.pde.ds.chatbot.ChatService - ChatService activated (config loaded)
+22:48:04.591 [Start Level: Equinox Container: f41427cf-3b9c-43ee-9a11-3209b2eea733] INFO  com.kk.pde.ds.app.App - App.App()
+22:48:04.591 [Start Level: Equinox Container: f41427cf-3b9c-43ee-9a11-3209b2eea733] INFO  com.kk.pde.ds.app.App - App.setApi()
+22:48:04.591 [Start Level: Equinox Container: f41427cf-3b9c-43ee-9a11-3209b2eea733] INFO  com.kk.pde.ds.app.App - App.setChatService()
+22:48:04.591 [Start Level: Equinox Container: f41427cf-3b9c-43ee-9a11-3209b2eea733] INFO  com.kk.pde.ds.app.App - App.start()
+22:48:04.591 [Start Level: Equinox Container: f41427cf-3b9c-43ee-9a11-3209b2eea733] INFO  com.kk.pde.ds.imp.Greet - Hello world!
+22:48:04.592 [Start Level: Equinox Container: f41427cf-3b9c-43ee-9a11-3209b2eea733] INFO  c.k.p.ds.mcp.server.McpToolRegistry - MCP tool registered: bundle_list
+22:48:04.592 [Start Level: Equinox Container: f41427cf-3b9c-43ee-9a11-3209b2eea733] INFO  c.k.p.d.m.s.tools.CalculatorTool - CalculatorTool activated
+22:48:04.592 [Start Level: Equinox Container: f41427cf-3b9c-43ee-9a11-3209b2eea733] INFO  c.k.p.ds.mcp.server.McpToolRegistry - MCP tool registered: calculator
+22:48:04.593 [Start Level: Equinox Container: f41427cf-3b9c-43ee-9a11-3209b2eea733] INFO  c.k.p.d.m.server.tools.DateTimeTool - DateTimeTool activated
+22:48:04.593 [Start Level: Equinox Container: f41427cf-3b9c-43ee-9a11-3209b2eea733] INFO  c.k.p.ds.mcp.server.McpToolRegistry - MCP tool registered: date_time
+22:48:04.593 [Start Level: Equinox Container: f41427cf-3b9c-43ee-9a11-3209b2eea733] INFO  c.k.pde.ds.mcp.server.tools.EchoTool - EchoTool activated
+22:48:04.593 [Start Level: Equinox Container: f41427cf-3b9c-43ee-9a11-3209b2eea733] INFO  c.k.p.ds.mcp.server.McpToolRegistry - MCP tool registered: echo
+22:48:04.594 [Start Level: Equinox Container: f41427cf-3b9c-43ee-9a11-3209b2eea733] INFO  c.k.p.ds.mcp.server.tools.GreetTool - GreetTool activated
+22:48:04.594 [Start Level: Equinox Container: f41427cf-3b9c-43ee-9a11-3209b2eea733] INFO  c.k.p.ds.mcp.server.McpToolRegistry - MCP tool registered: greet
+22:48:04.594 [Start Level: Equinox Container: f41427cf-3b9c-43ee-9a11-3209b2eea733] INFO  c.k.p.d.m.server.tools.HttpFetchTool - HttpFetchTool activated
+22:48:04.596 [Start Level: Equinox Container: f41427cf-3b9c-43ee-9a11-3209b2eea733] INFO  c.k.p.ds.mcp.server.McpToolRegistry - MCP tool registered: http_fetch
+22:48:04.596 [Start Level: Equinox Container: f41427cf-3b9c-43ee-9a11-3209b2eea733] INFO  c.k.p.d.m.s.tools.SystemInfoTool - SystemInfoTool activated
+22:48:04.596 [Start Level: Equinox Container: f41427cf-3b9c-43ee-9a11-3209b2eea733] INFO  c.k.p.ds.mcp.server.McpToolRegistry - MCP tool registered: system_info
+22:48:04.633 [Start Level: Equinox Container: f41427cf-3b9c-43ee-9a11-3209b2eea733] WARN  c.k.p.d.r.i.TesseractCliOcrEngine - TesseractCliOcrEngine: 'tesseract' not runnable; OCR disabled (documents will be parsed text-only). Install Tesseract or set -Drag.ocr.binary to enable.
+22:48:04.634 [Start Level: Equinox Container: f41427cf-3b9c-43ee-9a11-3209b2eea733] INFO  c.k.p.d.r.i.MultiFormatDocumentParser - MultiFormatDocumentParser activated (PDFBox + direct OOXML/HTML/text; OCR available=false)
+22:48:04.635 [Start Level: Equinox Container: f41427cf-3b9c-43ee-9a11-3209b2eea733] INFO  c.k.p.d.r.i.SlidingWindowChunker - SlidingWindowChunker activated (targetChars=1600, overlapChars=200)
+22:48:04.636 [Start Level: Equinox Container: f41427cf-3b9c-43ee-9a11-3209b2eea733] INFO  c.k.p.d.r.i.OpenAiEmbeddingClient - OpenAiEmbeddingClient activated (model=intfloat/multilingual-e5-large)
+22:48:04.636 [Start Level: Equinox Container: f41427cf-3b9c-43ee-9a11-3209b2eea733] INFO  c.k.p.d.r.i.InMemoryVectorStore - InMemoryVectorStore activated
+22:48:04.637 [Start Level: Equinox Container: f41427cf-3b9c-43ee-9a11-3209b2eea733] INFO  c.k.p.d.r.i.DocumentIngestionServiceImpl - DocumentIngestionService activated
+22:48:04.637 [Start Level: Equinox Container: f41427cf-3b9c-43ee-9a11-3209b2eea733] INFO  c.k.p.ds.rag.tool.DocumentSearchTool - DocumentSearchTool activated
+22:48:04.637 [Start Level: Equinox Container: f41427cf-3b9c-43ee-9a11-3209b2eea733] INFO  c.k.p.ds.mcp.server.McpToolRegistry - MCP tool registered: document_search
+22:48:04.638 [Start Level: Equinox Container: f41427cf-3b9c-43ee-9a11-3209b2eea733] INFO  c.k.p.d.rag.tool.IngestDocumentsTool - IngestDocumentsTool activated
+22:48:04.638 [Start Level: Equinox Container: f41427cf-3b9c-43ee-9a11-3209b2eea733] INFO  c.k.p.ds.mcp.server.McpToolRegistry - MCP tool registered: ingest_documents
+[smoker] step s001 CLICK [OSGi Chatbot] JButton('Settings')
+22:48:05.563 [Start Level: Equinox Container: f41427cf-3b9c-43ee-9a11-3209b2eea733] INFO  com.kk.pde.ds.mcp.llm.LlmChatServlet - LlmChatServlet activated at /llm/chat
+22:48:05.564 [Start Level: Equinox Container: f41427cf-3b9c-43ee-9a11-3209b2eea733] INFO  com.kk.pde.ds.mcp.server.McpServlet - McpServlet activated at /mcp
+22:48:05.566 [Start Level: Equinox Container: f41427cf-3b9c-43ee-9a11-3209b2eea733] INFO  com.kk.pde.ds.rest.GreetServlet - GreetServlet activated at /api/greet
+[smoker] step s002 SET_TEXT [Settings] JTextField = "MODEL"
+[smoker] step s003 CLICK [Settings] JButton('Cancel')
+[smoker] step s004 SET_TEXT [OSGi Chatbot] JTextArea = "HELLO"
+22:48:07.577 [mcp-client] INFO  com.kk.pde.ds.mcp.client.McpClient - === MCP Client Protocol Run ===
+22:48:07.613 [qtp1592824616-78] INFO  com.kk.pde.ds.mcp.server.McpServlet - MCP initialize request received
+22:48:07.618 [mcp-client] INFO  com.kk.pde.ds.mcp.client.McpClient - Initialize response: {"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05","capabilities":{"tools":{}},"serverInfo":{"name":"osgi-mcp-server","version":"1.0.0"}}}
+22:48:07.619 [mcp-client] INFO  com.kk.pde.ds.mcp.client.McpClient - Sent initialized notification
+22:48:07.619 [qtp1592824616-76] INFO  com.kk.pde.ds.mcp.server.McpServlet - MCP tools/list: 9 tools available
+22:48:07.620 [mcp-client] INFO  com.kk.pde.ds.mcp.client.McpClient - Tools list: {"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":"bundle_list","description":"Lists all installed OSGi bundles with their states","inputSchema":{"type":"object","properties":{"filter":{"type":"string","description":"Optional substring to filter bundle symbolic names"}},"required":[]}},{"name":"calculator","description":"Evaluates simple math: add, subtract, multiply, divide two numbers","inputSchema":{"type":"object","properties":{"a":{"type":"string","description":"First number"},"b":{"type":"string","description":"Second number"},"operation":{"type":"string","description":"One of: add, subtract, multiply, divide"}},"required":["a","b","operation"]}},{"name":"date_time","description":"Returns current date, time, and timezone. Accepts optional SimpleDateFormat pattern.","inputSchema":{"type":"object","properties":{"format":{"type":"string","description":"SimpleDateFormat pattern (default: yyyy-MM-dd HH:mm:ss z)"}},"required":[]}},{"name":"echo","description":"Echoes back the provided message","inputSchema":{"type":"object","properties":{"message":{"type":"string","description":"Message to echo back"}},"required":["message"]}},{"name":"greet","description":"Invokes the OSGi IGreet service and returns a greeting","inputSchema":{"type":"object","properties":{"name":{"type":"string","description":"Name to greet"}},"required":[]}},{"name":"http_fetch","description":"Fetches a URL and returns the response body (text, max 4KB)","inputSchema":{"type":"object","properties":{"url":{"type":"string","description":"URL to fetch (HTTP or HTTPS only)"}},"required":["url"]}},{"name":"system_info","description":"Returns JVM and OS system information","inputSchema":{"type":"object","properties":{},"required":[]}},{"name":"document_search","description":"Searches the ingested local documents (PDF/Word/PowerPoint/text/HTML) and returns the most relevant passages with their source citations. Use this to answer questions grounded in the user's documents.","inputSchema":{"type":"object","properties":{"query":{"type":"string","description":"What to search for"},"top_k":{"type":"integer","description":"How many passages to return (default 5)"}},"required":["query"]}},{"name":"ingest_documents","description":"Loads documents into the searchable knowledge base from a local file or folder path (folders are scanned recursively). Supported types: PDF, Word, PowerPoint, text, Markdown, HTML.","inputSchema":{"type":"object","properties":{"path":{"type":"string","description":"Absolute path to a file or folder of documents"}},"required":["path"]}}]}}
+22:48:07.620 [qtp1592824616-78] INFO  com.kk.pde.ds.mcp.server.McpServlet - MCP tools/call: executing 'echo'
+22:48:07.621 [mcp-client] INFO  com.kk.pde.ds.mcp.client.McpClient - Echo result: {"jsonrpc":"2.0","id":3,"result":{"content":[{"type":"text","text":"Echo: Hello from MCP client!"}],"isError":false}}
+22:48:07.621 [qtp1592824616-76] INFO  com.kk.pde.ds.mcp.server.McpServlet - MCP tools/call: executing 'greet'
+22:48:07.621 [qtp1592824616-76] INFO  com.kk.pde.ds.imp.Greet - Hello world!
+22:48:07.621 [mcp-client] INFO  com.kk.pde.ds.mcp.client.McpClient - Greet result: {"jsonrpc":"2.0","id":4,"result":{"content":[{"type":"text","text":"Hello, OSGi!"}],"isError":false}}
+22:48:07.621 [qtp1592824616-78] INFO  com.kk.pde.ds.mcp.server.McpServlet - MCP tools/call: executing 'system_info'
+22:48:07.622 [mcp-client] INFO  com.kk.pde.ds.mcp.client.McpClient - System info result: {"jsonrpc":"2.0","id":5,"result":{"content":[{"type":"text","text":"Java: 1.8.0_341, OS: Windows 11 10.0, Arch: amd64, Heap: 558MB, Free: 480MB"}],"isError":false}}
+22:48:07.622 [mcp-client] INFO  com.kk.pde.ds.mcp.client.McpClient - === MCP Client Protocol Run Complete ===
+[smoker] step s005 CLICK [OSGi Chatbot] JButton('Clear')
+22:48:07.849 [AWT-EventQueue-0] INFO  com.kk.pde.ds.chatbot.ChatService - Chat history cleared
+22:48:08.167 [SwingWorker-pool-1-thread-1] INFO  com.kk.pde.ds.chatbot.ModelFetcher - Fetched 407 tool-capable models from https://openrouter.ai/api/v1/models (total: 471)
+[smoker] scenario 'pilot' PASS (4159 ms)

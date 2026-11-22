@@ -11,8 +11,11 @@ import java.io.OutputStreamWriter;
 import java.io.Reader;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.FileSystemException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.Map;
 
 /** Pretty, stable JSON so scenario files diff cleanly in Git (R-25). */
@@ -61,6 +64,38 @@ public final class Json {
         StringBuilder out = new StringBuilder();
         compact(GSON.toJsonTree(value), "", out);
         writeText(file, out);
+    }
+
+    /**
+     * As {@link #write}, but through {@code <name>.tmp} in the same folder and a move: a reader never sees half a
+     * file (WP-04, F-22). The move is atomic when the file system supports it. A locked target gets 3 more tries.
+     */
+    public static void writeAtomic(Path file, Object value) throws IOException {
+        Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
+        write(tmp, value);
+        for (int retry = 0; ; retry++) {
+            try {
+                move(tmp, file);
+                return;
+            } catch (FileSystemException e) {
+                // On Windows a virus scanner or the indexer can lock the file for a short time.
+                if (retry >= 3) throw e;
+                try {
+                    Thread.sleep(50);
+                } catch (InterruptedException stop) {
+                    Thread.currentThread().interrupt();
+                    throw e;
+                }
+            }
+        }
+    }
+
+    private static void move(Path tmp, Path file) throws IOException {
+        try {
+            Files.move(tmp, file, StandardCopyOption.ATOMIC_MOVE);
+        } catch (AtomicMoveNotSupportedException e) {
+            Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING);
+        }
     }
 
     private static void writeText(Path file, StringBuilder text) throws IOException {

@@ -206,4 +206,87 @@ public class MainTest {
         assertEquals(old + 20000, Main.budgetMs(sc));
         assertTrue(base > 0);
     }
+
+    // ---- WP-04: unfinished results, log options, approve without a result ---------------------
+
+    private Path runDirWith(String json) throws Exception {
+        Path dir = tmp.newFolder().toPath();
+        if (json != null) Files.write(dir.resolve("run-result.json"), json.replace('\'', '"').getBytes(StandardCharsets.UTF_8));
+        return dir;
+    }
+
+    @Test
+    public void approveWithoutRunResultGivesExitCode2() throws Exception {
+        Path dir = tmp.newFolder().toPath();
+        Path sc = file("a.json", "{'schemaVersion':2,'steps':[]}");
+        assertEquals(2, Main.approve(options("run", dir.toString(), "scenario", sc.toString())));
+        assertTrue(err(), err().contains("approve: no run-result.json in " + dir));
+        assertFalse(err(), err().contains("Exception"));
+        assertFalse(err(), err().contains("\tat "));
+    }
+
+    @Test
+    public void unfinishedResultNamesTheStep() throws Exception {
+        Path dir = runDirWith("{'scenarioName':'x','status':'PASS','currentStep':'s003','finishedAt':0}");
+        Path sc = tmp.getRoot().toPath().resolve("x.json");
+        RunResult r = Main.resultOf(dir, "x", sc, 7, 5000);
+        assertEquals(RunResult.Status.ERROR, r.status);
+        assertEquals("the application stopped during step s003; exit code 7", r.error);
+        RunResult k = Main.resultOf(dir, "x", sc, -999, 5000);
+        assertEquals(RunResult.Status.HANG, k.status);
+        assertTrue(k.error, k.error.contains("s003"));
+    }
+
+    @Test
+    public void hookResultGetsTheExitCode() throws Exception {
+        Path dir = runDirWith("{'scenarioName':'x','status':'ERROR','finishedAt':5,"
+                + "'error':'the application exited during step s001'}");
+        RunResult r = Main.resultOf(dir, "x", tmp.getRoot().toPath().resolve("x.json"), 7, 5000);
+        assertEquals(RunResult.Status.ERROR, r.status);
+        assertEquals("the application exited during step s001; exit code 7", r.error);
+    }
+
+    @Test
+    public void finishedResultIsKept() throws Exception {
+        Path dir = runDirWith("{'scenarioName':'x','status':'PASS','finishedAt':5}");
+        RunResult r = Main.resultOf(dir, "x", tmp.getRoot().toPath().resolve("x.json"), 0, 5000);
+        assertEquals(RunResult.Status.PASS, r.status);
+        assertEquals(null, r.error);
+    }
+
+    @Test
+    public void missingResultKeepsTheOldMessage() throws Exception {
+        Path dir = runDirWith(null);
+        RunResult r = Main.resultOf(dir, "x", tmp.getRoot().toPath().resolve("x.json"), 7, 5000);
+        assertEquals(RunResult.Status.ERROR, r.status);
+        assertEquals("no run-result.json produced; app exit code 7 \u2014 see app-output.log", r.error);
+        RunResult k = Main.resultOf(dir, "x", tmp.getRoot().toPath().resolve("x.json"), -999, 5000);
+        assertEquals(RunResult.Status.HANG, k.status);
+        assertEquals("application did not exit within 5000 ms (killed)", k.error);
+    }
+
+    @Test
+    public void agentArgsCarryTheLogOptions() throws Exception {
+        Path sc = tmp.getRoot().toPath().resolve("x.json");
+        Path dir = tmp.getRoot().toPath().resolve("out");
+        String a = Main.agentArgs(options("logPattern", "%d %msg%n", "failLevel", "WARN", "logCharset", "UTF-8"), sc, dir);
+        assertTrue(a, a.startsWith("mode=play;scenario="));
+        assertTrue(a, a.contains(";logPattern=%d %msg%n"));
+        assertTrue(a, a.contains(";failLevel=WARN"));
+        assertTrue(a, a.contains(";logCharset=UTF-8"));
+        assertFalse(Main.agentArgs(options(), sc, dir).contains("logPattern"));
+    }
+
+    @Test
+    public void semicolonInLogPatternIsRefused() throws Exception {
+        Path sc = file("x.json", "{'schemaVersion':2,'steps':[]}");
+        int code = Main.run(options("agent", "none.jar", "app", "no-such-app", "scenarios", sc.toString(),
+                "out", tmp.getRoot().toPath().resolve("o").toString(), "logPattern", "%d;%msg"));
+        assertEquals(2, code);
+        assertTrue(err(), err().contains("run: logPattern must not contain ';'"));
+        assertTrue(err(), err().contains("WP-05"));
+        assertEquals(2, Main.record(options("agent", "none.jar", "app", "no-such-app",
+                "scenario", sc.toString(), "logPattern", "%d;%msg")));
+        assertTrue(err(), err().contains("record: logPattern must not contain ';'"));
+    }
 }

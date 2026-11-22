@@ -40,7 +40,7 @@ public final class JUnitXmlWriter {
                             esc(s.stepId + " " + s.stepName), esc(r.scenarioName), s.durationMs / 1000.0));
                     StringBuilder body = new StringBuilder();
                     for (String d : s.differences) body.append(d).append('\n');
-                    for (RunResult.LogHit h : s.logHits) body.append("[log:").append(h.source).append("] ").append(h.line).append('\n');
+                    for (RunResult.LogHit h : s.logHits) body.append("[log:").append(h.source).append("] ").append(h.text != null ? h.text : h.line).append('\n');
                     if (s.error != null) body.append(s.error).append('\n');
                     if (s.threadDump != null) body.append("\n--- thread dump ---\n").append(s.threadDump);
                     switch (s.status) {

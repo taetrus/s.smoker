@@ -85,6 +85,9 @@ Add this appender to `configuration/logback.xml` of each product folder, and add
 Scenarios in `docs/wp-01-pilot/` (`hang.json` with `stepTimeoutMs` 3000, `crash.json`). Results: report section 4.
 On JRE 8, 14 bundles of spike.master do not resolve (4 platform bundles need JavaSE-17). The Freeze and Crash buttons operate.
 
+F-22 note (WP-04): on JRE 8, spike.master now gives startup FAIL (28 Equinox entries in the console). Run `hang.json` and `crash.json` on JRE 17.
+`pilot.json` on p2.product stays PASS. With `--log logs\smoker.log` and the console, each ERROR gives two hits. Do not pass `--log` for a product that logs to the console.
+
 ## 5. New goldens for the pilot: done on 2026-11-16
 
 Done on Windows 11 with `master` at `5372284` (WP-02 and WP-09 merged), JRE 8u341. Branch `wp-01-pilot-goldens`.
@@ -127,4 +130,4 @@ For the WP-06 recording session (a person must record): make a test for focus ch
 |---|---|---|
 | The `build` job in `.gitlab-ci.yml` uses `-DskipTests`. | CI does not run the unit tests. | WP-07 |
 | Without a display, `SelfTestIT` fails and the window tests are skipped. | A developer on Linux must use `xvfb-run -a mvn -B verify`. The CI uses Windows runners (decision 5). | WP-07 |
-| Equinox framework errors are not read (F-22). | A product with unresolved bundles gives startup PASS. | WP-04 |
+| Equinox framework errors are not read (F-22). | A product with unresolved bundles gives startup PASS. | WP-04 (implemented, Windows check open) |

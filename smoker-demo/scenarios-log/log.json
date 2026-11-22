@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 2,
+  "name": "log",
+  "description": "Log analysis (WP-04). Needs -Ddemo.logPanel=true. s001: a JUL error with a 40-line stack trace gives one hit. s002: 'Error count 0 of 3' and 'Exception handler ready' give no hit. s003: printStackTrace on stderr gives one hit.",
+  "startupTimeoutMs": 30000,
+  "quietMs": 300,
+  "stepTimeoutMs": 10000,
+  "ignore": { "paths": [], "attributes": [], "valuePatterns": [] },
+  "steps": [
+    { "id": "s001", "name": "log an error with a trace", "action": { "type": "CLICK", "locator": { "name": "demo.logTrace" } } },
+    { "id": "s002", "name": "log words that look like errors", "action": { "type": "CLICK", "locator": { "name": "demo.logInfoError" } } },
+    { "id": "s003", "name": "print a stack trace", "action": { "type": "CLICK", "locator": { "name": "demo.printTrace" } } }
+  ]
+}

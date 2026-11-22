@@ -26,6 +26,18 @@ The integration test runs `run`, `approve`, `run`, `run` on `smoker-demo/scenari
 It also adds a step, removes a step and approves one step, and checks the golden file after each change.
 It copies the scenarios to `smoker-it/target/it-work` and does not change the files in the repository.
 The CLI and the demo application use the JVM and the locale of the test.
+The demo application has two system properties for the log analysis (WP-04).
+`-Ddemo.logPanel=true` shows a "Log" panel with the buttons `demo.logTrace`, `demo.logInfoError`, `demo.printTrace` and `demo.exit`.
+The panel is off by default, so the goldens of the other scenarios do not change.
+`-Ddemo.equinoxError=true` prints an Equinox start error to `System.out` before the UI is built.
+`smoker-demo/scenarios-log/` holds `log.json` and `exit.json`. Both need `-Ddemo.logPanel=true`.
+The integration test checks these results:
+a JUL error with a 40-line stack trace gives one hit in s001 (`log.json`);
+`Error count 0 of 3` and `Exception handler ready` give no hit;
+`printStackTrace` gives one `stderr` hit;
+`System.exit(7)` in a step gives ERROR with `during step s001` and exit code 1 of the CLI (`exit.json`);
+the Equinox error gives FAIL of the step `startup` with 4 `stdout` hits and no run of s001;
+`approve` without `run-result.json` gives exit code 2.
 Without a display the integration test fails, and `LocatorsWindowTest` is skipped.
 
 Windows (PowerShell): `mvn -B verify` then run the commands below; no Xvfb needed on a logged-in desktop.
@@ -70,6 +82,25 @@ or German settings, Cp1254 on a Turkish Windows. The CLI copies the bytes and do
 The `[smoker]` lines of the agent are ASCII, except for texts of the application, for example a label text.
 Scenario, golden and `run-result.json` files are always UTF-8.
 
+The agent writes `run-result.json` before startup, before each action and at the end. Until the end, `finishedAt`
+is 0 and `currentStep` names the step that runs (`startup` included). When the application calls `System.exit`
+before the end, a shutdown hook writes the file with status ERROR, the error
+`the application exited during step <id>` and the log hits of that step.
+
+The CLI deletes an old `run-result.json` before it starts the application. After the run it reads the file:
+
+- The file has `finishedAt` 0: the application stopped before the end. The CLI sets the status ERROR and the error
+  `the application stopped during step <id>; exit code <n>`. If the CLI killed the application at the time limit,
+  the status is HANG and the error ends with `killed after <ms> ms`.
+- The file comes from the exit hook: the CLI adds `; exit code <n>` to the error.
+- There is no file: ERROR `no run-result.json produced; app exit code <n>`, or HANG after a kill.
+
+`run` passes `--log`, `--screenshots`, `--failRegex`, `--allowRegex`, `--logPattern`, `--failLevel` and `--logCharset`
+to the agent. `record` passes `--log`, `--logPattern`, `--failLevel` and `--logCharset`. `--logPattern` cannot contain `;`.
+The CLI refuses it with exit code 2.
+
+`approve` without a `run-result.json` in the `--run` folder prints `approve: no run-result.json in <dir>` and exits with 2.
+
 ### Agent arguments (`-javaagent:smoker-agent.jar=k=v;k=v`)
 
 | key | values | default |
@@ -78,11 +109,69 @@ Scenario, golden and `run-result.json` files are always UTF-8.
 | `scenario` | scenario JSON (play: input, record: output) | required |
 | `out` | run directory (run-result.json, screenshots) | smoker-out |
 | `log` | comma-separated log files to tail (Logback/Log4j output) | — |
-| `failRegex` | regex; a matching log line fails the step | `\bERROR\b|\bSEVERE\b|Exception|\bError\b` |
-| `allowRegex` | regex; matching lines are ignored | — |
+| `logPattern` | Logback pattern of the log lines (the text of `<pattern>` in `logback.xml`) | `%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n` |
+| `failLevel` | `TRACE` / `DEBUG` / `INFO` / `WARN` / `ERROR`; a Logback event at this level or higher fails the step | ERROR |
+| `failRegex` | regex for plain events (not Logback, not Equinox); a match on the first line fails the step | `\b(ERROR\|SEVERE\|FATAL)\b` |
+| `allowRegex` | regex on the full text of an event; a matching event is never a hit | — |
+| `logCharset` | charset of the log files | the platform charset (Cp1252 on a Windows with English settings) |
 | `screenshots` | `evidence` / `off` | evidence |
 | `edtHangMs` | EDT blocked longer than this → HANG + thread dump | 5000 |
 | `exitWhenDone` | play: `System.exit` after writing results | true |
+
+An unknown `failLevel`, an unknown `logCharset` or an unsupported part of `logPattern` stops the application at
+start with exit code 2. System.err then has one line `[smoker] fatal: <message>`.
+The agent arguments use `;` as the separator: a value cannot contain `;`.
+
+### Log rules
+
+The agent reads these sources: the files of `log`, `System.out`, `System.err`, `java.util.logging` and uncaught
+exceptions. It decodes `System.out` and `System.err` with the charset of the stream, and the files with `logCharset`.
+Lines that start with `[smoker] ` are the output of the agent. They are not events.
+
+The agent removes ANSI color codes (`ESC[...m`, from Logback `%highlight`, `%red` and others) from each line first.
+Then it joins the lines of one source into events:
+
+1. A line that agrees with `logPattern` starts a Logback event.
+2. An `!ENTRY` line or a `!SESSION` line starts an Equinox event. The header of a `!SESSION` event ends at its
+   first empty line. `!MESSAGE`, `!SUBENTRY` and `!STACK` lines join an open Equinox event.
+3. A continuation line joins the open event: a line that starts with whitespace (`\tat …`), `Caused by:`,
+   `Suppressed:` or `... N more`. With no open event, a continuation line starts a plain event.
+4. An exception name line (for example `java.lang.IllegalStateException: x`) joins the open event. On the console
+   it joins only when the same write call gave it and the line before it. Logback writes an event in one call.
+   `printStackTrace` writes each line in a separate call, so its trace after a Logback line is a new plain event.
+   The exception name line after the `!STACK` line of an Equinox event always joins that event.
+5. An empty line joins the open event only when a continuation line follows it.
+6. Each other line starts a plain event.
+
+The fail rule runs once for each event:
+
+| Event | Hit when |
+|---|---|
+| Logback | level ≥ `failLevel` |
+| Equinox | severity 4 or 8, or severity 2 when `failLevel` ≤ `WARN` |
+| plain | the event has a stack trace, or the first line matches `failRegex` |
+| `java.util.logging` | the record has an exception, or level ≥ `failLevel` (SEVERE is ERROR, WARNING is WARN) |
+| uncaught exception | always |
+
+`allowRegex` applies to the full text of the event and wins over all other rules.
+A hit keeps the first line in `line` and the full text in `text` (at most 50 lines and 8000 characters).
+At most 200 hits wait for a step. The agent counts the hits after that and does not keep them. The step then
+gets one more hit with source `smoker` and the line `<N> more hits not shown`.
+
+Before a step closes, the agent reads each log file to its end. Each step gets the hits in (end of the last step,
+now]. A hit between two steps goes to the next step. A file event has the time of its log line. A file event with
+a time before the window of the step goes to the current step, with the prefix `late:` in `source`.
+
+An event that the application still writes at the end of a step can go into two parts in two steps. This is rare:
+it occurs only for Equinox output and for output in more than one write call.
+
+A file that exists when the agent starts is read from its end. A file that appears later is read from its start.
+
+Duplicate hits: when the application writes the same Logback lines to the console and to a file, each ERROR gives
+two hits. Do not use `log` for a product that logs to the console.
+The same is true for `java.util.logging` and uncaught exceptions: the default JUL `ConsoleHandler` writes each
+record to `System.err`, and the uncaught hook writes the stack trace to `System.err`. Such an event then gives a
+second hit on `stderr`.
 
 ### Scenario file
 

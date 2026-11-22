@@ -77,4 +77,28 @@ public class HtmlReportWriterTest {
         assertTrue(html, html.contains("<td>SettingsDialog</td>"));
         assertTrue(!html.contains("null"));
     }
+
+    @Test
+    public void hitShowsTheFullText() throws Exception {
+        RunResult r = new RunResult();
+        r.scenarioName = "orders";
+        RunResult.StepResult s = new RunResult.StepResult();
+        s.stepId = "s001";
+        s.status = RunResult.Status.FAIL;
+        RunResult.LogHit h = new RunResult.LogHit();
+        h.source = "stdout";
+        h.line = "ERROR first <b>";
+        h.text = "ERROR first <b>\nCaused by: second\n\tat third";
+        s.logHits.add(h);
+        RunResult.LogHit old = new RunResult.LogHit();
+        old.source = "stderr";
+        old.line = "ERROR only line";
+        s.logHits.add(old);
+        r.steps.add(s);
+        Path f = tmp.getRoot().toPath().resolve("report.html");
+        HtmlReportWriter.write(f, Collections.singletonList(r));
+        String html = new String(Files.readAllBytes(f), StandardCharsets.UTF_8);
+        assertTrue(html, html.contains("[stdout] ERROR first &lt;b&gt;\nCaused by: second\n\tat third\n"));
+        assertTrue(html, html.contains("[stderr] ERROR only line\n"));
+    }
 }

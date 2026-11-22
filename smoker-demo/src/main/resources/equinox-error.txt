@@ -1,0 +1,67 @@
+!SESSION 2026-11-14 22:51:28.581 -----------------------------------------------
+eclipse.buildId=unknown
+java.version=1.8.0_341
+java.vendor=Oracle Corporation
+BootLoader constants: OS=win32, ARCH=x86_64, WS=win32, NL=en_US
+Command-line arguments:  -configuration configuration -consoleLog
+
+!ENTRY org.eclipse.equinox.common 4 0 2026-11-14 22:51:28.788
+!MESSAGE FrameworkEvent ERROR
+!STACK 0
+org.osgi.framework.BundleException: Could not resolve module: org.eclipse.equinox.common [23]
+  Unresolved requirement: Require-Capability: osgi.ee; filter:="(&(osgi.ee=JavaSE)(version=17))"
+
+	at org.eclipse.osgi.container.Module.start(Module.java:495)
+	at org.eclipse.osgi.container.ModuleContainer$ContainerStartLevel$2.run(ModuleContainer.java:2111)
+	at org.eclipse.osgi.internal.framework.EquinoxContainerAdaptor$1$1.execute(EquinoxContainerAdaptor.java:146)
+	at org.eclipse.osgi.container.ModuleContainer$ContainerStartLevel.incStartLevel(ModuleContainer.java:2102)
+	at org.eclipse.osgi.container.ModuleContainer$ContainerStartLevel.incStartLevel(ModuleContainer.java:2044)
+	at org.eclipse.osgi.container.ModuleContainer$ContainerStartLevel.doContainerStartLevel(ModuleContainer.java:2004)
+	at org.eclipse.osgi.container.SystemModule.startWorker(SystemModule.java:274)
+	at org.eclipse.osgi.container.Module.doStart(Module.java:643)
+	at org.eclipse.osgi.container.Module.start(Module.java:500)
+	at org.eclipse.osgi.container.SystemModule.start(SystemModule.java:198)
+	at org.eclipse.osgi.internal.framework.EquinoxBundle.start(EquinoxBundle.java:471)
+	at org.eclipse.osgi.internal.framework.EquinoxBundle.start(EquinoxBundle.java:490)
+	at org.eclipse.osgi.launch.Equinox.start(Equinox.java:139)
+	at org.eclipse.core.runtime.adaptor.EclipseStarter.startup(EclipseStarter.java:394)
+	at org.eclipse.core.runtime.adaptor.EclipseStarter.run(EclipseStarter.java:294)
+	at org.eclipse.core.runtime.adaptor.EclipseStarter.main(EclipseStarter.java:269)
+
+!ENTRY org.eclipse.equinox.registry 4 0 2026-11-14 22:51:28.789
+!MESSAGE FrameworkEvent ERROR
+!STACK 0
+org.osgi.framework.BundleException: Could not resolve module: org.eclipse.equinox.registry [26]
+  Unresolved requirement: Import-Package: org.eclipse.core.runtime.jobs; resolution:="optional"
+    -> Export-Package: org.eclipse.core.runtime.jobs; bundle-symbolic-name="org.eclipse.core.jobs"; bundle-version="3.15.600.v20250513-1234"; version="0.0.0"
+       org.eclipse.core.jobs [11]
+         Unresolved requirement: Require-Capability: osgi.ee; filter:="(&(osgi.ee=JavaSE)(version=17))"
+         Unresolved requirement: Require-Bundle: org.eclipse.equinox.common; bundle-version="[3.8.0,4.0.0)"
+           -> Bundle-SymbolicName: org.eclipse.equinox.common; bundle-version="3.20.100.v20250506-0427"; singleton:="true"
+              org.eclipse.equinox.common [23]
+                Unresolved requirement: Require-Capability: osgi.ee; filter:="(&(osgi.ee=JavaSE)(version=17))"
+  Unresolved requirement: Require-Bundle: org.eclipse.equinox.common; bundle-version="[3.15.100,4.0.0)"
+    -> Bundle-SymbolicName: org.eclipse.equinox.common; bundle-version="3.20.100.v20250506-0427"; singleton:="true"
+
+	at org.eclipse.osgi.container.Module.start(Module.java:495)
+	at org.eclipse.osgi.container.ModuleContainer$ContainerStartLevel$2.run(ModuleContainer.java:2111)
+	at org.eclipse.osgi.internal.framework.EquinoxContainerAdaptor$1$1.execute(EquinoxContainerAdaptor.java:146)
+	at org.eclipse.osgi.container.ModuleContainer$ContainerStartLevel.incStartLevel(ModuleContainer.java:2102)
+	at org.eclipse.osgi.container.ModuleContainer$ContainerStartLevel.incStartLevel(ModuleContainer.java:2044)
+	at org.eclipse.osgi.container.ModuleContainer$ContainerStartLevel.doContainerStartLevel(ModuleContainer.java:2004)
+	at org.eclipse.osgi.container.SystemModule.startWorker(SystemModule.java:274)
+	at org.eclipse.osgi.container.Module.doStart(Module.java:643)
+	at org.eclipse.osgi.container.Module.start(Module.java:500)
+	at org.eclipse.osgi.container.SystemModule.start(SystemModule.java:198)
+	at org.eclipse.osgi.internal.framework.EquinoxBundle.start(EquinoxBundle.java:471)
+	at org.eclipse.osgi.internal.framework.EquinoxBundle.start(EquinoxBundle.java:490)
+	at org.eclipse.osgi.launch.Equinox.start(Equinox.java:139)
+	at org.eclipse.core.runtime.adaptor.EclipseStarter.startup(EclipseStarter.java:394)
+	at org.eclipse.core.runtime.adaptor.EclipseStarter.run(EclipseStarter.java:294)
+	at org.eclipse.core.runtime.adaptor.EclipseStarter.main(EclipseStarter.java:269)
+
+!ENTRY org.eclipse.osgi 4 0 2026-11-14 22:51:28.925
+!MESSAGE Bundle initial@reference:file:org.eclipse.core.jobs_3.15.600.v20250513-1234.jar was not resolved.
+
+!ENTRY org.eclipse.osgi 4 0 2026-11-14 22:51:28.925
+!MESSAGE Bundle initial@reference:file:org.eclipse.ecf_3.10.0.v20210925-0032.jar was not resolved.

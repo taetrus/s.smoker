@@ -19,12 +19,14 @@ import java.awt.BorderLayout;
 import java.awt.FlowLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.util.Locale;
 import java.util.logging.FileHandler;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import java.util.logging.SimpleFormatter;
 
 /**
  * Minimal Swing app for exercising smoker. Every interactive component has a stable name
@@ -36,18 +38,83 @@ public class DemoApp {
 
     private static final boolean BAD_CELL = Boolean.getBoolean("demo.badCell");
     private static final boolean EXTRA_PANEL = Boolean.getBoolean("demo.extraPanel");
+    // -Ddemo.logPanel=true: the "Log" panel with the buttons of the log scenarios (off: the other goldens stay as they are).
+    private static final boolean LOG_PANEL = Boolean.getBoolean("demo.logPanel");
+    // -Ddemo.equinoxError=true: the application prints an Equinox start error to System.out before the UI (F-22).
+    private static final boolean EQUINOX_ERROR = Boolean.getBoolean("demo.equinoxError");
 
     public static void main(String[] args) throws IOException {
         FileHandler fh = new FileHandler(System.getProperty("demo.log", "demo.log"), true);
-        fh.setFormatter(new SimpleFormatter());
+        fh.setFormatter(new PilotFormatter());
         LOG.addHandler(fh);
         LOG.setUseParentHandlers(false);
+        if (EQUINOX_ERROR) printEquinoxError();
         SwingUtilities.invokeLater(new Runnable() {
             @Override
             public void run() {
                 build();
             }
         });
+    }
+
+    private static void printEquinoxError() throws IOException {
+        InputStream in = DemoApp.class.getResourceAsStream("/equinox-error.txt");
+        BufferedReader r = new BufferedReader(new InputStreamReader(in, "US-ASCII"));
+        try {
+            String line;
+            while ((line = r.readLine()) != null) System.out.print(line + "\n");
+        } finally {
+            r.close();
+        }
+        System.out.flush();
+    }
+
+    private static JPanel logPanel() {
+        JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        p.setName("demo.logPanel");
+        JButton trace = new JButton("Log trace");
+        trace.setName("demo.logTrace");
+        trace.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                IllegalStateException ex = new IllegalStateException("trace demo");
+                StackTraceElement[] st = new StackTraceElement[40];
+                for (int i = 0; i < st.length; i++) st[i] = new StackTraceElement("demo.Deep", "frame" + i, "Deep.java", 100 + i);
+                ex.setStackTrace(st);
+                LOG.log(Level.SEVERE, "trace demo", ex);
+            }
+        });
+        JButton infoError = new JButton("Log info with Error");
+        infoError.setName("demo.logInfoError");
+        infoError.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                LOG.info("Error count 0 of 3");
+                System.out.println("Exception handler ready");
+            }
+        });
+        JButton print = new JButton("Print trace");
+        print.setName("demo.printTrace");
+        print.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                new IllegalStateException("print demo", new IOException("cause")).printStackTrace();
+            }
+        });
+        JButton exit = new JButton("Exit 7");
+        exit.setName("demo.exit");
+        exit.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                LOG.severe("exit on purpose");
+                System.exit(7);
+            }
+        });
+        p.add(trace);
+        p.add(infoError);
+        p.add(print);
+        p.add(exit);
+        return p;
     }
 
     static void build() {
@@ -143,7 +210,14 @@ public class DemoApp {
         // The notes row is below the bottom row: the paths of the named components stay as they are.
         JPanel south = new JPanel(new BorderLayout());
         south.add(bottom, BorderLayout.CENTER);
-        south.add(new NotesPanel(), BorderLayout.SOUTH);
+        if (LOG_PANEL) {
+            JPanel notesAndLog = new JPanel(new BorderLayout());
+            notesAndLog.add(new NotesPanel(), BorderLayout.NORTH);
+            notesAndLog.add(logPanel(), BorderLayout.SOUTH);
+            south.add(notesAndLog, BorderLayout.SOUTH);
+        } else {
+            south.add(new NotesPanel(), BorderLayout.SOUTH);
+        }
         // The query row is below the notes row: the delayed answer stands in for a hardware simulator (WAIT_FOR).
         JPanel queryRow = new JPanel(new FlowLayout(FlowLayout.LEFT));
         JButton query = new JButton("Query");

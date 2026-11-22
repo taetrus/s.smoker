@@ -51,8 +51,9 @@ Three decisions carry the design:
 | | `smoker.core.io` | `ScenarioFiles` — reads and checks the scenario and golden files (`schemaVersion` 2) |
 | | `smoker.core.diff` | `SnapshotDiff` — path-keyed attribute diff with ignore rules |
 | | `smoker.core.io` / `.report` | `Json` (Gson, pretty, stable), `JUnitXmlWriter`, `HtmlReportWriter` |
-| smoker-agent | `smoker.agent` | `SmokerAgent` (premain), `AgentConfig`, `Observations` (+`LogTailer`), `EdtWatchdog`, `Quiescence`, `Locators`, `SnapshotTaker`, `ActionExecutor`, `Player`, `Recorder`, `RecorderToolbar`, `Screenshots` |
+| smoker-agent | `smoker.agent` | `SmokerAgent` (premain), `AgentConfig`, `Observations`, `LogTailer`, `LogPattern`, `LogLevel`, `LogEvent`, `EventJoiner`, `FailRule`, `ConsoleTee`, `EdtWatchdog`, `Quiescence`, `Locators`, `SnapshotTaker`, `ActionExecutor`, `Player`, `Recorder`, `RecorderToolbar`, `Screenshots` |
 | | `smoker.agent` | `WindowKeys` — applies the `WindowKey` rules to window titles |
+| | `smoker.agent` | `LogPattern` — converts the Logback `logPattern` into one regex (time, level, logger, thread, message).<br>`LogLevel` — the log levels in Logback order, for `failLevel`.<br>`LogEvent` — one log event: the lines of one entry, joined.<br>`EventJoiner` — joins the lines of one log source into events. A stack trace gives one hit.<br>`FailRule` — decides once for each closed event whether it is a hit (level, `failRegex`, allow rules).<br>`ConsoleTee` — wraps `System.out` and `System.err`. It passes the bytes unchanged and gives each decoded line to its joiner. |
 | smoker-cli | `smoker.cli` | `Main` — `run` / `record` / `approve` |
 | smoker-demo | `smoker.demo` | `DemoApp` + `scenarios/` (`greet.json`, `wait.json`, ...) + `scenarios-failing/` |
 
@@ -72,7 +73,7 @@ sequenceDiagram
   P->>E: invokeAndWait(SnapshotTaker.take())
   P->>P: Screenshots.capture() (evidence)
   P->>P: SnapshotDiff.diff(expected, actual, ignore)
-  P->>O: hitsBetween(t0, now) → log/stderr/JUL/uncaught hits
+  P->>O: drain(), then takeHits(lastEnd, now) → log/console/JUL/uncaught hits
   Note over P: PASS · FAIL (diff or hits) · ERROR (not found / exception) · NO_GOLDEN
 ```
 
@@ -83,16 +84,18 @@ which a modal dialog's secondary loop services. Only true silence is a hang.
 **Wait for a condition.** A `WAIT_FOR` step uses `WaitCondition`. The player polls one attribute of one component each
 100 ms, with every Swing read on the EDT, until the value matches or `timeoutMs` ends. A timeout is FAIL.
 
+**Progress.** `Player` writes `run-result.json` with `currentStep` before startup and before each action. After `System.exit`, the exit hook adds the hits and the step name (F-22).
+
 **Startup** is a pseudo-step: first `Frame` showing within `startupTimeoutMs`, quiet, no log hits (R-14).
 
 ## 4. Observing logs inside OSGi (R-10, R-15)
 
 | Source | Mechanism | Reaches Logback-in-a-bundle? |
 |---|---|---|
-| Log files | `LogTailer`: tail from current end, rotation-aware, regex fail/allow rules, timestamp-correlated to the step | **Yes** — primary mechanism |
+| Log files | `LogTailer`: tail from the current end (a new file from 0), rotation-aware, `drain()` reads to the end before each step closes; `EventJoiner` and `FailRule` make the hits | **Yes** — primary mechanism |
 | Uncaught exceptions | `Thread.setDefaultUncaughtExceptionHandler` + `sun.awt.exception.handler` (Java 8 EDT) | n/a |
-| stderr | `System.setErr` tee | catches `printStackTrace()` |
-| java.util.logging | root `Handler`, WARNING+ | only JUL users |
+| stdout, stderr | `ConsoleTee` on `System.out` and `System.err` | catches `printStackTrace()` and Equinox console errors (F-22) |
+| java.util.logging | root `Handler`: level ≥ `failLevel` or a thrown exception | only JUL users |
 | Phase 2: in-JVM Logback events | fragment bundle `Fragment-Host: ch.qos.logback.classic` with an `AppenderBase` that pushes `(level, logger, message)` into a `java.util.function.Consumer<String>` stored in `System.getProperties()` (bootstrap-visible type, no class sharing needed); configured in `logback.xml` | Yes, with the fragment deployed in the test product |
 
 Tailing is enough for a smoke tester and keeps the agent free of any classloader coupling; phase 2 adds

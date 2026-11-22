@@ -9,6 +9,7 @@ import smoker.core.model.Golden;
 import smoker.core.model.IgnoreRules;
 import smoker.core.model.Locator;
 import smoker.core.model.NodeSnapshot;
+import smoker.core.model.RunResult;
 import smoker.core.model.Scenario;
 import smoker.core.model.Snapshot;
 import smoker.core.model.Step;
@@ -272,5 +273,34 @@ public class JsonTest {
             assertTrue(written, written.contains("ç ğ İ"));
             assertTrue(written, written.contains("q\\\"b\\\\n\\nt\\tc\\u0001"));
         }
+    }
+
+    @Test
+    public void writeAtomicReplacesTheFile() throws Exception {
+        Path f = tmp.getRoot().toPath().resolve("run-result.json");
+        RunResult a = new RunResult();
+        a.scenarioName = "first";
+        Json.writeAtomic(f, a);
+        RunResult b = new RunResult();
+        b.scenarioName = "second";
+        Json.writeAtomic(f, b);
+        assertEquals("second", Json.read(f, RunResult.class).scenarioName);
+        assertFalse(Files.exists(tmp.getRoot().toPath().resolve("run-result.json.tmp")));
+        assertEquals(1, tmp.getRoot().list().length);
+    }
+
+    @Test
+    public void oldResultWithoutNewFieldsReads() throws Exception {
+        Path f = tmp.newFile("run-result.json").toPath();
+        String old = "{\"scenarioName\": \"old\", \"startedAt\": 5, \"finishedAt\": 9, \"status\": \"FAIL\",\n"
+                + "  \"steps\": [{\"stepId\": \"s001\", \"status\": \"FAIL\",\n"
+                + "    \"logHits\": [{\"timestamp\": 7, \"source\": \"stderr\", \"line\": \"ERROR x\"}]}]}\n";
+        Files.write(f, old.getBytes(StandardCharsets.UTF_8));
+        RunResult r = Json.read(f, RunResult.class);
+        assertEquals("old", r.scenarioName);
+        assertNull(r.currentStep);
+        assertEquals(9, r.finishedAt);
+        assertEquals("ERROR x", r.steps.get(0).logHits.get(0).line);
+        assertNull(r.steps.get(0).logHits.get(0).text);
     }
 }

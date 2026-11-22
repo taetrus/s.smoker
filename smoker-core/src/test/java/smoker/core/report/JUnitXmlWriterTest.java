@@ -45,4 +45,30 @@ public class JUnitXmlWriterTest {
         NodeList failures = tc.getElementsByTagName("failure");
         assertEquals(1, failures.getLength());
     }
+
+    @Test
+    public void failureBodyHasTheFullTextOfAHit() throws Exception {
+        RunResult r = new RunResult();
+        r.scenarioName = "x";
+        RunResult.StepResult s = new RunResult.StepResult();
+        s.stepId = "s001";
+        s.stepName = "n";
+        s.status = RunResult.Status.FAIL;
+        RunResult.LogHit h = new RunResult.LogHit();
+        h.source = "stdout";
+        h.line = "ERROR first";
+        h.text = "ERROR first\nCaused by: second";
+        s.logHits.add(h);
+        RunResult.LogHit old = new RunResult.LogHit();
+        old.source = "stderr";
+        old.line = "ERROR only line";
+        s.logHits.add(old);
+        r.steps.add(s);
+        Path f = tmp.getRoot().toPath().resolve("junit.xml");
+        JUnitXmlWriter.write(f, Arrays.asList(r));
+        Document doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(f.toFile());
+        String body = doc.getElementsByTagName("failure").item(0).getTextContent();
+        org.junit.Assert.assertTrue(body, body.contains("[log:stdout] ERROR first\nCaused by: second\n"));
+        org.junit.Assert.assertTrue(body, body.contains("[log:stderr] ERROR only line\n"));
+    }
 }
