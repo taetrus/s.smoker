@@ -60,6 +60,9 @@ with the state of the next step), F-02 (network answer after the snapshot), and 
 | `C:\smoke\hang\hang.json`, `stepTimeoutMs` 3000 | CLICK `Freeze 5s` | **HANG** after 3014 ms. The thread dump shows `AWT-EventQueue-0` in `Thread.sleep` at `MasterApp.java:261`. Expected result. |
 | `C:\smoke\crash\crash.json` | CLICK `Crash` (`System.exit(7)`) | **ERROR**: "no run-result.json produced; app exit code 7". The report does not show the step or the ERROR line (F-22). |
 
+F-22 note (WP-04): on JRE 8, spike.master now gives startup FAIL (28 Equinox entries, 4 platform bundles need JavaSE-17). Run `hang.json` and `crash.json` on JRE 17.
+`pilot.json` on p2.product stays PASS. With `--log logs\smoker.log` and the console, each ERROR gives two hits. Do not pass `--log` for a product that logs to the console.
+
 ## 5. Failures and findings
 
 | ID | Sev. | Where | Finding | State |
@@ -71,7 +74,7 @@ with the state of the next step), F-02 (network answer after the snapshot), and 
 | F-23 | A | Player | The locator `[Settings] JTextField` index 0 found the `JPasswordField` (subclass of `JTextField`) in front of the Model field. s002 typed "MODEL" into the API key field. `approve` accepted this state, so the run gave PASS. | Corrected. `find` and `resolve` use the same class rule (`Locators.classNameOf`). 2 window tests. After the correction: FAIL at s002 with the old golden, `approve`, then PASS 3 times. |
 | F-21 | B | Recorder | The golden snapshot of a step can show the state after the next step. Each `approve` corrects only one step. | Open (WP-02, WP-06). |
 | F-02 | A | Player | Confirmed without a simulator: the answer from `openrouter.ai` arrives after the snapshot. The result changes from run to run. | Open (WP-03). Workaround: ignore rules. |
-| F-22 | B | Agent | Equinox framework errors are not read. 14 unresolved bundles gave startup PASS. After `System.exit` the report shows only the exit code. | Open (WP-04). |
+| F-22 | B | Agent | Equinox framework errors are not read. 14 unresolved bundles gave startup PASS. After `System.exit` the report shows only the exit code. | Open (WP-04). Implemented in WP-04, Windows check open. |
 | F-10 | B | Agent | The agent called `System.exit` 12 times, and the PC lost power one time. The `configuration` folder was not damaged, and each next start operated. Equinox adds one `configuration\<n>.log` file in each run. | Not seen as a problem. |
 
 Findings for p.osgi.ds (not for s.smoker):
