@@ -60,14 +60,20 @@ final class ConsoleTee extends PrintStream {
         }
     }
 
+    /** Caller holds the lock of this stream. Never throws into the print call of the application. */
     private void see(int b) {
         if (b != '\n') {
             line.write(b);
+            if (line.size() >= EventJoiner.MAX_LINE_BYTES) emit(); // a long line goes in parts
             return;
         }
+        emit();
+    }
+
+    private void emit() {
         String text = new String(line.toByteArray(), cs);
         line.reset();
         if (text.endsWith("\r")) text = text.substring(0, text.length() - 1);
-        joiner.line(text, System.currentTimeMillis());
+        joiner.lineSafely(text, System.currentTimeMillis());
     }
 }

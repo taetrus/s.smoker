@@ -12,6 +12,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -102,6 +103,47 @@ public class ObservationsTest {
         assertEquals(1, hits.size());
         assertEquals("SEVERE: x", hits.get(0).line);
         assertArrayEquals(line, bytes.toByteArray());
+    }
+
+    private static String repeat(char c, int n) {
+        StringBuilder b = new StringBuilder(n);
+        for (int i = 0; i < n; i++) b.append(c);
+        return b.toString();
+    }
+
+    @Test
+    public void aThrowingSinkNeverReachesThePrintCall() throws Exception {
+        for (final Error error : new Error[] {null, new StackOverflowError("user regex")}) {
+            Consumer<LogEvent> sink = new Consumer<LogEvent>() {
+                @Override
+                public void accept(LogEvent e) {
+                    if (error != null) throw error;
+                    throw new IllegalStateException("fail rule");
+                }
+            };
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            ConsoleTee tee = new ConsoleTee(new PrintStream(bytes, true, "UTF-8"), StandardCharsets.UTF_8,
+                    new EventJoiner("stdout", LogPattern.compile(LogPattern.DEFAULT), false, sink));
+            tee.println("ERROR one");
+            tee.println("ERROR two"); // closes "ERROR one": the sink throws
+            tee.drain();              // closes "ERROR two": the sink throws
+            String nl = System.getProperty("line.separator");
+            assertEquals("ERROR one" + nl + "ERROR two" + nl, new String(bytes.toByteArray(), StandardCharsets.UTF_8));
+        }
+    }
+
+    @Test
+    public void teeGivesALongLineInParts() throws Exception {
+        Observations obs = new Observations(new AgentConfig());
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        PrintStream tee = obs.tee(new PrintStream(bytes, true, "UTF-8"), StandardCharsets.UTF_8, "stdout");
+        String text = "ERROR " + repeat('a', 100 * 1024); // no line feed
+        tee.print(text);
+        List<RunResult.LogHit> hits = obs.takeHits(Long.MIN_VALUE, Long.MAX_VALUE);
+        assertEquals(1, hits.size());
+        assertTrue(hits.get(0).line.startsWith("ERROR aaa"));
+        assertEquals(2001, hits.get(0).line.length());
+        assertEquals(text, new String(bytes.toByteArray(), StandardCharsets.UTF_8));
     }
 
     @Test(timeout = 5000)

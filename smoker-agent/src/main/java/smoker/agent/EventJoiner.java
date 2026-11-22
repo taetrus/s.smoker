@@ -17,6 +17,8 @@ import java.util.regex.Pattern;
 final class EventJoiner {
 
     private static final String SMOKER_PREFIX = "[smoker] ";
+    /** A source gives the bytes of a longer line in parts of this size. */
+    static final int MAX_LINE_BYTES = 64 * 1024;
     private static final Pattern ENTRY = Pattern.compile(
             "^!ENTRY\\s+\\S+\\s+(\\d+)\\s+\\d+\\s+(\\d{4}-\\d\\d-\\d\\d \\d\\d:\\d\\d:\\d\\d\\.\\d{3})");
     private static final Pattern SESSION = Pattern.compile(
@@ -100,6 +102,27 @@ final class EventJoiner {
         startPlain(line, arrivedAt);
     }
 
+    /**
+     * Gives one line, as {@link #line}, for a source that runs in a thread of the application (WP-04, F-08).
+     * An exception or error of the pattern drops the line and never reaches the caller (see {@link #rethrowFatal}).
+     */
+    void lineSafely(String line, long arrivedAt) {
+        try {
+            line(line, arrivedAt);
+        } catch (RuntimeException e) {
+            // drop the line
+        } catch (Error e) {
+            rethrowFatal(e);
+        }
+    }
+
+    /** A fatal error of the virtual machine (except a stack overflow) and {@link ThreadDeath} still go up. */
+    private static void rethrowFatal(Error e) {
+        if (e instanceof ThreadDeath || e instanceof VirtualMachineError && !(e instanceof StackOverflowError)) {
+            throw e;
+        }
+    }
+
     /** Closes the open event and drops a held empty line. */
     void close() {
         heldEmpty = false;
@@ -107,7 +130,13 @@ final class EventJoiner {
         if (open != null) {
             LogEvent done = open;
             open = null;
-            sink.accept(done);
+            try {
+                sink.accept(done); // the fail rule runs a user regex: an error drops this event only
+            } catch (RuntimeException e) {
+                // drop the event
+            } catch (Error e) {
+                rethrowFatal(e);
+            }
         }
     }
 

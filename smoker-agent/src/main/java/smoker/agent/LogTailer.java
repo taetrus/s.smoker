@@ -63,7 +63,8 @@ final class LogTailer extends Thread {
                     readToEnd();
                 }
                 Thread.sleep(150);
-            } catch (IOException e) {
+            } catch (IOException | RuntimeException e) {
+                // the poll thread keeps reading: a later poll tries again
                 try { Thread.sleep(500); } catch (InterruptedException ie) { return; }
             } catch (InterruptedException e) {
                 return;
@@ -91,16 +92,21 @@ final class LogTailer extends Thread {
                 for (int i = 0; i < n; i++) {
                     if (buf[i] != '\n') {
                         partial.write(buf[i]);
+                        if (partial.size() >= EventJoiner.MAX_LINE_BYTES) emit(now); // a long line goes in parts
                         continue;
                     }
-                    String line = new String(partial.toByteArray(), cs);
-                    partial.reset();
-                    if (line.endsWith("\r")) line = line.substring(0, line.length() - 1);
-                    joiner.line(line, now);
+                    emit(now);
                 }
             }
         } finally {
             raf.close();
         }
+    }
+
+    private void emit(long now) {
+        String line = new String(partial.toByteArray(), cs);
+        partial.reset();
+        if (line.endsWith("\r")) line = line.substring(0, line.length() - 1);
+        joiner.lineSafely(line, now);
     }
 }

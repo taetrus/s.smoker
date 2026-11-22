@@ -119,6 +119,9 @@ A file that exists when the agent starts is read from its end. A file that appea
 
 Duplicate hits: when the application writes the same Logback lines to the console and to a file, each ERROR gives
 two hits. Do not use `log` for a product that logs to the console.
+The same is true for `java.util.logging` and uncaught exceptions: the default JUL `ConsoleHandler` writes each
+record to `System.err`, and the uncaught hook writes the stack trace to `System.err`. Such an event then gives a
+second hit on `stderr`.
 
 ### Scenario file
 

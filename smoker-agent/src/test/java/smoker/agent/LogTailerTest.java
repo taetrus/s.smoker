@@ -13,9 +13,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.Consumer;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -96,6 +99,42 @@ public class LogTailerTest {
         assertEquals(1, hits.size());
         assertEquals("ERROR new", hits.get(0).line);
         assertTrue(all().isEmpty());
+    }
+
+    @Test(timeout = 10000)
+    public void tailerKeepsReadingAfterAThrowingLine() throws Exception {
+        append("", StandardCharsets.UTF_8);
+        final List<String> seen = Collections.synchronizedList(new ArrayList<String>());
+        Consumer<LogEvent> sink = new Consumer<LogEvent>() {
+            @Override
+            public void accept(LogEvent e) {
+                if (e.firstLine().startsWith("boom")) throw new IllegalStateException("user regex");
+                seen.add(e.firstLine());
+            }
+        };
+        LogTailer t = new LogTailer(file, StandardCharsets.UTF_8,
+                new EventJoiner("file:app.log", LogPattern.compile(LogPattern.DEFAULT), true, sink));
+        t.start();
+        try {
+            append("boom\nERROR a\nERROR b\n", StandardCharsets.UTF_8); // "ERROR a" closes "boom": the sink throws
+            while (!seen.contains("ERROR a")) Thread.sleep(20);         // the poll thread read on
+            append("ERROR c\n", StandardCharsets.UTF_8);
+            while (!seen.contains("ERROR b")) Thread.sleep(20);         // the poll thread is still alive
+            assertTrue(t.isAlive());
+        } finally {
+            t.stopTailing();
+        }
+    }
+
+    @Test
+    public void longLineIsReadInParts() throws Exception {
+        obs.tail(file, StandardCharsets.UTF_8);
+        StringBuilder text = new StringBuilder("ERROR ");
+        for (int i = 0; i < 100 * 1024; i++) text.append('a'); // no line feed
+        append(text.toString(), StandardCharsets.UTF_8);
+        List<RunResult.LogHit> hits = all();
+        assertEquals(1, hits.size());
+        assertTrue(hits.get(0).line.startsWith("ERROR aaa"));
     }
 
     @Test
