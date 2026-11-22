@@ -409,6 +409,21 @@ public class SelfTestIT {
         for (RunResult.StepResult s : r.steps) assertFalse("s001 ran", "s001".equals(s.stepId));
     }
 
+    /** R-39: the configuration file carries a folder name with ';', ' ' and '='. The compare itself is not the point. */
+    @Test
+    public void outFolderWithSemicolonAndSpacesWorks() throws Exception {
+        Path dir = Files.createDirectories(work.resolve("odd-out"));
+        Path scenario = dir.resolve("greet.json");
+        Files.copy(demoDir.resolve("scenarios/greet.json"), scenario);
+        Path out = dir.resolve("out;1 a=b");
+        Cli run1 = run(scenario, out, dir.resolve("demo.log"));
+        Path resultFile = out.resolve("greet/run-result.json");
+        assertTrue(run1.output, Files.exists(resultFile));
+        assertTrue(run1.output, Files.exists(out.resolve("agent-1.cfg")));
+        RunResult.Status status = result(out.resolve("greet")).status;
+        assertTrue(run1.output, status == RunResult.Status.PASS || status == RunResult.Status.NO_GOLDEN);
+    }
+
     @Test
     public void approveWithoutRunResultGivesExitCode2() throws Exception {
         Path dir = Files.createDirectories(work.resolve("approve-empty"));

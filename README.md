@@ -59,7 +59,8 @@ java -jar smoker-cli.jar approve --run out/orders-create --scenario scenarios/or
 
 `--app` is the full command line. The agent option is inserted after the first word, or where you put the
 token `{agent}`. Equinox product: `--app "myapp.exe -vmargs {agent}"` — or add
-`-javaagent:C:\tools\smoker-agent.jar=mode=play;scenario=...;out=...;log=...` to `eclipse.ini` under `-vmargs`.
+`-javaagent:C:\tools\smoker-agent.jar=config=C:\tools\agent.cfg` to `eclipse.ini` under `-vmargs`
+(see "Agent configuration file").
 
 Windows: if a path in `--app` contains spaces, put the path in double quotes and write each inner quote as `\"`.
 If you do not, Windows splits the `--app` value into many arguments.
@@ -96,19 +97,35 @@ The CLI deletes an old `run-result.json` before it starts the application. After
 - There is no file: ERROR `no run-result.json produced; app exit code <n>`, or HANG after a kill.
 
 `run` passes `--log`, `--screenshots`, `--failRegex`, `--allowRegex`, `--logPattern`, `--failLevel` and `--logCharset`
-to the agent. `record` passes `--log`, `--logPattern`, `--failLevel` and `--logCharset`. `--logPattern` cannot contain `;`.
-The CLI refuses it with exit code 2.
+to the agent. `record` passes `--log`, `--logPattern`, `--failLevel` and `--logCharset`. `--log a.log,b.log` becomes `log.1` and `log.2`.
+`run` writes the agent configuration file `<out>/agent-<k>.cfg` for scenario *k*. `record` writes a temporary file.
 
 `approve` without a `run-result.json` in the `--run` folder prints `approve: no run-result.json in <dir>` and exits with 2.
 
-### Agent arguments (`-javaagent:smoker-agent.jar=k=v;k=v`)
+### Agent configuration file (`-javaagent:smoker-agent.jar=config=<file>`)
+
+The only agent argument is `config=<file>`. Everything after `config=` is the path, so the path can contain `;`,
+spaces and `=`. The old form `mode=play;scenario=...` stops the application with exit code 2 and the line
+`[smoker] fatal: use config=<file> (see README)`. A hand-made `-javaagent` option needs `config=<file>`.
+The CLI writes this file for you.
+
+Format rules:
+
+- One `key=value` per line. UTF-8. A BOM at the start is allowed.
+- The first `=` ends the key. The agent trims key and value.
+- An empty line and a line that starts with `#` have no meaning.
+- A value has no escape rules. A backslash, `;` and `=` stay as they are.
+- A line without `=` and a key that occurs two times are errors.
+- An unknown key is an error: `unknown key '<key>' in <file>`.
+- Numbered keys (`scenario.N`, `log.N`, `resetCommand.N`) start at 1 and have no gap:
+  `missing key 'scenario.2' in <file>`. `resetTimeoutS.N` needs `resetCommand.N`.
 
 | key | values | default |
 |---|---|---|
 | `mode` | `play` / `record` | play |
-| `scenario` | scenario JSON (play: input, record: output) | required |
-| `out` | run directory (run-result.json, screenshots) | smoker-out |
-| `log` | comma-separated log files to tail (Logback/Log4j output) | — |
+| `scenario.1`, `scenario.2`, ... | scenario JSON (play: input, record: output); `scenario.1` is required | required |
+| `out` | root folder of the results; the agent writes the result of a scenario to `<out>/<scenario file name without extension>/` (run-result.json, screenshots) | smoker-out |
+| `log.1`, `log.2`, ... | one log file to tail for each key (Logback/Log4j output) | — |
 | `logPattern` | Logback pattern of the log lines (the text of `<pattern>` in `logback.xml`) | `%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n` |
 | `failLevel` | `TRACE` / `DEBUG` / `INFO` / `WARN` / `ERROR`; a Logback event at this level or higher fails the step | ERROR |
 | `failRegex` | regex for plain events (not Logback, not Equinox); a match on the first line fails the step | `\b(ERROR\|SEVERE\|FATAL)\b` |
@@ -117,10 +134,14 @@ The CLI refuses it with exit code 2.
 | `screenshots` | `evidence` / `off` | evidence |
 | `edtHangMs` | EDT blocked longer than this → HANG + thread dump | 5000 |
 | `exitWhenDone` | play: `System.exit` after writing results | true |
+| `resetCommand.1`, `resetCommand.2`, ... | command to reset the application state (read now, used by suite mode later) | — |
+| `resetTimeoutS.N` | time limit of `resetCommand.N` in seconds | 60 |
+| `resetScenario` | scenario that resets the application (read now, used by suite mode later) | — |
+| `stopTimeoutMs` | time to wait for the application to stop (read now, used by suite mode later) | 10000 |
+| `aliveFile` | file of the alive signal (read now, used by suite mode later) | — |
 
-An unknown `failLevel`, an unknown `logCharset` or an unsupported part of `logPattern` stops the application at
-start with exit code 2. System.err then has one line `[smoker] fatal: <message>`.
-The agent arguments use `;` as the separator: a value cannot contain `;`.
+An unknown `failLevel`, an unknown `logCharset`, an unsupported part of `logPattern` or a wrong key stops the
+application at start with exit code 2. System.err then has one line `[smoker] fatal: <message>`.
 
 ### Log rules
 

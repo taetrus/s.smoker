@@ -125,7 +125,7 @@ final class Recorder implements AWTEventListener {
 
     /** Writes the scenario and its golden file. The golden file has the steps in scenario order. */
     void save() throws Exception {
-        Files.createDirectories(cfg.scenario.toAbsolutePath().getParent());
+        Files.createDirectories(cfg.scenarios.get(0).toAbsolutePath().getParent());
         LinkedHashMap<String, Snapshot> golden = new LinkedHashMap<String, Snapshot>();
         synchronized (snapshots) {
             for (Step s : scenario.steps) {
@@ -133,9 +133,9 @@ final class Recorder implements AWTEventListener {
                 if (snap != null) golden.put(s.id, snap);
             }
         }
-        Json.write(cfg.scenario, scenario);
-        ScenarioFiles.writeGolden(cfg.scenario, scenario.name, golden);
-        say("saved " + cfg.scenario + " (" + scenario.steps.size() + " steps, " + golden.size() + " snapshots)");
+        Json.write(cfg.scenarios.get(0), scenario);
+        ScenarioFiles.writeGolden(cfg.scenarios.get(0), scenario.name, golden);
+        say("saved " + cfg.scenarios.get(0) + " (" + scenario.steps.size() + " steps, " + golden.size() + " snapshots)");
     }
 
     void remove(Step s) {

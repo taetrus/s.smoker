@@ -5,6 +5,7 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import smoker.core.io.ConfigFile;
 import smoker.core.io.Json;
 import smoker.core.io.ScenarioFiles;
 import smoker.core.model.NodeSnapshot;
@@ -18,6 +19,7 @@ import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -266,27 +268,40 @@ public class MainTest {
     }
 
     @Test
-    public void agentArgsCarryTheLogOptions() throws Exception {
+    public void agentConfigCarriesTheOptions() throws Exception {
         Path sc = tmp.getRoot().toPath().resolve("x.json");
-        Path dir = tmp.getRoot().toPath().resolve("out");
-        String a = Main.agentArgs(options("logPattern", "%d %msg%n", "failLevel", "WARN", "logCharset", "UTF-8"), sc, dir);
-        assertTrue(a, a.startsWith("mode=play;scenario="));
-        assertTrue(a, a.contains(";logPattern=%d %msg%n"));
-        assertTrue(a, a.contains(";failLevel=WARN"));
-        assertTrue(a, a.contains(";logCharset=UTF-8"));
-        assertFalse(Main.agentArgs(options(), sc, dir).contains("logPattern"));
+        Path out = tmp.getRoot().toPath().resolve("out");
+        Map<String, String> c = Main.agentConfig(options("logPattern", "%d;%msg%n", "failLevel", "WARN", "logCharset", "UTF-8"),
+                Arrays.asList(sc), out);
+        assertEquals(out.toString(), c.get("out"));
+        assertEquals(sc.toAbsolutePath().toString(), c.get("scenario.1"));
+        assertEquals("%d;%msg%n", c.get("logPattern"));
+        assertEquals("WARN", c.get("failLevel"));
+        assertEquals("UTF-8", c.get("logCharset"));
+        assertFalse(Main.agentConfig(options(), Arrays.asList(sc), out).containsKey("logPattern"));
     }
 
     @Test
-    public void semicolonInLogPatternIsRefused() throws Exception {
+    public void agentConfigNumbersTheLogFiles() throws Exception {
+        Path sc = tmp.getRoot().toPath().resolve("x.json");
+        Map<String, String> c = Main.agentConfig(options("log", "a.log,b.log"), Arrays.asList(sc), tmp.getRoot().toPath());
+        assertEquals("a.log", c.get("log.1"));
+        assertEquals("b.log", c.get("log.2"));
+        assertFalse(c.containsKey("log"));
+    }
+
+    @Test
+    public void runAcceptsALogPatternWithASemicolon() throws Exception {
         Path sc = file("x.json", "{'schemaVersion':2,'steps':[]}");
-        int code = Main.run(options("agent", "none.jar", "app", "no-such-app", "scenarios", sc.toString(),
-                "out", tmp.getRoot().toPath().resolve("o").toString(), "logPattern", "%d;%msg"));
-        assertEquals(2, code);
-        assertTrue(err(), err().contains("run: logPattern must not contain ';'"));
-        assertTrue(err(), err().contains("WP-05"));
-        assertEquals(2, Main.record(options("agent", "none.jar", "app", "no-such-app",
-                "scenario", sc.toString(), "logPattern", "%d;%msg")));
-        assertTrue(err(), err().contains("record: logPattern must not contain ';'"));
+        Path out = tmp.getRoot().toPath().resolve("o");
+        try {
+            Main.run(options("agent", "none.jar", "app", "no-such-app", "scenarios", sc.toString(),
+                    "out", out.toString(), "logPattern", "%d;%msg"));
+            fail("the application cannot start");
+        } catch (java.io.IOException e) {
+            // expected: the command does not exist; the configuration file was written before the start
+        }
+        assertFalse(err(), err().contains("must not contain ';'"));
+        assertEquals("%d;%msg", ConfigFile.read(out.resolve("agent-1.cfg")).get("logPattern"));
     }
 }

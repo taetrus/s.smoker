@@ -1,6 +1,7 @@
 package smoker.cli;
 
 import smoker.core.diff.SnapshotDiff;
+import smoker.core.io.ConfigFile;
 import smoker.core.io.Json;
 import smoker.core.io.ScenarioFiles;
 import smoker.core.model.Action;
@@ -82,18 +83,18 @@ public final class Main {
             System.err.println(e.getMessage());
             return 2;
         }
-        if (o.containsKey("logPattern") && o.get("logPattern").indexOf(';') >= 0) {
-            System.err.println(SEMICOLON.replace("<cmd>", "run"));
-            return 2;
-        }
         Files.createDirectories(out);
         List<RunResult> results = new ArrayList<RunResult>();
         int failures = 0;
-        for (Path sc : scenarios) {
+        for (int index = 0; index < scenarios.size(); index++) {
+            Path sc = scenarios.get(index);
             String name = stripExt(sc.getFileName().toString());
             Path runDir = out.resolve(name);
             Files.createDirectories(runDir);
-            String agentArgs = agentArgs(o, sc, runDir);
+            LinkedHashMap<String, String> cfg = agentConfig(o, Arrays.asList(sc.toAbsolutePath()), out);
+            cfg.put("mode", "play");
+            Path cfgFile = out.resolve("agent-" + (index + 1) + ".cfg");
+            ConfigFile.write(cfgFile, cfg);
             Scenario scenario = parsed.get(sc);
             long budgetMs = budgetMs(scenario);
             if (o.containsKey("timeout")) budgetMs = Long.parseLong(o.get("timeout")) * 1000;
@@ -101,7 +102,7 @@ public final class Main {
             System.out.println("== " + name);
             // An old result must not look like the result of this run.
             Files.deleteIfExists(runDir.resolve("run-result.json"));
-            int exit = launch(req(o, "app"), agent, agentArgs, runDir.resolve("app-output.log"), budgetMs);
+            int exit = launch(req(o, "app"), agent, cfgFile, null, runDir.resolve("app-output.log"), budgetMs);
 
             RunResult r = resultOf(runDir, name, sc, exit, budgetMs);
             // make screenshot paths relative to the report
@@ -124,17 +125,23 @@ public final class Main {
         return failures == 0 ? 0 : 1;
     }
 
-    private static final String SEMICOLON = "<cmd>: logPattern must not contain ';' "
-            + "(agent arguments use ';'; WP-05 adds a configuration file)";
-
-    /** The agent arguments of one {@code run}. */
-    static String agentArgs(Map<String, String> o, Path scenario, Path runDir) {
-        StringBuilder a = new StringBuilder("mode=play;scenario=").append(scenario.toAbsolutePath())
-                .append(";out=").append(runDir);
-        for (String k : new String[] {"log", "screenshots", "failRegex", "allowRegex", "logPattern", "failLevel", "logCharset"}) {
-            if (o.containsKey(k)) a.append(';').append(k).append('=').append(o.get(k));
+    /**
+     * The agent configuration of one application run: the scenarios, the root folder of the results and the options
+     * that pass through. {@code out} null leaves the key {@code out} out. The caller adds {@code mode}.
+     */
+    static LinkedHashMap<String, String> agentConfig(Map<String, String> o, List<Path> scenarios, Path out) {
+        LinkedHashMap<String, String> c = new LinkedHashMap<String, String>();
+        if (out != null) c.put("out", out.toString());
+        for (int i = 0; i < scenarios.size(); i++) c.put("scenario." + (i + 1), scenarios.get(i).toAbsolutePath().toString());
+        if (o.containsKey("log")) {
+            String[] files = o.get("log").split(",");
+            for (int i = 0; i < files.length; i++) c.put("log." + (i + 1), files[i].trim());
         }
-        return a.toString();
+        for (String k : new String[] {"screenshots", "failRegex", "allowRegex", "logPattern", "failLevel", "logCharset",
+                "stopTimeoutMs"}) {
+            if (o.containsKey(k)) c.put(k, o.get(k));
+        }
+        return c;
     }
 
     /**
@@ -184,16 +191,17 @@ public final class Main {
                 return 2;
             }
         }
-        if (o.containsKey("logPattern") && o.get("logPattern").indexOf(';') >= 0) {
-            System.err.println(SEMICOLON.replace("<cmd>", "record"));
-            return 2;
-        }
-        StringBuilder agentArgs = new StringBuilder("mode=record;scenario=").append(scenario);
-        for (String k : new String[] {"log", "logPattern", "failLevel", "logCharset"}) {
-            if (o.containsKey(k)) agentArgs.append(';').append(k).append('=').append(o.get(k));
-        }
+        LinkedHashMap<String, String> cfg = agentConfig(o, Arrays.asList(scenario), null);
+        cfg.put("mode", "record");
         Path log = scenario.getParent().resolve(stripExt(scenario.getFileName().toString()) + ".record.log");
-        int exit = launch(req(o, "app"), agent, agentArgs.toString(), log, Long.MAX_VALUE);
+        Path cfgFile = Files.createTempFile("smoker-agent-", ".cfg");
+        int exit;
+        try {
+            ConfigFile.write(cfgFile, cfg);
+            exit = launch(req(o, "app"), agent, cfgFile, null, log, Long.MAX_VALUE);
+        } finally {
+            Files.deleteIfExists(cfgFile);
+        }
         System.out.println("application exited with " + exit + "; scenario file: " + scenario);
         return 0;
     }
@@ -324,14 +332,16 @@ public final class Main {
     }
 
     /** @return exit code, or -999 if killed on timeout. */
-    static int launch(String appCmd, Path agentJar, String agentArgs, Path outputLog, long budgetMs) throws IOException, InterruptedException {
-        String javaagent = "-javaagent:" + agentJar + "=" + agentArgs;
+    static int launch(String appCmd, Path agentJar, Path configFile, Path workDir, Path outputLog, long budgetMs)
+            throws IOException, InterruptedException {
+        String javaagent = "-javaagent:" + agentJar + "=config=" + configFile.toAbsolutePath();
         List<String> cmd = new ArrayList<String>(splitCommand(appCmd));
         int at = cmd.indexOf("{agent}");
         if (at >= 0) cmd.set(at, javaagent);
         else cmd.add(1, javaagent);
         System.out.println("   $ " + join(cmd));
         ProcessBuilder pb = new ProcessBuilder(cmd);
+        if (workDir != null) pb.directory(workDir.toFile());
         pb.redirectErrorStream(true);
         pb.redirectOutput(outputLog.toFile());
         Process p = pb.start();

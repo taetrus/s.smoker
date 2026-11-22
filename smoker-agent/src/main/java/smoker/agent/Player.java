@@ -30,6 +30,8 @@ import java.util.concurrent.locks.ReentrantLock;
 final class Player implements Runnable {
 
     private final AgentConfig cfg;
+    private final Path scenarioFile;
+    private final Path outDir;
     private final Scenario scenario;
     private final Map<String, Snapshot> golden;
     private final Observations obs;
@@ -48,7 +50,15 @@ final class Player implements Runnable {
 
     /** @param golden golden snapshot per step id, from the golden file; a step without an entry gives NO_GOLDEN */
     Player(AgentConfig cfg, Scenario scenario, Map<String, Snapshot> golden, Observations obs, EdtWatchdog watchdog) {
+        this(cfg, cfg.scenarios.isEmpty() ? null : cfg.scenarios.get(0), scenario, golden, obs, watchdog, cfg.out);
+    }
+
+    /** @param outDir the folder of the result file and the screenshots of this scenario */
+    Player(AgentConfig cfg, Path scenarioFile, Scenario scenario, Map<String, Snapshot> golden, Observations obs,
+            EdtWatchdog watchdog, Path outDir) {
         this.cfg = cfg;
+        this.scenarioFile = scenarioFile;
+        this.outDir = outDir;
         this.scenario = scenario;
         this.golden = golden;
         this.taker = new SnapshotTaker(scenario.maxRows, "named".equals(scenario.compare));
@@ -60,7 +70,7 @@ final class Player implements Runnable {
     public void run() {
         result.scenarioName = scenario.name;
         result.compare = scenario.compare;
-        result.scenarioFile = cfg.scenario.toString();
+        result.scenarioFile = scenarioFile == null ? null : scenarioFile.toString();
         result.startedAt = System.currentTimeMillis();
         result.javaVersion = System.getProperty("java.version");
         result.os = System.getProperty("os.name") + " " + System.getProperty("os.version");
@@ -96,7 +106,7 @@ final class Player implements Runnable {
     }
 
     private Path resultFile() {
-        return cfg.out.resolve("run-result.json");
+        return outDir.resolve("run-result.json");
     }
 
     /** Adds a closed step and its status to the result. Ignored after the hook took the result. */
@@ -260,7 +270,7 @@ final class Player implements Runnable {
         }
         Quiescence.await(scenario.quietMs, scenario.stepTimeoutMs);
         // before the hits, as in runStep: no gap between takeHits and addStep where an exit loses the hits
-        if (cfg.screenshots) sr.screenshot = shots.capture(cfg.out, "startup");
+        if (cfg.screenshots) sr.screenshot = shots.capture(outDir, "startup");
         obs.drain(); // a plain file line gets the time of reading: read before the end of the window
         long now = System.currentTimeMillis();
         sr.durationMs = now - t0;
@@ -422,7 +432,7 @@ final class Player implements Runnable {
                     return taker.take();
                 }
             });
-            if (cfg.screenshots) sr.screenshot = shots.capture(cfg.out, step.id);
+            if (cfg.screenshots) sr.screenshot = shots.capture(outDir, step.id);
 
             // 4. compare
             Snapshot expected = golden.get(step.id);
@@ -456,6 +466,6 @@ final class Player implements Runnable {
     }
 
     Path outDir() {
-        return cfg.out;
+        return outDir;
     }
 }

@@ -7,10 +7,11 @@ import smoker.core.model.Snapshot;
 import javax.swing.SwingUtilities;
 import java.lang.instrument.Instrumentation;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.LinkedHashMap;
 
 /**
- * Entry point: {@code -javaagent:smoker-agent.jar=mode=play;scenario=x.json;out=run1;log=app.log} (R-04).
+ * Entry point: {@code -javaagent:smoker-agent.jar=config=<file>} (R-04).
  * No bytecode instrumentation is performed; the agent only needs to be in the JVM early to install hooks.
  * Works unchanged inside an Equinox/Felix launch because Swing lives on the bootstrap classpath.
  */
@@ -39,7 +40,7 @@ public final class SmokerAgent {
     /** Parses the agent arguments. A bad argument gives one line {@code [smoker] fatal: <message>} on System.err. */
     static AgentConfig parseConfig(String args) {
         try {
-            return AgentConfig.parse(args);
+            return AgentConfig.fromArgs(args);
         } catch (IllegalArgumentException e) {
             System.err.println("[smoker] fatal: " + e.getMessage());
             throw e;
@@ -77,28 +78,32 @@ public final class SmokerAgent {
         }, "smoker-main");
         t.setDaemon(true);
         t.start();
-        log("agent started, mode=" + cfg.mode + ", scenario=" + cfg.scenario);
+        log("agent started, mode=" + cfg.mode + ", scenario=" + cfg.scenarios.get(0));
     }
 
     private static void play(AgentConfig cfg, Observations obs, EdtWatchdog watchdog) throws Exception {
-        Scenario sc = ScenarioFiles.readScenario(cfg.scenario);
-        if (sc.name == null) sc.name = stripExt(cfg.scenario.getFileName().toString());
-        LinkedHashMap<String, Snapshot> golden = ScenarioFiles.readGolden(cfg.scenario);
+        Path file = cfg.scenarios.get(0);
+        Scenario sc = ScenarioFiles.readScenario(file);
+        String name = stripExt(file.getFileName().toString());
+        if (sc.name == null) sc.name = name;
+        LinkedHashMap<String, Snapshot> golden = ScenarioFiles.readGolden(file);
         Locators.useWindowKeys(new WindowKeys(sc.windowKeys));
         AutoNames.enable(sc.autoNames);
-        Files.createDirectories(cfg.out);
-        new Player(cfg, sc, golden, obs, watchdog).run();
+        Path outDir = cfg.out.resolve(name);
+        Files.createDirectories(outDir);
+        new Player(cfg, file, sc, golden, obs, watchdog, outDir).run();
     }
 
     private static void record(final AgentConfig cfg) throws Exception {
         final Scenario sc;
+        Path file = cfg.scenarios.get(0);
         LinkedHashMap<String, Snapshot> golden = new LinkedHashMap<String, Snapshot>();
-        if (Files.exists(cfg.scenario)) {
-            sc = ScenarioFiles.readScenario(cfg.scenario); // continue an existing scenario and keep its snapshots
-            golden = ScenarioFiles.readGolden(cfg.scenario);
+        if (Files.exists(file)) {
+            sc = ScenarioFiles.readScenario(file); // continue an existing scenario and keep its snapshots
+            golden = ScenarioFiles.readGolden(file);
         } else {
             sc = new Scenario();
-            sc.name = stripExt(cfg.scenario.getFileName().toString());
+            sc.name = stripExt(file.getFileName().toString());
         }
         Locators.useWindowKeys(new WindowKeys(sc.windowKeys));
         AutoNames.enable(sc.autoNames);
