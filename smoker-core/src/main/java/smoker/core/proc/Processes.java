@@ -61,10 +61,24 @@ public final class Processes {
         return pb.start();
     }
 
+    /**
+     * Starts a command that runs to its end: like {@link #start}, but stdin is closed. A command that reads
+     * stdin (a {@code .bat} with {@code pause}) gets end of input and does not wait.
+     */
+    public static Process startForeground(List<String> cmd, Path workDir, Path log) throws IOException {
+        Process p = start(cmd, workDir, log);
+        try {
+            p.getOutputStream().close();
+        } catch (IOException e) {
+            // the process ended already
+        }
+        return p;
+    }
+
     /** @return the exit code, or {@link #TIMEOUT} after {@code stopTree} when the command ran longer than timeoutMs */
     public static int run(List<String> cmd, Path workDir, Path log, long timeoutMs)
             throws IOException, InterruptedException {
-        Process p = start(cmd, workDir, log);
+        Process p = startForeground(cmd, workDir, log);
         if (!p.waitFor(timeoutMs, TimeUnit.MILLISECONDS)) {
             stopTree(p);
             p.waitFor(10, TimeUnit.SECONDS);

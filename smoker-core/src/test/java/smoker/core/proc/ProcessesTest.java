@@ -37,6 +37,25 @@ public class ProcessesTest {
     }
 
     @Test
+    public void runClosesStdinOfAForegroundCommand() throws Exception {
+        Path log = tmp.getRoot().toPath().resolve("c.log");
+        long t0 = System.currentTimeMillis();
+        assertEquals(0, Processes.run(FakeCommand.command("readstdin"), null, log, 30000));
+        assertTrue(System.currentTimeMillis() - t0 < 25000);
+    }
+
+    @Test
+    public void startKeepsStdinOpenForABackgroundProcess() throws Exception {
+        Path log = tmp.getRoot().toPath().resolve("c.log");
+        Process p = Processes.start(FakeCommand.command("readstdin"), null, log);
+        try {
+            assertFalse(p.waitFor(1500, java.util.concurrent.TimeUnit.MILLISECONDS));
+        } finally {
+            Processes.stopTree(p);
+        }
+    }
+
+    @Test
     public void runAppendsTheOutputToTheLog() throws Exception {
         Path log = tmp.getRoot().toPath().resolve("c.log");
         Processes.run(FakeCommand.command("print", "first"), null, log, 30000);

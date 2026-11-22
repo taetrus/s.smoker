@@ -18,6 +18,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -271,5 +272,66 @@ public class SuiteRunnerTest {
         assertTrue(Files.exists(marker));
         first.join();
         assertEquals(1, runner.cleanupCount());
+    }
+
+    private SuiteResult resultOf(Path out) throws Exception {
+        return smoker.core.io.Json.read(out.resolve("suite-result.json"), SuiteResult.class);
+    }
+
+    @Test
+    public void wrongExecutableGivesExitCode2AndTheReports() throws Exception {
+        Path missing = tmp.getRoot().toPath().resolve("no-such-dir").resolve("no-such-program");
+        Path suiteFile = suiteWithApp(missing.toString(), "");
+        Path out = tmp.getRoot().toPath().resolve("out");
+        SuiteRunner runner = new SuiteRunner(SuiteFile.read(suiteFile), tmp.getRoot().toPath().resolve("agent.jar"), out, false, null);
+        assertEquals(2, runner.run());
+        SuiteResult sr = resultOf(out);
+        assertEquals(1, sr.scenarios.size());
+        assertEquals(RunResult.Status.ERROR, sr.scenarios.get(0).status);
+        assertEquals(1, sr.commandErrors.size());
+        assertTrue(sr.commandErrors.get(0), sr.commandErrors.get(0).contains("no-such-program"));
+        assertTrue(Files.exists(out.resolve("junit.xml")));
+        assertTrue(Files.exists(out.resolve("report.html")));
+        assertEquals(1, runner.cleanupCount());
+    }
+
+    @Test
+    public void commandOfOnlyQuotesDoesNotStopTheReports() throws Exception {
+        // A command of only quotes passes the suite file check and splits to no word.
+        file("a.json", "{\"schemaVersion\": 2, \"name\": \"a\", \"steps\": []}");
+        Path suiteFile = file("suite.json", "{\"app\": \"x\", \"before\": [{\"command\": \"\\\"\\\"\"}],"
+                + " \"scenarios\": [\"a.json\"]}");
+        Path out = tmp.getRoot().toPath().resolve("out");
+        assertEquals(2, new SuiteRunner(SuiteFile.read(suiteFile), tmp.getRoot().toPath().resolve("agent.jar"), out, false, null).run());
+        SuiteResult sr = resultOf(out);
+        assertEquals(RunResult.Status.ERROR, sr.scenarios.get(0).status);
+        assertFalse(sr.commandErrors.isEmpty());
+    }
+
+    @Test
+    public void backgroundProcessThatEndsAfterTheAfterCommandIsNotStopped() throws Exception {
+        file("a.json", "{\"schemaVersion\": 2, \"name\": \"a\", \"steps\": []}");
+        // The background process ends about 300 ms after the 'after' command; stopTree reports "no tree" (Java 8).
+        Path suiteFile = file("suite.json", "{\"app\": \"x\","
+                + " \"before\": [{\"command\": " + q(FakeCommand.line("sleep", "4000")) + ", \"background\": true},"
+                + " {\"command\": " + q(FakeCommand.line("exit", "1")) + "}],"
+                + " \"after\": [{\"command\": " + q(FakeCommand.line("exit", "0")) + "}],"
+                + " \"scenarios\": [\"a.json\"]}");
+        Path out = tmp.getRoot().toPath().resolve("out");
+        SuiteRunner runner = new SuiteRunner(SuiteFile.read(suiteFile), tmp.getRoot().toPath().resolve("agent.jar"), out, false, null);
+        final AtomicInteger stops = new AtomicInteger();
+        runner.stopper = new SuiteRunner.Stopper() {
+            @Override
+            public boolean stopTree(Process p) {
+                stops.incrementAndGet();
+                p.destroyForcibly();
+                return false;
+            }
+        };
+        assertEquals(2, runner.run()); // the failed before command
+        assertEquals(0, stops.get());
+        SuiteResult sr = resultOf(out);
+        assertEquals(1, sr.commandErrors.size()); // only the before command; no "cannot stop child processes"
+        assertTrue(sr.commandErrors.get(0), sr.commandErrors.get(0).startsWith("before[2]"));
     }
 }

@@ -18,6 +18,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -72,7 +73,7 @@ final class SuiteFile {
         }
         Path base = file.toAbsolutePath().normalize().getParent();
         SuiteFile s = new SuiteFile();
-        s.app = string(root, "app", true);
+        s.app = commandLine(string(root, "app", true), "app");
         String wd = string(root, "workDir", false);
         s.workDir = wd == null ? Paths.get("").toAbsolutePath().normalize() : resolve(base, wd);
         if (root.has("agentConfig")) s.readAgentConfig(object(root.get("agentConfig"), "agentConfig"));
@@ -98,28 +99,60 @@ final class SuiteFile {
             if (!AGENT_KEYS.contains(k)) throw new IllegalArgumentException("suite: unknown agentConfig key '" + k + "'");
             if ("log".equals(k)) {
                 if (e.getValue().isJsonArray()) {
-                    for (JsonElement l : e.getValue().getAsJsonArray()) logFiles.add(text(l, "agentConfig.log"));
+                    for (JsonElement l : e.getValue().getAsJsonArray()) logFiles.add(noBreak(text(l, "agentConfig.log"), "agentConfig.log"));
                 } else {
-                    logFiles.add(text(e.getValue(), "agentConfig.log"));
+                    logFiles.add(noBreak(text(e.getValue(), "agentConfig.log"), "agentConfig.log"));
                 }
             } else {
-                agentConfig.put(k, text(e.getValue(), "agentConfig." + k));
+                agentConfig.put(k, agentValue(k, e.getValue()));
             }
         }
+    }
+
+    /** The text of one agentConfig value, checked for the keys that the CLI or the agent reads as a number or a choice. */
+    private static String agentValue(String key, JsonElement value) {
+        String name = "agentConfig." + key;
+        if ("screenshots".equals(key)) {
+            if (value.isJsonPrimitive() && value.getAsJsonPrimitive().isString()) {
+                String v = value.getAsString().trim().toLowerCase(Locale.ROOT);
+                if ("evidence".equals(v) || "off".equals(v)) return v;
+            }
+            throw new IllegalArgumentException("suite: '" + name + "' must be \"evidence\" or \"off\"");
+        }
+        String v = noBreak(text(value, name), name);
+        if ("stopTimeoutMs".equals(key) || "edtHangMs".equals(key)) {
+            if (!v.matches("[0-9]{1,15}")) {
+                throw new IllegalArgumentException("suite: '" + name + "' must be a whole number, 0 or more");
+            }
+        }
+        return v;
+    }
+
+    /** A command line: not empty, no line break. */
+    private static String commandLine(String v, String name) {
+        if (v.trim().isEmpty()) throw new IllegalArgumentException("suite: '" + name + "' must not be empty");
+        return noBreak(v, name);
+    }
+
+    private static String noBreak(String v, String name) {
+        if (v.indexOf('\n') >= 0 || v.indexOf('\r') >= 0) {
+            throw new IllegalArgumentException("suite: '" + name + "' must not contain a line break");
+        }
+        return v;
     }
 
     private void readScenarios(JsonArray list, Path base) throws IOException {
         List<Path> files = new ArrayList<Path>();
         for (JsonElement e : list) {
             Path p = resolve(base, text(e, "scenarios"));
-            if (Files.isDirectory(p)) files.addAll(Main.scenarios(p.toString()));
+            if (Files.isDirectory(p)) files.addAll(Main.scenariosIn(p));
             else files.add(p);
         }
         if (files.isEmpty()) throw new IllegalArgumentException("suite: 'scenarios' has no scenario");
         Map<String, Path> names = new HashMap<String, Path>();
         for (Path p : files) {
-            String name = p.getFileName().toString().replaceFirst("\\.json$", "");
-            if (names.put(name, p) != null) throw new IllegalArgumentException("suite: two scenarios have the name '" + name + "'");
+            String name = Main.stripExt(p.getFileName().toString());
+            if (names.put(name.toLowerCase(Locale.ROOT), p) != null) throw new IllegalArgumentException("suite: two scenarios have the name '" + name + "'");
             scenarios.add(p);
             parsed.put(p, readOne(p, true));
         }
@@ -149,7 +182,7 @@ final class SuiteFile {
                 if (!COMMAND_FIELDS.contains(k)) throw new IllegalArgumentException("suite: unknown field '" + k + "' in " + where);
             }
             Command c = new Command();
-            c.command = string(o, "command", true, where);
+            c.command = commandLine(string(o, "command", true, where), where + ".command");
             if (o.has("timeoutS")) c.timeoutS = number(o, "timeoutS", where);
             if (o.has("readyTimeoutS")) c.readyTimeoutS = number(o, "readyTimeoutS", where);
             if (o.has("readyPort")) {

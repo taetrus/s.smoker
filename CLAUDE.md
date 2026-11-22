@@ -67,8 +67,8 @@ after every change to `smoker-agent` or `smoker-core`.
 - WP-04 (log analysis) is complete; F-08, F-09, F-22 and F-24 are closed. Merged in PR #11; PR #13 keeps the console
   lines of each thread apart. Demo checks pass (SelfTestIT). The Windows check on the pilot (2026-11-22, after PR #13):
   5 of 5 runs pass, and 3 of 3 `jre8` runs give 28 hits. See `docs/wp-04-windows-report.md`.
-- Tests: 83 in `smoker-core`, 268 in `smoker-agent`, 70 in `smoker-cli`, 16 IT. They pass on macOS (JDK 27 default
-  locale and `-Plocale-tr`) and in the Windows CI (JDK 25: default, `-Plocale-tr`, tr_TR with JRE 8u341 as test JVM).
+- Tests: 86 in `smoker-core`, 268 in `smoker-agent`, 77 in `smoker-cli`, 16 IT. They pass on macOS (JDK 27 default
+  locale and `-Plocale-tr`). The Windows CI result for these counts follows the pull request.
 - The record log and `app-output.log` are in the console charset of the application (Cp1252 on Windows), not UTF-8.
   PR #8 (merged 2026-11-19) makes the `[smoker]` texts ASCII and documents this in `README.md`.
   Windows record session: the record log has no non-ASCII byte (PR #8 comment).

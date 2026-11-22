@@ -242,10 +242,10 @@ public class MainTest {
     public void unfinishedResultNamesTheStep() throws Exception {
         Path dir = runDirWith("{'scenarioName':'x','status':'PASS','currentStep':'s003','finishedAt':0}");
         Path sc = tmp.getRoot().toPath().resolve("x.json");
-        RunResult r = Main.resultOf(dir, "x", sc, 7, 5000);
+        RunResult r = Main.resultOf(dir, "x", sc, 7, 5000, "app-output.log");
         assertEquals(RunResult.Status.ERROR, r.status);
         assertEquals("the application stopped during step s003; exit code 7", r.error);
-        RunResult k = Main.resultOf(dir, "x", sc, -999, 5000);
+        RunResult k = Main.resultOf(dir, "x", sc, -999, 5000, "app-output.log");
         assertEquals(RunResult.Status.HANG, k.status);
         assertTrue(k.error, k.error.contains("s003"));
     }
@@ -254,7 +254,7 @@ public class MainTest {
     public void hookResultGetsTheExitCode() throws Exception {
         Path dir = runDirWith("{'scenarioName':'x','status':'ERROR','finishedAt':5,"
                 + "'error':'the application exited during step s001'}");
-        RunResult r = Main.resultOf(dir, "x", tmp.getRoot().toPath().resolve("x.json"), 7, 5000);
+        RunResult r = Main.resultOf(dir, "x", tmp.getRoot().toPath().resolve("x.json"), 7, 5000, "app-output.log");
         assertEquals(RunResult.Status.ERROR, r.status);
         assertEquals("the application exited during step s001; exit code 7", r.error);
     }
@@ -262,7 +262,7 @@ public class MainTest {
     @Test
     public void finishedResultIsKept() throws Exception {
         Path dir = runDirWith("{'scenarioName':'x','status':'PASS','finishedAt':5}");
-        RunResult r = Main.resultOf(dir, "x", tmp.getRoot().toPath().resolve("x.json"), 0, 5000);
+        RunResult r = Main.resultOf(dir, "x", tmp.getRoot().toPath().resolve("x.json"), 0, 5000, "app-output.log");
         assertEquals(RunResult.Status.PASS, r.status);
         assertEquals(null, r.error);
     }
@@ -270,10 +270,10 @@ public class MainTest {
     @Test
     public void missingResultKeepsTheOldMessage() throws Exception {
         Path dir = runDirWith(null);
-        RunResult r = Main.resultOf(dir, "x", tmp.getRoot().toPath().resolve("x.json"), 7, 5000);
+        RunResult r = Main.resultOf(dir, "x", tmp.getRoot().toPath().resolve("x.json"), 7, 5000, "app-output.log");
         assertEquals(RunResult.Status.ERROR, r.status);
         assertEquals("no run-result.json produced; app exit code 7 \u2014 see app-output.log", r.error);
-        RunResult k = Main.resultOf(dir, "x", tmp.getRoot().toPath().resolve("x.json"), -999, 5000);
+        RunResult k = Main.resultOf(dir, "x", tmp.getRoot().toPath().resolve("x.json"), -999, 5000, "app-output.log");
         assertEquals(RunResult.Status.HANG, k.status);
         assertEquals("application did not exit within 5000 ms (killed)", k.error);
     }

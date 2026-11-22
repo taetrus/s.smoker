@@ -371,7 +371,7 @@ final class Player {
     private String runResetCommand(int k) {
         int n = k + 1;
         try {
-            Process p = Processes.start(Processes.split(cfg.resetCommands.get(k)), null,
+            Process p = Processes.startForeground(Processes.split(cfg.resetCommands.get(k)), null,
                     outDir.resolve("reset-command.log"));
             if (p.waitFor(cfg.resetTimeoutS.get(k) * 1000, TimeUnit.MILLISECONDS)) {
                 return p.exitValue() == 0 ? null : "reset command " + n + " failed: exit code " + p.exitValue();

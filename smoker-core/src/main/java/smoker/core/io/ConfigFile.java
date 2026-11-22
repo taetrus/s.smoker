@@ -26,7 +26,7 @@ public final class ConfigFile {
         LinkedHashMap<String, String> m = new LinkedHashMap<String, String>();
         for (int n = 0; n < lines.size(); n++) {
             String line = lines.get(n);
-            if (n == 0 && line.startsWith("﻿")) line = line.substring(1);
+            if (n == 0 && line.startsWith("\uFEFF")) line = line.substring(1);
             String t = line.trim();
             if (t.isEmpty() || t.startsWith("#")) continue;
             int i = t.indexOf('=');

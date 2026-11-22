@@ -7,7 +7,7 @@ import java.util.List;
 
 /**
  * A command for the tests of {@link Processes}. Arguments: {@code exit <n>}, {@code sleep <ms>},
- * {@code print <text>}, {@code child <pidFile>} (starts a copy of itself that writes its PID to the file and
+ * {@code print <text>}, {@code readstdin} (ends at end of stdin), {@code child <pidFile>} (starts a copy of itself that writes its PID to the file and
  * sleeps).
  */
 public final class FakeCommand {
@@ -31,6 +31,10 @@ public final class FakeCommand {
             System.exit(Integer.parseInt(args[1]));
         } else if ("sleep".equals(op)) {
             Thread.sleep(Long.parseLong(args[1]));
+        } else if ("readstdin".equals(op)) {
+            while (System.in.read() >= 0) {
+                // ends at end of input
+            }
         } else if ("print".equals(op)) {
             System.out.println(args[1]);
         } else if ("child".equals(op)) {

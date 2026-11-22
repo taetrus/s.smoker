@@ -106,7 +106,7 @@ start (`<out>/agent-<k>.cfg`) with the launch list (`scenario.1`, `scenario.2`, 
 
 - **Session.** The agent runs the launch list in one JVM. The first scenario has the `startup` step. A scenario that
   follows gets the `reset` step as its first step: close the dialogs (`DialogCloser`), run the `reset` commands
-  (`Processes.run`), replay the reset scenario without a snapshot, read the logs. A `reset` step that is not PASS gives
+  (`Processes.startForeground`, with its own time limit and with stdin closed), replay the reset scenario without a snapshot, read the logs. A `reset` step that is not PASS gives
   its status to the next scenario. After FAIL, HANG or ERROR, the session stops: the scenarios that remain have no result file.
 - **Stop.** After the last result, `AppStopper` stops the application in three stages. The exit code is then not
   a source of the verdict: the CLI reads the result files.

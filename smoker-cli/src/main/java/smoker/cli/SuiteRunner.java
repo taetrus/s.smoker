@@ -38,6 +38,7 @@ final class SuiteRunner {
     private static final String STOPPED = "not run: the CLI was stopped";
     private static final long POLL_MS = 500;
     private static final long ALIVE_MS = 1000;
+    private static final long BACKGROUND_WAIT_MS = 5000;
     private static final long DEFAULT_STOP_TIMEOUT_MS = 10_000;
 
     private final SuiteFile suite;
@@ -61,6 +62,16 @@ final class SuiteRunner {
     private boolean stopping;
     /** Test seam: runs between two application starts. */
     Runnable betweenLaunches;
+    /** Test seam: stops a process and its descendants; true when the descendants stopped too. */
+    interface Stopper {
+        boolean stopTree(Process p);
+    }
+    Stopper stopper = new Stopper() {
+        @Override
+        public boolean stopTree(Process p) {
+            return Processes.stopTree(p);
+        }
+    };
 
     SuiteRunner(SuiteFile suite, Path agentJar, Path out, boolean strict, Long timeoutS) {
         this.suite = suite;
@@ -146,8 +157,14 @@ final class SuiteRunner {
                 deleteTree(out.resolve(n));
                 deleteTree(out.resolve(n + ".shared"));
             }
-            if (runBefore()) runLaunches();
-            else plan.giveUp("not run: a before command failed", "not run: a before command failed");
+            try {
+                if (runBefore()) runLaunches();
+                else plan.giveUp("not run: a before command failed", "not run: a before command failed");
+            } catch (IOException e) {
+                failRun(e);
+            } catch (RuntimeException e) {
+                failRun(e);
+            }
             cleanup();
             return report();
         } finally {
@@ -158,6 +175,13 @@ final class SuiteRunner {
                 // the JVM is already in shutdown: the hook runs
             }
         }
+    }
+
+    /** A failure that the run did not expect (a wrong executable, a locked file): the reports still get written. */
+    private void failRun(Exception e) {
+        String m = e.getMessage() != null ? e.getMessage() : e.toString();
+        fail("run stopped: " + m);
+        plan.giveUp("not run: " + m, "failed in a shared JVM; not run again: " + m);
     }
 
     private void runLaunches() throws Exception {
@@ -265,7 +289,7 @@ final class SuiteRunner {
             app = p;
         }
         int exit = watch(p, launched, alive);
-        return collect(launched, exit);
+        return collect(launched, exit, k);
     }
 
     LinkedHashMap<String, String> agentConfig(List<String> launched) {
@@ -329,7 +353,7 @@ final class SuiteRunner {
     }
 
     /** The raw results. A scenario after the first one without a good result did not run: null. */
-    private Map<String, RunResult> collect(List<String> launched, int exit) throws IOException {
+    private Map<String, RunResult> collect(List<String> launched, int exit, int k) throws IOException {
         Map<String, RunResult> results = new LinkedHashMap<String, RunResult>();
         boolean stopped = false;
         for (int i = 0; i < launched.size(); i++) {
@@ -340,7 +364,8 @@ final class SuiteRunner {
                 continue;
             }
             long budget = limitOf(launched, i);
-            RunResult r = Main.resultOf(runDir, n, files.get(n), exit, budget);
+            RunResult r = Main.resultOf(runDir, n, files.get(n), exit, budget,
+                    "app-output-" + k + ".log");
             results.put(n, r);
             if (r.status != RunResult.Status.PASS && r.status != RunResult.Status.NO_GOLDEN) stopped = true;
         }
@@ -380,9 +405,20 @@ final class SuiteRunner {
             }
         }
         synchronized (background) {
+            // An 'after' command can stop a process, but the wrapper (a .bat) ends some time later: wait for it.
+            long deadline = System.currentTimeMillis() + BACKGROUND_WAIT_MS;
+            boolean interrupted = false;
+            for (Process b : background) {
+                try {
+                    if (!interrupted) b.waitFor(Math.max(0, deadline - System.currentTimeMillis()), TimeUnit.MILLISECONDS);
+                } catch (InterruptedException e) {
+                    interrupted = true;
+                }
+            }
+            if (interrupted) Thread.currentThread().interrupt();
             for (Process b : background) {
                 if (!b.isAlive()) continue;
-                if (!Processes.stopTree(b)) {
+                if (!stopper.stopTree(b)) {
                     String m = "cannot stop child processes on Java 8: use an 'after' command";
                     System.err.println(m);
                     commandErrors.add(m);
@@ -436,8 +472,13 @@ final class SuiteRunner {
 
     // ---- files ---------------------------------------------------------------------------------
 
-    private static void touch(Path f) throws IOException {
-        Files.write(f, Long.toString(System.currentTimeMillis()).getBytes(StandardCharsets.UTF_8));
+    /** Writes the alive file. A short lock (Windows) is no failure: the agent tolerates 10 s without a change. */
+    private static void touch(Path f) {
+        try {
+            Files.write(f, Long.toString(System.currentTimeMillis()).getBytes(StandardCharsets.UTF_8));
+        } catch (IOException e) {
+            // tried again at the next tick
+        }
     }
 
     private static void deleteTree(Path dir) throws IOException {

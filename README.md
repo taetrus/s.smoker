@@ -61,9 +61,9 @@ java -jar smoker-cli.jar run --agent smoker-agent.jar --suite suite.json --out o
 ```
 
 `--app` is the full command line. The agent option is inserted after the first word, or where you put the
-token `{agent}`. Equinox product: `--app "myapp.exe -vmargs {agent}"` — or add
-`-javaagent:C:\tools\smoker-agent.jar=config=C:\tools\agent.cfg` to `eclipse.ini` under `-vmargs`
-(see "Agent configuration file").
+token `{agent}`. Equinox product: `--app "myapp.exe -vmargs {agent}"`.
+A fixed `-javaagent:...=config=<file>` line in `eclipse.ini` does not operate with `run`: each application start
+has its own configuration file. Use that line only for a hand-made start (see "Agent configuration file").
 
 Windows: if a path in `--app` contains spaces, put the path in double quotes and write each inner quote as `\"`.
 If you do not, Windows splits the `--app` value into many arguments.
@@ -99,8 +99,8 @@ The CLI deletes an old `run-result.json` before it starts the application. After
 - The file comes from the exit hook: the CLI adds `; exit code <n>` to the error.
 - There is no file: ERROR `no run-result.json produced; app exit code <n>`, or HANG after a kill.
 
-`run` passes `--log`, `--screenshots`, `--failRegex`, `--allowRegex`, `--logPattern`, `--failLevel` and `--logCharset`
-to the agent. `record` passes `--log`, `--logPattern`, `--failLevel` and `--logCharset`. `--log a.log,b.log` becomes `log.1` and `log.2`.
+`run` passes `--log`, `--screenshots`, `--failRegex`, `--allowRegex`, `--logPattern`, `--failLevel`, `--logCharset`
+and `--stopTimeoutMs` to the agent. `record` passes `--log`, `--logPattern`, `--failLevel` and `--logCharset`. `--log a.log,b.log` becomes `log.1` and `log.2`.
 `run` writes the agent configuration file `<out>/agent-<k>.cfg` for scenario *k*. `record` writes a temporary file.
 
 `approve` without a `run-result.json` in the `--run` folder prints `approve: no run-result.json in <dir>` and exits with 2.
@@ -207,6 +207,11 @@ Rules:
 
 - A relative path in `scenarios`, `resetScenario` and `workDir` is relative to the folder of the suite file.
 - A relative path in a command or in `agentConfig.log` is relative to `workDir`.
+  The CLI resolves the first word of a command against `workDir` only when it is a regular file. Write the file
+  extension: `sim\stop-sim.bat`, not `sim\stop-sim`.
+- `app` and each `command` must not be empty and must not contain a line break. `stopTimeoutMs` and `edtHangMs` are
+  whole numbers, 0 or more. `screenshots` is `"evidence"` or `"off"`.
+- The names of the scenarios are compared without regard to case: `Login.json` and `login.json` are the same name.
 - The file names of the scenarios, without the extension, must be different. Each name is the name of a result folder.
 - The CLI checks the suite file, each scenario file and each golden file before it runs the first command.
   An unknown field, an unknown `agentConfig` key or a wrong file gives a message and exit code 2.
@@ -223,7 +228,8 @@ Sequence:
    A command that fails, or a `readyPort` that does not open, gives exit code 2 and no scenario runs.
 2. The CLI starts the application with the scenarios that have no verdict. The agent runs them one after the other.
 3. Between two scenarios the agent does the reset step. It closes the dialogs, runs the `reset` commands
-   (output in `<out>/<next scenario>/reset-command.log`) and replays `resetScenario`. The result of the step has the
+   (output in `<out>/<next scenario>/reset-command.log`; on JRE 8 a command that times out gives the text
+   `reset command <k> timed out; child processes can remain`) and replays `resetScenario`. The result of the step has the
    step id `reset`. A step of the reset that is not PASS gives that status to the next scenario.
 4. The agent stops the application after a scenario with the status FAIL, HANG or ERROR. It does not run the scenarios that remain.
 5. The CLI runs the `reset` commands, and starts the application again for the scenarios that have no verdict.
@@ -231,6 +237,11 @@ Sequence:
    Then it stops each background process. On Java 9 or later, this includes the child processes. On Java 8, only the
    process stops: the CLI prints `cannot stop child processes on Java 8: use an 'after' command` and the exit code is 2.
    Stop the simulator with an `after` command in this case.
+   Before it stops a background process, the CLI waits up to 5 s for the end of all of them. An `after` command
+   that stops the simulator can leave its wrapper script alive for a short time.
+   Ctrl+C does not skip this step: the CLI waits for the time limits of the `after` commands before it ends.
+   An error in the run itself (for example an application that cannot start) gives exit code 2. The CLI still writes
+   the reports and `suite-result.json`; the scenarios without a verdict have the status ERROR.
 7. The CLI writes `junit.xml`, `report.html` and `suite-result.json` and prints `application starts: <n>`.
 
 Retry rule. A scenario that is the first of a launch runs in a new JVM. Its result is its verdict.

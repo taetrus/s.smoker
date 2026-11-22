@@ -546,6 +546,16 @@ public class SelfTestIT {
     /** R-37: the simulator starts before the scenarios, the reset command resets it, the after commands end it. */
     @Test
     public void simulatorRunsBeforeResetAndAfter() throws Exception {
+        List<Integer> ports = new ArrayList<Integer>();
+        try {
+            simulatorCheck(ports);
+        } finally {
+            // A CLI timeout must not leave the simulator JVM: it locks smoker-demo.jar on the Windows runner.
+            for (int port : ports) quitSimulator(port);
+        }
+    }
+
+    private void simulatorCheck(List<Integer> ports) throws Exception {
         Path dir = Files.createDirectories(work.resolve("suite-sim"));
         Path scenarios = Files.createDirectories(dir.resolve("scenarios"));
         Files.copy(demoDir.resolve("suite/sim-a.json"), scenarios.resolve("sim-a.json"));
@@ -557,6 +567,7 @@ public class SelfTestIT {
 
         // run1: no golden. The counter is 1 for each scenario, because the reset command runs between them.
         int port1 = freePort();
+        ports.add(port1);
         Cli run1 = cli("run", "--agent", agentJar.toString(), "--suite", simSuite(dir, scenarios, port1, marker).toString(), "--out", out.toString());
         assertEquals(run1.output, 0, run1.exit);
         assertEquals(run1.output, 1, suiteResult(out).get("applicationStarts").getAsInt());
@@ -577,13 +588,16 @@ public class SelfTestIT {
 
         long t0 = System.currentTimeMillis();
         int port2 = freePort();
+        ports.add(port2);
         Cli run2 = cli("run", "--agent", agentJar.toString(), "--suite", simSuite(dir, scenarios, port2, marker).toString(), "--out", out.toString());
         assertEquals(run2.output, 1, run2.exit);
         JsonObject r = suiteResult(out);
         assertEntry(run2.output, r, "sim-a", "PASS", 1, null);
-        assertEntry(run2.output, r, "sim-b", "PASS", 1, null);
         assertEntry(run2.output, r, "bad", "FAIL", 2, "failed in a shared JVM and in a new JVM");
-        assertEquals(run2.output, 2, r.get("applicationStarts").getAsInt());
+        assertEntry(run2.output, r, "sim-b", "PASS", 1, null);
+        // Start 1: sim-a, bad (fails). Start 2: the retry of bad (fails again). Start 3: sim-b. The CLI resets the
+        // simulator before starts 2 and 3: without it sim-b would read the counter 2 and fail.
+        assertEquals(run2.output, 3, r.get("applicationStarts").getAsInt());
         assertEquals(run2.output, 0, r.getAsJsonArray("commandErrors").size());
         assertTrue("after marker of run2", Files.exists(marker));
         assertSimulatorStopped(port2);
@@ -660,10 +674,26 @@ public class SelfTestIT {
         suite.put("reset", Arrays.asList(command(simulator("--send " + port + " RESET"))));
         suite.put("after", Arrays.asList(command(simulator("--touch " + quote(marker.toString()))),
                 command(simulator("--send " + port + " QUIT"))));
-        // The order matters: a scenario that fails first in a JVM is not retried.
+        // The order matters: a scenario that fails first in a JVM is not retried, and sim-b after bad needs a retry launch.
         suite.put("scenarios", Arrays.asList(scenarios.resolve("sim-a.json").toString(),
-                scenarios.resolve("sim-b.json").toString(), scenarios.resolve("bad.json").toString()));
+                scenarios.resolve("bad.json").toString(), scenarios.resolve("sim-b.json").toString()));
         return writeSuite(dir.resolve("suite-" + port + ".json"), suite);
+    }
+
+    /** Sends QUIT to the simulator. Errors are ignored: the simulator is usually stopped already. */
+    private static void quitSimulator(int port) {
+        try {
+            java.net.Socket sock = new java.net.Socket();
+            try {
+                sock.connect(new java.net.InetSocketAddress("127.0.0.1", port), 1000);
+                sock.getOutputStream().write("QUIT\n".getBytes(StandardCharsets.US_ASCII));
+                sock.getOutputStream().flush();
+            } finally {
+                sock.close();
+            }
+        } catch (IOException e) {
+            // ignored
+        }
     }
 
     private static int freePort() throws IOException {

@@ -38,6 +38,15 @@ public class ConfigFileTest {
     }
 
     @Test
+    public void readStripsAUtf8Bom() throws Exception {
+        Path f = tmp.getRoot().toPath().resolve("bom.cfg");
+        Files.write(f, "\uFEFFa=1\nb=2\n".getBytes(StandardCharsets.UTF_8));
+        Map<String, String> m = ConfigFile.read(f);
+        assertEquals("1", m.get("a"));
+        assertEquals("2", m.get("b"));
+    }
+
+    @Test
     public void readSkipsCommentsAndEmptyLines() throws Exception {
         Map<String, String> m = ConfigFile.read(file("# comment", "", "  ", "a=1", "  # other", "b = 2 "));
         assertEquals(2, m.size());

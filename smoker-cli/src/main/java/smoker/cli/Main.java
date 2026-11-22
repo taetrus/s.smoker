@@ -136,7 +136,7 @@ public final class Main {
             Files.deleteIfExists(runDir.resolve("run-result.json"));
             int exit = launch(req(o, "app"), agent, cfgFile, null, runDir.resolve("app-output.log"), budgetMs);
 
-            RunResult r = resultOf(runDir, name, sc, exit, budgetMs);
+            RunResult r = resultOf(runDir, name, sc, exit, budgetMs, "app-output.log");
             // make screenshot paths relative to the report
             for (RunResult.StepResult s : r.steps) if (s.screenshot != null) s.screenshot = name + "/" + s.screenshot;
             results.add(r);
@@ -182,10 +182,11 @@ public final class Main {
     }
 
     /**
-     * The result of one run. The file of the agent has a step in {@code currentStep} and {@code finishedAt} 0 when the
+     * The result of one run. {@code outputLog} is the name of the output file of the application. The file of the agent has a step in {@code currentStep} and {@code finishedAt} 0 when the
      * application stopped before the end of the run (F-22). The CLI adds the exit code to the error of the exit hook.
      */
-    static RunResult resultOf(Path runDir, String name, Path scenario, int exit, long budgetMs) throws IOException {
+    static RunResult resultOf(Path runDir, String name, Path scenario, int exit, long budgetMs, String outputLog)
+            throws IOException {
         Path resultFile = runDir.resolve("run-result.json");
         if (!Files.exists(resultFile)) {
             RunResult r = new RunResult();
@@ -193,7 +194,7 @@ public final class Main {
             r.scenarioFile = scenario.toString();
             r.status = exit == -999 ? RunResult.Status.HANG : RunResult.Status.ERROR;
             r.error = exit == -999 ? "application did not exit within " + budgetMs + " ms (killed)"
-                    : "no run-result.json produced; app exit code " + exit + " \u2014 see app-output.log";
+                    : "no run-result.json produced; app exit code " + exit + " \u2014 see " + outputLog;
             r.startedAt = r.finishedAt = System.currentTimeMillis();
             return r;
         }
@@ -404,16 +405,21 @@ public final class Main {
         List<Path> out = new ArrayList<Path>();
         for (String s : spec.split(File.pathSeparator)) {
             Path p = Paths.get(s);
-            if (Files.isDirectory(p)) {
-                DirectoryStream<Path> ds = Files.newDirectoryStream(p, "*.json");
-                try {
-                    for (Path f : ds) if (!ScenarioFiles.isGoldenFile(f)) out.add(f);
-                } finally {
-                    ds.close();
-                }
-            } else {
-                out.add(p);
-            }
+            if (Files.isDirectory(p)) out.addAll(scenariosIn(p));
+            else out.add(p);
+        }
+        java.util.Collections.sort(out);
+        return out;
+    }
+
+    /** The scenario files of one folder: {@code *.json} without golden files, sorted. */
+    static List<Path> scenariosIn(Path dir) throws IOException {
+        List<Path> out = new ArrayList<Path>();
+        DirectoryStream<Path> ds = Files.newDirectoryStream(dir, "*.json");
+        try {
+            for (Path f : ds) if (!ScenarioFiles.isGoldenFile(f)) out.add(f);
+        } finally {
+            ds.close();
         }
         java.util.Collections.sort(out);
         return out;
@@ -452,7 +458,7 @@ public final class Main {
     static void usage(int code) {
         System.err.println("usage:\n"
                 + "  run     --agent smoker-agent.jar --app \"<cmd>\" --scenarios <dir|file> --out <dir> [--log <file>] [--screenshots off] [--strict] [--timeout <s>]\n"
-                + "          [--failRegex <r>] [--allowRegex <r>] [--logPattern <p>] [--failLevel <L>] [--logCharset <c>]\n"
+                + "          [--failRegex <r>] [--allowRegex <r>] [--logPattern <p>] [--failLevel <L>] [--logCharset <c>] [--stopTimeoutMs <ms>]\n"
                 + "  run     --agent smoker-agent.jar --suite <suite.json> [--out <dir>] [--strict] [--timeout <s>]\n"
                 + "          (the suite file holds the application, the commands, the log files and the scenarios)\n"
                 + "  record  --agent smoker-agent.jar --app \"<cmd>\" --scenario <file> [--log <file>]\n"

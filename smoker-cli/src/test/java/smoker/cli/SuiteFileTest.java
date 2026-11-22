@@ -164,6 +164,46 @@ public class SuiteFileTest {
     }
 
     @Test
+    public void scenarioNamesDifferingInCaseAreRefused() throws Exception {
+        scenario("a/Login.json");
+        scenario("b/login.json");
+        refused(suite("{'app': 'x', 'scenarios': ['a', 'b']}"), "suite: two scenarios have the name");
+    }
+
+    @Test
+    public void folderWithASemicolonInItsNameIsListed() throws Exception {
+        scenario("a;b/one.json");
+        scenario("a;b/two.json");
+        SuiteFile f = SuiteFile.read(suite("{'app': 'x', 'scenarios': ['a;b']}"));
+        assertEquals(2, f.scenarios.size());
+        assertEquals("one.json", f.scenarios.get(0).getFileName().toString());
+    }
+
+    @Test
+    public void wrongNumbersAndChoicesInAgentConfigAreRefused() throws Exception {
+        scenario("a.json");
+        String head = "{'app': 'x', 'scenarios': ['a.json'], 'agentConfig': ";
+        refused(suite(head + "{'stopTimeoutMs': 'abc'}}"), "agentConfig.stopTimeoutMs");
+        refused(suite(head + "{'stopTimeoutMs': -5}}"), "agentConfig.stopTimeoutMs");
+        refused(suite(head + "{'edtHangMs': '1.5'}}"), "agentConfig.edtHangMs");
+        refused(suite(head + "{'screenshots': false}}"), "agentConfig.screenshots");
+        refused(suite(head + "{'screenshots': 'maybe'}}"), "agentConfig.screenshots");
+        assertEquals("off", SuiteFile.read(suite(head + "{'screenshots': 'off', 'stopTimeoutMs': 0}}"))
+                .agentConfig.get("screenshots"));
+    }
+
+    @Test
+    public void emptyCommandsAndLineBreaksAreRefused() throws Exception {
+        scenario("a.json");
+        refused(suite("{'app': '  ', 'scenarios': ['a.json']}"), "'app' must not be empty");
+        refused(suite("{'app': 'x', 'scenarios': ['a.json'], 'reset': [{'command': ''}]}"), "reset[0].command");
+        refused(suite("{'app': 'x', 'scenarios': ['a.json'], 'before': [{'command': ' '}]}"), "before[0].command");
+        refused(suite("{'app': 'x\\ny', 'scenarios': ['a.json']}"), "'app' must not contain a line break");
+        refused(suite("{'app': 'x', 'scenarios': ['a.json'], 'after': [{'command': 'a\\r\\nb'}]}"), "line break");
+        refused(suite("{'app': 'x', 'scenarios': ['a.json'], 'agentConfig': {'failRegex': 'a\\nb'}}"), "line break");
+    }
+
+    @Test
     public void missingScenarioFileIsRefused() throws Exception {
         refused(suite("{'app': 'x', 'scenarios': ['nope.json']}"), "nope.json");
     }
