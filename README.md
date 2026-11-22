@@ -241,7 +241,10 @@ Sequence:
    that stops the simulator can leave its wrapper script alive for a short time.
    Ctrl+C does not skip this step: the CLI waits for the time limits of the `after` commands before it ends.
    An error in the run itself (for example an application that cannot start) gives exit code 2. The CLI still writes
-   the reports and `suite-result.json`; the scenarios without a verdict have the status ERROR.
+   the reports and `suite-result.json`; a scenario without a verdict has the status ERROR,
+   except a scenario that waits for its retry: it keeps its result of the shared JVM (it can be FAIL) with the note
+   `failed in a shared JVM; not run again: <reason>`. If the CLI cannot write the reports, it prints
+   `suite: cannot write the reports: <message>` and the exit code is 2.
 7. The CLI writes `junit.xml`, `report.html` and `suite-result.json` and prints `application starts: <n>`.
 
 Retry rule. A scenario that is the first of a launch runs in a new JVM. Its result is its verdict.

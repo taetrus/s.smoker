@@ -197,6 +197,8 @@ public class SuiteFileTest {
         scenario("a.json");
         refused(suite("{'app': '  ', 'scenarios': ['a.json']}"), "'app' must not be empty");
         refused(suite("{'app': 'x', 'scenarios': ['a.json'], 'reset': [{'command': ''}]}"), "reset[0].command");
+        refused(suite("{'app': 'x', 'scenarios': ['a.json'], 'reset': [{'command': '\\\"\\\"'}]}"), "reset[0].command");
+        refused(suite("{'app': '\\\"\\\"', 'scenarios': ['a.json']}"), "'app' must not be empty");
         refused(suite("{'app': 'x', 'scenarios': ['a.json'], 'before': [{'command': ' '}]}"), "before[0].command");
         refused(suite("{'app': 'x\\ny', 'scenarios': ['a.json']}"), "'app' must not contain a line break");
         refused(suite("{'app': 'x', 'scenarios': ['a.json'], 'after': [{'command': 'a\\r\\nb'}]}"), "line break");

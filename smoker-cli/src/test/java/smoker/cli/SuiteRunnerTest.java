@@ -296,22 +296,28 @@ public class SuiteRunnerTest {
     }
 
     @Test
-    public void commandOfOnlyQuotesDoesNotStopTheReports() throws Exception {
-        // A command of only quotes passes the suite file check and splits to no word.
-        file("a.json", "{\"schemaVersion\": 2, \"name\": \"a\", \"steps\": []}");
-        Path suiteFile = file("suite.json", "{\"app\": \"x\", \"before\": [{\"command\": \"\\\"\\\"\"}],"
-                + " \"scenarios\": [\"a.json\"]}");
+    public void reportWriteFailureGivesExitCode2WithoutAnException() throws Exception {
+        Path suiteFile = suiteWithApp(FakeCommand.line("exit", "0"), "");
         Path out = tmp.getRoot().toPath().resolve("out");
-        assertEquals(2, new SuiteRunner(SuiteFile.read(suiteFile), tmp.getRoot().toPath().resolve("agent.jar"), out, false, null).run());
-        SuiteResult sr = resultOf(out);
-        assertEquals(RunResult.Status.ERROR, sr.scenarios.get(0).status);
-        assertFalse(sr.commandErrors.isEmpty());
+        Files.createDirectories(out.resolve("report.html")); // the HTML write fails
+        SuiteRunner runner = new SuiteRunner(SuiteFile.read(suiteFile), tmp.getRoot().toPath().resolve("agent.jar"), out, false, null);
+        assertEquals(2, runner.run());
+        assertEquals(1, runner.cleanupCount());
+    }
+
+    @Test
+    public void outputFolderThatCannotBeMadeGivesExitCode2() throws Exception {
+        Path suiteFile = suiteWithApp(FakeCommand.line("exit", "0"), "");
+        Path out = file("blocker", "x"); // a file, not a folder
+        SuiteRunner runner = new SuiteRunner(SuiteFile.read(suiteFile), tmp.getRoot().toPath().resolve("agent.jar"), out, false, null);
+        assertEquals(2, runner.run());
+        assertEquals(1, runner.cleanupCount());
     }
 
     @Test
     public void backgroundProcessThatEndsAfterTheAfterCommandIsNotStopped() throws Exception {
         file("a.json", "{\"schemaVersion\": 2, \"name\": \"a\", \"steps\": []}");
-        // The background process ends about 300 ms after the 'after' command; stopTree reports "no tree" (Java 8).
+        // The background process (4 s) ends 2 to 3 s after the 'after' command ran, inside the 5 s wait; stopTree reports "no tree" (Java 8).
         Path suiteFile = file("suite.json", "{\"app\": \"x\","
                 + " \"before\": [{\"command\": " + q(FakeCommand.line("sleep", "4000")) + ", \"background\": true},"
                 + " {\"command\": " + q(FakeCommand.line("exit", "1")) + "}],"

@@ -7,6 +7,7 @@ import com.google.gson.JsonPrimitive;
 import smoker.core.io.Json;
 import smoker.core.io.ScenarioFiles;
 import smoker.core.model.Scenario;
+import smoker.core.proc.Processes;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -130,7 +131,7 @@ final class SuiteFile {
 
     /** A command line: not empty, no line break. */
     private static String commandLine(String v, String name) {
-        if (v.trim().isEmpty()) throw new IllegalArgumentException("suite: '" + name + "' must not be empty");
+        if (v.trim().isEmpty() || Processes.split(v).isEmpty()) throw new IllegalArgumentException("suite: '" + name + "' must not be empty");
         return noBreak(v, name);
     }
 

@@ -152,12 +152,12 @@ final class SuiteRunner {
         }, "smoker-suite-cleanup");
         Runtime.getRuntime().addShutdownHook(hook);
         try {
-            Files.createDirectories(out);
-            for (String n : names) {
-                deleteTree(out.resolve(n));
-                deleteTree(out.resolve(n + ".shared"));
-            }
             try {
+                Files.createDirectories(out);
+                for (String n : names) {
+                    deleteTree(out.resolve(n));
+                    deleteTree(out.resolve(n + ".shared"));
+                }
                 if (runBefore()) runLaunches();
                 else plan.giveUp("not run: a before command failed", "not run: a before command failed");
             } catch (IOException e) {
@@ -166,7 +166,12 @@ final class SuiteRunner {
                 failRun(e);
             }
             cleanup();
-            return report();
+            try {
+                return report();
+            } catch (IOException e) {
+                System.err.println("suite: cannot write the reports: " + e.getMessage());
+                return 2;
+            }
         } finally {
             cleanup();
             try {
