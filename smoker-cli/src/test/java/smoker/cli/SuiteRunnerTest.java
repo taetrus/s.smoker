@@ -226,4 +226,50 @@ public class SuiteRunnerTest {
         String json = new String(Files.readAllBytes(out.resolve("suite-result.json")), StandardCharsets.UTF_8);
         assertTrue(json, json.contains("\"applicationStarts\": 3"));
     }
+
+    @Test
+    public void hookBetweenLaunchesStartsNoNewApplication() throws Exception {
+        Path suiteFile = suiteWithApp(FakeCommand.line("exit", "0"), "");
+        Path out = tmp.getRoot().toPath().resolve("out");
+        final SuiteRunner runner = new SuiteRunner(SuiteFile.read(suiteFile),
+                tmp.getRoot().toPath().resolve("agent.jar"), out, false, null);
+        runner.betweenLaunches = new Runnable() {
+            @Override
+            public void run() {
+                runner.cleanup(); // the body of the shutdown hook
+            }
+        };
+        int code = runner.run();
+        assertEquals(1, code);
+        assertTrue(Files.exists(out.resolve("agent-1.cfg")));
+        assertFalse(Files.exists(out.resolve("agent-2.cfg")));
+        assertEquals(1, runner.cleanupCount());
+        String report = new String(Files.readAllBytes(out.resolve("report.html")), StandardCharsets.UTF_8);
+        assertTrue(report, report.contains("not run: the CLI was stopped"));
+    }
+
+    @Test
+    public void secondCleanupWaitsForTheFirst() throws Exception {
+        Path marker = tmp.getRoot().toPath().resolve("slow.marker");
+        file("a.json", "{\"schemaVersion\": 2, \"name\": \"a\", \"steps\": []}");
+        Path suiteFile = file("suite.json", "{\"app\": \"x\","
+                + " \"after\": [{\"command\": " + q(FakeCommand.line("sleeptouch", "1000", marker.toString())) + "}],"
+                + " \"scenarios\": [\"a.json\"]}");
+        final SuiteRunner runner = new SuiteRunner(SuiteFile.read(suiteFile),
+                tmp.getRoot().toPath().resolve("agent.jar"), tmp.getRoot().toPath().resolve("out"), false, null);
+        Files.createDirectories(tmp.getRoot().toPath().resolve("out"));
+        Thread first = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                runner.cleanup();
+            }
+        });
+        first.start();
+        long end = System.currentTimeMillis() + 10_000;
+        while (runner.cleanupCount() == 0 && System.currentTimeMillis() < end) Thread.sleep(10);
+        runner.cleanup();
+        assertTrue(Files.exists(marker));
+        first.join();
+        assertEquals(1, runner.cleanupCount());
+    }
 }

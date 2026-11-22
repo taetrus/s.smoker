@@ -25,7 +25,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -36,6 +35,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 final class SuiteRunner {
 
+    private static final String STOPPED = "not run: the CLI was stopped";
     private static final long POLL_MS = 500;
     private static final long ALIVE_MS = 1000;
     private static final long DEFAULT_STOP_TIMEOUT_MS = 10_000;
@@ -49,13 +49,18 @@ final class SuiteRunner {
     private final List<String> names = new ArrayList<String>();
     private final Map<String, Path> files = new LinkedHashMap<String, Path>();
     private final SuitePlan plan;
-    private final AtomicBoolean cleaned = new AtomicBoolean();
+    private boolean cleaned;
     private final AtomicInteger cleanups = new AtomicInteger();
     private final List<Process> background = Collections.synchronizedList(new ArrayList<Process>());
     private final List<String> commandErrors = Collections.synchronizedList(new ArrayList<String>());
     /** The results that moved to {@code <name>.shared}, by identity: the verdict can be one of them. */
     private final Map<RunResult, Boolean> shared = new IdentityHashMap<RunResult, Boolean>();
     private volatile Process app;
+    /** Guards {@code stopping}, {@code app}, {@code background} and the cleanup: a process is refused or seen by it. */
+    private final Object lock = new Object();
+    private boolean stopping;
+    /** Test seam: runs between two application starts. */
+    Runnable betweenLaunches;
 
     SuiteRunner(SuiteFile suite, Path agentJar, Path out, boolean strict, Long timeoutS) {
         this.suite = suite;
@@ -157,12 +162,20 @@ final class SuiteRunner {
 
     private void runLaunches() throws Exception {
         while (!plan.done()) {
+            if (isStopping()) {
+                plan.giveUp(STOPPED, "failed in a shared JVM; not run again: " + STOPPED);
+                break;
+            }
             if (plan.applicationStarts() > 0 && !runCommands(suite.reset, "reset-" + plan.applicationStarts())) {
                 plan.giveUp("not run: reset command failed", "failed in a shared JVM; not run again: reset command failed");
                 break;
             }
             List<String> launched = plan.launchList();
             Map<String, RunResult> results = launch(plan.applicationStarts(), launched);
+            if (results == null) {
+                plan.giveUp(STOPPED, "failed in a shared JVM; not run again: " + STOPPED);
+                break;
+            }
             for (String n : plan.record(launched, results)) {
                 Path dir = out.resolve(n);
                 Path moved = out.resolve(n + ".shared");
@@ -170,6 +183,7 @@ final class SuiteRunner {
                 if (Files.isDirectory(dir)) Files.move(dir, moved);
                 shared.put(results.get(n), Boolean.TRUE);
             }
+            if (betweenLaunches != null) betweenLaunches.run();
         }
     }
 
@@ -183,16 +197,20 @@ final class SuiteRunner {
             Path log = out.resolve("before-" + n + ".log");
             System.out.println("   $ " + c.command);
             if (!c.background) {
+                if (isStopping()) return fail(where + ": not started: the CLI was stopped");
                 if (!runOne(c, log, where)) return false;
                 continue;
             }
             Process p;
             try {
-                p = Processes.start(Processes.split(c.command), suite.workDir, log);
+                synchronized (lock) {
+                    if (stopping) return fail(where + ": not started: the CLI was stopped");
+                    p = Processes.start(Processes.split(c.command), suite.workDir, log);
+                    background.add(p);
+                }
             } catch (IOException e) {
                 return fail(where + ": cannot start: " + e.getMessage());
             }
-            background.add(p);
             if (c.readyPort != null && !waitForPort(c.readyPort, c.readyTimeoutS * 1000, p)) {
                 return fail(where + ": port " + c.readyPort + " did not open (the process ended or " + c.readyTimeoutS + " s passed)");
             }
@@ -205,6 +223,7 @@ final class SuiteRunner {
         int n = 0;
         for (SuiteFile.Command c : list) {
             n++;
+            if (isStopping()) return fail(logPrefix + "[" + n + "]: not started: the CLI was stopped");
             System.out.println("   $ " + c.command);
             if (!runOne(c, out.resolve(logPrefix + "-" + n + ".log"), logPrefix + "[" + n + "]")) return false;
         }
@@ -233,13 +252,18 @@ final class SuiteRunner {
 
     private Map<String, RunResult> launch(int k, List<String> launched) throws Exception {
         for (String n : launched) deleteTree(out.resolve(n));
+        if (isStopping()) return null;
         Path cfgFile = out.resolve("agent-" + k + ".cfg");
         ConfigFile.write(cfgFile, agentConfig(launched));
         Path alive = out.resolve("cli-alive");
         touch(alive);
         System.out.println("== application start " + k + ": " + launched);
-        Process p = Main.start(suite.app, agentJar, cfgFile, suite.workDir, out.resolve("app-output-" + k + ".log"));
-        app = p;
+        Process p;
+        synchronized (lock) {
+            if (stopping) return null;
+            p = Main.start(suite.app, agentJar, cfgFile, suite.workDir, out.resolve("app-output-" + k + ".log"));
+            app = p;
+        }
         int exit = watch(p, launched, alive);
         return collect(launched, exit);
     }
@@ -327,7 +351,21 @@ final class SuiteRunner {
 
     /** Stops the application, runs the {@code after} commands, stops the background processes. Runs one time. */
     void cleanup() {
-        if (!cleaned.compareAndSet(false, true)) return;
+        synchronized (lock) { // a second caller waits until the first one ends
+            stopping = true;
+            if (cleaned) return;
+            cleaned = true;
+            cleanupBody();
+        }
+    }
+
+    private boolean isStopping() {
+        synchronized (lock) {
+            return stopping;
+        }
+    }
+
+    private void cleanupBody() {
         cleanups.incrementAndGet();
         Process p = app;
         if (p != null && p.isAlive()) Processes.stopTree(p);

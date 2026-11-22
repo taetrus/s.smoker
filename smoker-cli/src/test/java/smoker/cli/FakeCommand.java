@@ -4,7 +4,7 @@ import java.io.File;
 import java.nio.file.Files;
 import java.util.ArrayList;
 
-/** A command for the tests of the suite runner. Arguments: {@code exit <n>}, {@code sleep <ms>}, {@code touch <file>}. */
+/** A command for the tests of the suite runner. Arguments: {@code exit <n>}, {@code sleep <ms>}, {@code touch <file>}, {@code sleeptouch <ms> <file>}. */
 public final class FakeCommand {
 
     private FakeCommand() {}
@@ -25,6 +25,9 @@ public final class FakeCommand {
             System.exit(Integer.parseInt(args[1]));
         } else if ("sleep".equals(op)) {
             Thread.sleep(Long.parseLong(args[1]));
+        } else if ("sleeptouch".equals(op)) {
+            Thread.sleep(Long.parseLong(args[1]));
+            Files.write(new File(args[2]).toPath(), new ArrayList<String>());
         } else if ("touch".equals(op)) {
             Files.write(new File(args[1]).toPath(), new ArrayList<String>());
         }
