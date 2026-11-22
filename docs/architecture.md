@@ -86,6 +86,8 @@ which a modal dialog's secondary loop services. Only true silence is a hang.
 
 **Progress.** `Player` writes `run-result.json` with `currentStep` before startup and before each action. After `System.exit`, the exit hook adds the hits and the step name (F-22).
 
+**Stop.** `AppStopper` ends the application after the final result (F-10, R-38): `WINDOW_CLOSING` to the main frames on the EDT (skipped on HANG), `stop()` of the OSGi system bundle by reflection (no OSGi type at compile time), then `System.exit(code)`. Each of the first two stages waits `stopTimeoutMs`. The daemon thread `smoker-halt` calls `Runtime.halt` when `System.exit` does not return. The class does not depend on `Player`. When the application exits itself in stage 1 (for example `EXIT_ON_CLOSE`), the exit code is the code of the application, and the shutdown hook of `Player` does nothing because `finished` is set.
+
 **Startup** is a pseudo-step: first `Frame` showing within `startupTimeoutMs`, quiet, no log hits (R-14).
 
 ## 4. Observing logs inside OSGi (R-10, R-15)

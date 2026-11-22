@@ -424,6 +424,35 @@ public class SelfTestIT {
         assertTrue(run1.output, status == RunResult.Status.PASS || status == RunResult.Status.NO_GOLDEN);
     }
 
+    /** WP-05, F-10: the stage 1 closes the frame, the demo deletes its lock file, and the stop ends without System.exit. */
+    @Test
+    public void cleanStopRemovesTheLockFile() throws Exception {
+        Path dir = Files.createDirectories(work.resolve("stop-clean"));
+        Path scenario = dir.resolve("greet.json");
+        Files.copy(demoDir.resolve("scenarios/greet.json"), scenario);
+        Path lock = dir.resolve("lock");
+        Cli run1 = run(scenario, dir.resolve("run1"), dir.resolve("demo.log"), "-Ddemo.lockFile=" + quote(lock.toString()));
+        assertFalse(run1.output, Files.exists(lock));
+        String appOutput = read(dir.resolve("run1/greet/app-output.log"));
+        assertTrue(appOutput, appOutput.contains("[smoker] stop: closing the windows"));
+        assertFalse(appOutput, appOutput.contains("stop: System.exit"));
+    }
+
+    /** WP-05, F-10: the application ignores WINDOW_CLOSING. The stop ends with System.exit, and the result stays complete. */
+    @Test
+    public void blockedCloseEndsWithExit() throws Exception {
+        Path dir = Files.createDirectories(work.resolve("stop-blocked"));
+        Path scenario = dir.resolve("greet.json");
+        Files.copy(demoDir.resolve("scenarios/greet.json"), scenario);
+        Path lock = dir.resolve("lock");
+        Cli run1 = runWithStopTimeout("1000", scenario, dir.resolve("run1"), dir.resolve("demo.log"),
+                "-Ddemo.lockFile=" + quote(lock.toString()), "-Ddemo.ignoreClose=true");
+        assertTrue(run1.output, Files.exists(lock));
+        assertTrue(run1.output, result(dir.resolve("run1/greet")).finishedAt > 0);
+        String appOutput = read(dir.resolve("run1/greet/app-output.log"));
+        assertTrue(appOutput, appOutput.contains("[smoker] stop: System.exit("));
+    }
+
     @Test
     public void approveWithoutRunResultGivesExitCode2() throws Exception {
         Path dir = Files.createDirectories(work.resolve("approve-empty"));
@@ -453,11 +482,19 @@ public class SelfTestIT {
 
     /** Runs the CLI command {@code run} with the demo application. */
     private static Cli run(Path scenarios, Path out, Path log, String... demoOptions) throws Exception {
+        return runWithStopTimeout(null, scenarios, out, log, demoOptions);
+    }
+
+    /** As {@link #run}; a non-null {@code stopTimeoutMs} goes to the CLI as {@code --stopTimeoutMs}. */
+    private static Cli runWithStopTimeout(String stopTimeoutMs, Path scenarios, Path out, Path log, String... demoOptions)
+            throws Exception {
         StringBuilder extra = new StringBuilder();
         for (String o : demoOptions) extra.append(o).append(' ');
         String app = quote(java) + " " + localeArgs() + " " + extra + "-Ddemo.log=" + quote(log.toString()) + " -jar " + quote(demoJar.toString());
-        return cli("run", "--agent", agentJar.toString(), "--app", app, "--scenarios", scenarios.toString(),
-                "--out", out.toString(), "--log", log.toString());
+        List<String> args = new ArrayList<String>(Arrays.asList("run", "--agent", agentJar.toString(), "--app", app,
+                "--scenarios", scenarios.toString(), "--out", out.toString(), "--log", log.toString()));
+        if (stopTimeoutMs != null) args.addAll(Arrays.asList("--stopTimeoutMs", stopTimeoutMs));
+        return cli(args.toArray(new String[0]));
     }
 
     private static Cli cli(String... args) throws Exception {

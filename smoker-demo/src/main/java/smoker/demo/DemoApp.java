@@ -43,12 +43,18 @@ public class DemoApp {
     // -Ddemo.equinoxError=true: the application prints an Equinox start error to System.out before the UI (F-22).
     private static final boolean EQUINOX_ERROR = Boolean.getBoolean("demo.equinoxError");
 
+    // -Ddemo.lockFile=<file>: created at start, deleted when the main frame closes (test of the clean stop, WP-05).
+    private static final String LOCK_FILE = System.getProperty("demo.lockFile");
+    // -Ddemo.ignoreClose=true: the main frame ignores WINDOW_CLOSING and deletes no lock file.
+    private static final boolean IGNORE_CLOSE = Boolean.getBoolean("demo.ignoreClose");
+
     public static void main(String[] args) throws IOException {
         FileHandler fh = new FileHandler(System.getProperty("demo.log", "demo.log"), true);
         fh.setFormatter(new PilotFormatter());
         LOG.addHandler(fh);
         LOG.setUseParentHandlers(false);
         if (EQUINOX_ERROR) printEquinoxError();
+        if (LOCK_FILE != null) java.nio.file.Files.write(java.nio.file.Paths.get(LOCK_FILE), new byte[0]);
         SwingUtilities.invokeLater(new Runnable() {
             @Override
             public void run() {
@@ -120,7 +126,15 @@ public class DemoApp {
     static void build() {
         final JFrame f = new JFrame("Smoker Demo");
         f.setName("demo.frame");
-        f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        f.setDefaultCloseOperation(IGNORE_CLOSE ? JFrame.DO_NOTHING_ON_CLOSE : JFrame.EXIT_ON_CLOSE);
+        if (LOCK_FILE != null && !IGNORE_CLOSE) {
+            f.addWindowListener(new java.awt.event.WindowAdapter() {
+                @Override
+                public void windowClosing(java.awt.event.WindowEvent e) {
+                    new java.io.File(LOCK_FILE).delete();
+                }
+            });
+        }
 
         JMenuBar mb = new JMenuBar();
         JMenu help = new JMenu("Help");

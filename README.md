@@ -133,15 +133,30 @@ Format rules:
 | `logCharset` | charset of the log files | the platform charset (Cp1252 on a Windows with English settings) |
 | `screenshots` | `evidence` / `off` | evidence |
 | `edtHangMs` | EDT blocked longer than this → HANG + thread dump | 5000 |
-| `exitWhenDone` | play: `System.exit` after writing results | true |
+| `exitWhenDone` | play: stop the application after writing results | true |
 | `resetCommand.1`, `resetCommand.2`, ... | command to reset the application state (read now, used by suite mode later) | — |
 | `resetTimeoutS.N` | time limit of `resetCommand.N` in seconds | 60 |
 | `resetScenario` | scenario that resets the application (read now, used by suite mode later) | — |
-| `stopTimeoutMs` | time to wait for the application to stop (read now, used by suite mode later) | 10000 |
+| `stopTimeoutMs` | time to wait after each stage of the stop of the application, in ms (see "Stop of the application") | 10000 |
 | `aliveFile` | file of the alive signal (read now, used by suite mode later) | — |
 
 An unknown `failLevel`, an unknown `logCharset`, an unsupported part of `logPattern` or a wrong key stops the
 application at start with exit code 2. System.err then has one line `[smoker] fatal: <message>`.
+
+### Stop of the application
+
+When `exitWhenDone` is true, the agent stops the application after it writes the result. The stop has three stages.
+After stages 1 and 2, the agent waits `stopTimeoutMs`.
+
+1. The agent sends `WINDOW_CLOSING` to each main frame. The application can close itself and release its resources.
+   The agent skips this stage when the status is HANG: the EDT is blocked.
+2. The agent stops the OSGi system bundle by reflection. It finds the bundle through the class loaders of the windows
+   and through `EclipseStarter`. Without an OSGi framework, it goes to stage 3 at once.
+3. The agent calls `System.exit(code)`. The code is 0 for PASS and NO_GOLDEN, and 1 for all other statuses.
+   A thread `smoker-halt` calls `Runtime.halt(code)` after `stopTimeoutMs`, when `System.exit` does not return.
+
+The agent writes one line `[smoker] stop: ...` for each stage to the console. The stop does not change the result file:
+the agent writes it before stage 1. When the application exits itself in stage 1, the exit code is the code of the application.
 
 ### Log rules
 

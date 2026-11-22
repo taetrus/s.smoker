@@ -100,7 +100,7 @@ final class Player implements Runnable {
             watchdog.shutdown();
             if (cfg.exitWhenDone) {
                 int code = result.status == RunResult.Status.PASS || result.status == RunResult.Status.NO_GOLDEN ? 0 : 1;
-                System.exit(code);
+                new AppStopper(cfg.stopTimeoutMs, AppStopper.SYSTEM).stop(code, result.status == RunResult.Status.HANG);
             }
         }
     }
