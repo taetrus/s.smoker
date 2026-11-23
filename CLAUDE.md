@@ -61,15 +61,15 @@ A `before` command with exit code 1 gives exit code 2, no `agent-1.cfg`, and the
 Run `mvn -B verify` and `mvn -B verify -Plocale-tr`
 after every change to `smoker-agent` or `smoker-core`.
 
-## State on 2026-11-22
+## State on 2026-11-23
 
-- `master` holds WP-01, WP-02, WP-09, WP-03 and WP-04. All five work packages are complete; their completion criteria passed.
-- WP-05 (suite mode and lifecycle) is complete on branch `wp-05-suite-mode` (PR #15); F-03, F-04, F-10 and F-11 are closed.
+- `master` holds WP-01, WP-02, WP-09, WP-03, WP-04 and WP-05. All six work packages are complete; their completion criteria passed.
+- WP-05 (suite mode and lifecycle) is complete; merged in PR #15 (2026-11-22). F-03, F-04, F-10 and F-11 are closed.
   `run --suite`, the reset step, the three-stage stop and the agent configuration file (`config=<file>`).
   The Windows check on `p2.product` (2026-11-22, commit 8799100): R-36 (20 scenarios, 1 start), R-38 (20 stops),
   R-39 (`out` path with `;` and a space) pass; R-37 passes in the Windows CI with `DemoSimulator`. See `docs/wp-05-windows-report.md`.
   `p2.product` does not stop Equinox when its windows close: each stop ends at stage 2. Stage 1 now ends when no main
-  frame shows, so stage 2 starts at once, not after `stopTimeoutMs` (branch `stop-stage1-early`; not yet checked on Windows).
+  frame shows, so stage 2 starts at once, not after `stopTimeoutMs` (PR #16, merged 2026-11-23; not yet checked on `p2.product`).
 - WP-03 (`WAIT_FOR`, F-02, R-23a) was merged on 2026-11-17 (PR #5). R-23a passes on the demo (`wait.json`, SelfTestIT).
   Windows run and manual walkthrough of `Wait for…`: pass (`docs/wp-03-windows-report.md`). Follow-ups from the
   walkthrough: the toolbar writes what it shows to the record log (PR #6), the picker gives no border to a `JViewport` (PR #7).
@@ -84,7 +84,7 @@ after every change to `smoker-agent` or `smoker-core`.
   (2026-11-23, commit 5daf8df): N-1 to N-6 pass; the record session gives 14 components, 14 proposals (100 %), the
   same table as on macOS. See `docs/wp-09-windows-report.md`. Through Chrome Remote Desktop the application windows
   looked empty; the record sessions with the environment variable `J2D_D3D=false` operated (now in `README.md`,
-  "Remote desktop"). Follow-ups of that check, plan item 13 (branch `claude/kind-hopper-mabw35`): the password
+  "Remote desktop"). Follow-ups of that check, plan item 13 (PR #21, merged 2026-11-23): the password
   warning comes at the first editing key, the toolbar shows `paused` or `RECORDING`, a save with no steps while
   paused gives a hint.
 - WP-09 follow-up, PR #18 (merged 2026-11-23), items 10 and 11 of the plan: a generated field name
