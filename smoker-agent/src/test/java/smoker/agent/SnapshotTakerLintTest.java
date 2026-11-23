@@ -5,6 +5,7 @@ import nametest.LoginPanel;
 import nametest.OrdersFrame;
 import nametest.OrdersPanel;
 import nametest.OrdersView;
+import nametest.QuantityPanel;
 import nametest.SettingsDialogPanel;
 import org.junit.After;
 import org.junit.Assume;
@@ -249,6 +250,24 @@ public class SnapshotTakerLintTest {
         assertEquals("orders.btn.ok", lint.get(0).proposedName);
         assertEquals("nametest.OrdersView", lint.get(1).runtimeClass);
         assertEquals("orders.btn.ok2", lint.get(1).proposedName);
+    }
+
+    /**
+     * A spinner and a slider need a real name. The editor text field inside the spinner is part of the spinner:
+     * it gives no entry of its own.
+     */
+    @Test
+    public void spinnerAndSliderGiveEntries() throws Exception {
+        List<LintEntry> lint = lintOf(onEdt(new Callable<JPanel>() {
+            public JPanel call() {
+                return new QuantityPanel();
+            }
+        })).lintEntries();
+        List<String> proposals = new ArrayList<String>();
+        for (LintEntry e : lint) proposals.add(e.type + " " + e.autoName + " " + e.proposedName);
+        assertEquals(proposals.toString(), 2, lint.size());
+        assertTrue(proposals.toString(), proposals.contains("JSpinner @QuantityPanel.amountSpinner quantity.spn.amount"));
+        assertTrue(proposals.toString(), proposals.contains("JSlider @QuantityPanel.volumeSlider quantity.sld.volume"));
     }
 
     @Test

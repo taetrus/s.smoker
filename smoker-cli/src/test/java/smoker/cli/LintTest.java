@@ -5,6 +5,7 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import smoker.core.io.Json;
 import smoker.core.model.LintEntry;
+import smoker.core.model.LintFile;
 import smoker.core.model.RunResult;
 
 import java.nio.charset.StandardCharsets;
@@ -63,6 +64,33 @@ public class LintTest {
         result("b", fieldEntry("saveButton", "orders.btn.save"), fieldEntry("b1", "orders.btn.b1"));
         List<LintEntry> all = Lint.read(tmp.getRoot().toPath());
         assertEquals(3, all.size());
+    }
+
+    /** WP-09: a record session writes {@code <scenario>.lint.json}; lint reads it beside the run results. */
+    @Test
+    public void readJoinsLintFilesOfRecordSessions() throws Exception {
+        result("out/a", fieldEntry("saveButton", "orders.btn.save"));
+        Path scenarios = tmp.getRoot().toPath().resolve("scenarios");
+        Files.createDirectories(scenarios);
+        LintFile f = new LintFile();
+        f.scenarioName = "walk";
+        f.lint.add(fieldEntry("saveButton", "orders.btn.save"));
+        f.lint.add(fieldEntry("deleteButton", "orders.btn.delete"));
+        Json.write(scenarios.resolve("walk.lint.json"), f);
+        Json.write(scenarios.resolve("walk.json"), new RunResult());   // a scenario file is not read
+        Lint.Loaded loaded = Lint.load(tmp.getRoot().toPath());
+        assertEquals(2, loaded.files);
+        assertEquals(2, loaded.entries.size());
+    }
+
+    @Test
+    public void lintOfARecordSessionOnlyExitsZero() throws Exception {
+        LintFile f = new LintFile();
+        f.lint.add(fieldEntry("saveButton", "orders.btn.save"));
+        Json.write(tmp.getRoot().toPath().resolve("walk.lint.json"), f);
+        Map<String, String> o = new LinkedHashMap<String, String>();
+        o.put("run", tmp.getRoot().toPath().toString());
+        assertEquals(0, Main.lint(o));
     }
 
     @Test

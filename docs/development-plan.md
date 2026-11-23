@@ -243,6 +243,14 @@ Purpose: decrease the work to give names to the components of an existing applic
 Completion criterion: on the pilot application, the tool proposes a name for a minimum of 80 % of the unnamed interactive components. A scenario that uses automatic names passes on Windows. Status: met on 2026-11-16. Pilot: 14 of 14 proposals (100 %, `docs/wp-09-pilot-report.md`). The demo scenario `notes.json` passes on macOS (SelfTestIT), and `docs/wp-01-pilot/pilot-autonames.json` passes on Windows with JRE 8. WP-09 is complete.
 Sequence: do WP-09 immediately after WP-01. The lint result from WP-01 is its input.
 
+Follow-up (2026-11-22), so that a team can use the naming assistant before version 1.0:
+
+8. DONE: `Save` in the recorder writes `<scenario>.lint.json` with the lint of the record session, and of one snapshot at the save. `lint --run` reads these files too. `record` prints the summary line. A record session with no steps gives a lint.
+9. DONE: `JSpinner` and `JSlider` are interactive components. They get lint entries and proposals (`spn`, `sld`).
+10. OPEN: a field name from a GUI builder (`jButton1`) gives a poor proposal (`orders.btn.jButton1`). Use the visible text for such a field.
+11. OPEN: a text field in a local variable gets no proposal. Use the text of the label that refers to it (`JLabel.setLabelFor`).
+12. DONE: `record` creates the scenario folder before the application starts. Before, a scenario folder that did not exist gave a stack trace: the CLI could not create `<scenario>.record.log`.
+
 ## 5. Risks
 
 | Risk | Probability | Effect | Mitigation |

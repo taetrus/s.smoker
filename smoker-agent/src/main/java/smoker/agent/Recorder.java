@@ -3,6 +3,7 @@ package smoker.agent;
 import smoker.core.io.Json;
 import smoker.core.io.ScenarioFiles;
 import smoker.core.model.Action;
+import smoker.core.model.LintFile;
 import smoker.core.model.Locator;
 import smoker.core.model.Scenario;
 import smoker.core.model.Snapshot;
@@ -29,6 +30,7 @@ import java.awt.event.FocusEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
@@ -44,7 +46,7 @@ import java.util.regex.Pattern;
 /**
  * Records user actions through {@link Toolkit#addAWTEventListener} (R-20) and, after each action settles,
  * captures the golden snapshot (R-23). Steps are auto-named and can be renamed in the toolbar (R-26).
- * {@link #save()} writes the scenario and the golden file (F-06).
+ * {@link #save()} writes the scenario and the golden file (F-06), and the lint of the session (WP-09).
  */
 final class Recorder implements AWTEventListener {
 
@@ -123,7 +125,10 @@ final class Recorder implements AWTEventListener {
         }
     }
 
-    /** Writes the scenario and its golden file. The golden file has the steps in scenario order. */
+    /**
+     * Writes the scenario and its golden file, then the lint file {@code <scenario>.lint.json}. The golden file has
+     * the steps in scenario order. A lint failure does not stop the save: the scenario is already written.
+     */
     void save() throws Exception {
         Files.createDirectories(cfg.scenarios.get(0).toAbsolutePath().getParent());
         LinkedHashMap<String, Snapshot> golden = new LinkedHashMap<String, Snapshot>();
@@ -135,7 +140,33 @@ final class Recorder implements AWTEventListener {
         }
         Json.write(cfg.scenarios.get(0), scenario);
         ScenarioFiles.writeGolden(cfg.scenarios.get(0), scenario.name, golden);
-        say("saved " + cfg.scenarios.get(0) + " (" + scenario.steps.size() + " steps, " + golden.size() + " snapshots)");
+        String saved = "saved " + cfg.scenarios.get(0) + " (" + scenario.steps.size() + " steps, " + golden.size() + " snapshots)";
+        Path lintFile = ScenarioFiles.lintPath(cfg.scenarios.get(0));
+        try {
+            LintFile lint = lint();
+            Json.write(lintFile, lint);
+            say(saved + "; " + lint.lint.size() + " component(s) without a real name in " + lintFile);
+        } catch (Exception e) {
+            say(saved + "; cannot write " + lintFile + ": " + e);
+        }
+    }
+
+    /**
+     * The lint of this session: all snapshots of the session and one more snapshot now, so that the windows that show
+     * at the save count too. That snapshot is for the lint only: no step gets it.
+     */
+    private LintFile lint() throws Exception {
+        Quiescence.onEdt(new Callable<Void>() {
+            @Override
+            public Void call() {
+                taker.take();
+                return null;
+            }
+        });
+        LintFile f = new LintFile();
+        f.scenarioName = scenario.name;
+        f.lint.addAll(taker.lintEntries());
+        return f;
     }
 
     void remove(Step s) {

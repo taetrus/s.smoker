@@ -8,6 +8,8 @@ import javax.swing.JDialog;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JList;
+import javax.swing.JSlider;
+import javax.swing.JSpinner;
 import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JTree;
@@ -223,9 +225,11 @@ final class Locators {
         return null;
     }
 
+    /** A component that the user changes or acts on. It needs a real name (lint, WP-09). */
     static boolean isInteractive(Component c) {
         return c instanceof AbstractButton || c instanceof JTextComponent || c instanceof JComboBox
-                || c instanceof JList || c instanceof JTable || c instanceof JTree || c instanceof JTabbedPane;
+                || c instanceof JList || c instanceof JTable || c instanceof JTree || c instanceof JTabbedPane
+                || c instanceof JSpinner || c instanceof JSlider;
     }
 
     private static String nz(String s) {

@@ -23,6 +23,7 @@ public final class ScenarioFiles {
 
     private static final String SCENARIO_EXT = ".json";
     private static final String GOLDEN_EXT = ".golden.json";
+    private static final String LINT_EXT = ".lint.json";
 
     private ScenarioFiles() {}
 
@@ -57,6 +58,24 @@ public final class ScenarioFiles {
     /** True for {@code *.golden.json}. A folder of scenarios also holds their golden files. */
     public static boolean isGoldenFile(Path file) {
         return file.getFileName().toString().endsWith(GOLDEN_EXT);
+    }
+
+    /** {@code dir/greet.json} gives {@code dir/greet.lint.json}: the lint of the record session (WP-09). */
+    public static Path lintPath(Path scenario) {
+        String n = scenario.getFileName().toString();
+        if (n.endsWith(SCENARIO_EXT)) n = n.substring(0, n.length() - SCENARIO_EXT.length());
+        return scenario.resolveSibling(n + LINT_EXT);
+    }
+
+    /** True for {@code *.lint.json}. The recorder writes it beside the scenario. */
+    public static boolean isLintFile(Path file) {
+        return file.getFileName().toString().endsWith(LINT_EXT);
+    }
+
+    /** True for a {@code *.json} file that is not a golden file and not a lint file. */
+    public static boolean isScenarioFile(Path file) {
+        String n = file.getFileName().toString();
+        return n.endsWith(SCENARIO_EXT) && !isGoldenFile(file) && !isLintFile(file);
     }
 
     /**

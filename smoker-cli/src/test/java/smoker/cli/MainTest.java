@@ -8,6 +8,8 @@ import org.junit.rules.TemporaryFolder;
 import smoker.core.io.ConfigFile;
 import smoker.core.io.Json;
 import smoker.core.io.ScenarioFiles;
+import smoker.core.model.LintEntry;
+import smoker.core.model.LintFile;
 import smoker.core.model.NodeSnapshot;
 import smoker.core.model.RunResult;
 import smoker.core.model.Scenario;
@@ -21,6 +23,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
@@ -65,6 +68,46 @@ public class MainTest {
         Path f = tmp.getRoot().toPath().resolve(name);
         Files.write(f, json.replace('\'', '"').getBytes(StandardCharsets.UTF_8));
         return f;
+    }
+
+    /** WP-09: the lint file of a record session beside the scenario is not a scenario. */
+    @Test
+    public void scenarioFolderSkipsGoldenAndLintFiles() throws Exception {
+        file("greet.json", "{'schemaVersion': 2, 'name': 'greet', 'steps': []}");
+        file("greet.golden.json", "{'scenario': 'greet', 'steps': []}");
+        file("greet.lint.json", "{'scenarioName': 'greet', 'lint': []}");
+        List<Path> found = Main.scenariosIn(tmp.getRoot().toPath());
+        assertEquals(found.toString(), Arrays.asList(tmp.getRoot().toPath().resolve("greet.json")), found);
+    }
+
+    /** WP-09: after a record session that saved, record prints the lint summary. */
+    @Test
+    public void recordPrintsTheLintOfTheSession() throws Exception {
+        Path sc = tmp.getRoot().toPath().resolve("walk.json");
+        LintFile f = new LintFile();
+        LintEntry e = new LintEntry();
+        e.field = "saveButton";
+        e.autoName = "@OrdersPanel.saveButton";
+        e.proposedName = "orders.btn.save";
+        e.source = "field";
+        f.lint.add(e);
+        Json.write(ScenarioFiles.lintPath(sc), f);
+        Main.printRecordLint(sc, System.currentTimeMillis() - 1000);
+        assertTrue(out(), out().contains("lint file: " + ScenarioFiles.lintPath(sc)));
+        assertTrue(out(), out().contains("1 unnamed interactive component(s), 1 with a proposed name (100 %"));
+    }
+
+    /** WP-09: a lint file from an earlier session gives no summary. */
+    @Test
+    public void recordIgnoresALintFileOfAnEarlierSession() throws Exception {
+        Path sc = tmp.getRoot().toPath().resolve("walk.json");
+        Json.write(ScenarioFiles.lintPath(sc), new LintFile());
+        Files.setLastModifiedTime(ScenarioFiles.lintPath(sc),
+                java.nio.file.attribute.FileTime.fromMillis(System.currentTimeMillis() - 60000));
+        Main.printRecordLint(sc, System.currentTimeMillis());
+        assertEquals("", out());
+        Main.printRecordLint(tmp.getRoot().toPath().resolve("none.json"), 0);
+        assertEquals("", out() + err());
     }
 
     private static NodeSnapshot node(String path, String text) {
@@ -112,6 +155,26 @@ public class MainTest {
         assertEquals(2, code);
         assertTrue(err(), err().contains(sc + ": old scenario format"));
         assertFalse(Files.exists(tmp.getRoot().toPath().resolve("old.record.log")));
+    }
+
+    /** WP-09 follow-up: a scenario in a folder that does not exist. Before, the record log could not be created. */
+    @Test
+    public void recordCreatesTheScenarioFolder() throws Exception {
+        Path sc = tmp.getRoot().toPath().resolve("names/new/walk.json");
+        assertEquals(0, Main.record(options("agent", "agent.jar", "app", FakeCommand.line("exit", "0"),
+                "scenario", sc.toString())));
+        assertTrue(Files.isDirectory(sc.getParent()));
+        assertTrue(Files.exists(sc.getParent().resolve("walk.record.log")));
+        assertTrue(out(), out().contains("application exited with"));
+    }
+
+    /** A file where the scenario folder must be: a message and exit code 2, no stack trace. */
+    @Test
+    public void recordWithAFileAsScenarioFolderExitsTwo() throws Exception {
+        Path blocker = file("blocker", "x");
+        assertEquals(2, Main.record(options("agent", "agent.jar", "app", "no-such-command-smoker",
+                "scenario", blocker.resolve("walk.json").toString())));
+        assertTrue(err(), err().contains("record: cannot create " + blocker));
     }
 
     @Test

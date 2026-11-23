@@ -123,6 +123,17 @@ public class ScenarioFilesTest {
     }
 
     @Test
+    public void lintFileIsBesideTheScenarioAndIsNotAScenario() {
+        assertEquals(Paths.get("dir", "greet.lint.json"), ScenarioFiles.lintPath(Paths.get("dir", "greet.json")));
+        assertTrue(ScenarioFiles.isLintFile(Paths.get("dir", "greet.lint.json")));
+        assertFalse(ScenarioFiles.isLintFile(Paths.get("dir", "greet.json")));
+        assertTrue(ScenarioFiles.isScenarioFile(Paths.get("dir", "greet.json")));
+        assertFalse(ScenarioFiles.isScenarioFile(Paths.get("dir", "greet.golden.json")));
+        assertFalse(ScenarioFiles.isScenarioFile(Paths.get("dir", "greet.lint.json")));
+        assertFalse(ScenarioFiles.isScenarioFile(Paths.get("dir", "greet.record.log")));
+    }
+
+    @Test
     public void goldenWithOldOrNewerSchemaVersionIsRefused() throws Exception {
         Path f = tmp.getRoot().toPath().resolve("greet.json");
         Path g = file("greet.golden.json", "{'scenario': 'greet', 'steps': []}");

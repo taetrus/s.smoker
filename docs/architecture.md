@@ -141,6 +141,9 @@ sub-second attribution and MDC fields if needed.
   scroll-bar buttons, table-header internals) so Metal-on-Linux and Windows-LAF goldens agree.
 - Paths: `[Title]/#orders.table`, `[#orders.frame]/#orders.panel/JButton[0]` (WP-02 design, section 4.2); `IgnoreRules.paths` are regexes on this string.
 - Locator lint: every visible interactive component without a name is listed in `RunResult.unnamedComponents`.
+- Lint with proposals (WP-09): `SnapshotTaker` collects a `LintEntry` per component without a real name. The player
+  writes them into `RunResult.lint`. The recorder writes them into `<scenario>.lint.json` (`LintFile`) at each save,
+  with one more snapshot at the save. `lint --run` reads both files.
 
 ## 6. Recorder (R-20, R-26)
 

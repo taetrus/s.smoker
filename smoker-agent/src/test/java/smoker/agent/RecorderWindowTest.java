@@ -5,8 +5,11 @@ import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
 import nametest.SearchPanel;
+import smoker.core.io.Json;
 import smoker.core.io.ScenarioFiles;
 import smoker.core.model.Action;
+import smoker.core.model.LintEntry;
+import smoker.core.model.LintFile;
 import smoker.core.model.Locator;
 import smoker.core.model.NodeSnapshot;
 import smoker.core.model.Scenario;
@@ -39,6 +42,8 @@ import java.awt.event.ActionListener;
 import java.awt.event.FocusEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -269,6 +274,25 @@ public class RecorderWindowTest {
         Map<String, Snapshot> golden = ScenarioFiles.readGolden(Paths.get("target/recorder-window-test.json"));
         assertEquals(golden.keySet().toString(), 1, golden.size());
         assertTrue(golden.keySet().toString(), golden.containsKey(steps.get(1).id));
+    }
+
+    /**
+     * WP-09: save writes the lint of the session beside the scenario. A session without steps has a lint too:
+     * the snapshot at the save counts. That snapshot gives no golden.
+     */
+    @Test
+    public void saveWritesTheLintOfTheSession() throws Exception {
+        Path lintFile = ScenarioFiles.lintPath(Paths.get("target/recorder-window-test.json"));
+        Files.deleteIfExists(lintFile);
+        addSearchPanel();
+        recorder.save();
+        LintFile lint = Json.read(lintFile, LintFile.class);
+        List<String> entries = new ArrayList<String>();
+        for (LintEntry e : lint.lint) entries.add(e.type + " " + e.text + " " + e.autoName + " " + e.proposedName);
+        assertTrue(entries.toString(), entries.contains("JTextField null @SearchPanel.queryField search.txt.query"));
+        assertTrue(entries.toString(), entries.contains("JButton Clear null null"));
+        assertFalse("a named field is not in the lint: " + entries, entries.toString().contains("t.name"));
+        assertTrue(ScenarioFiles.readGolden(Paths.get("target/recorder-window-test.json")).isEmpty());
     }
 
     /** WP-03, spec 6.5: the snapshot of a WAIT_FOR step shows the state after the condition matched. */
