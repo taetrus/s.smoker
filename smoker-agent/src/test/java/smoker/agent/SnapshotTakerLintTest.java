@@ -1,6 +1,7 @@
 package smoker.agent;
 
 import nametest.BarPanel;
+import nametest.BuilderPanel;
 import nametest.LoginPanel;
 import nametest.OrdersFrame;
 import nametest.OrdersPanel;
@@ -268,6 +269,25 @@ public class SnapshotTakerLintTest {
         assertEquals(proposals.toString(), 2, lint.size());
         assertTrue(proposals.toString(), proposals.contains("JSpinner @QuantityPanel.amountSpinner quantity.spn.amount"));
         assertTrue(proposals.toString(), proposals.contains("JSlider @QuantityPanel.volumeSlider quantity.sld.volume"));
+    }
+
+    /**
+     * WP-09 follow-up: a field name of a GUI builder gives way to the text (item 4), and a labeled text field
+     * gets the text of its label, also without a field (item 5).
+     */
+    @Test
+    public void builderFieldsAndLabelsGiveReadableProposals() throws Exception {
+        List<LintEntry> lint = lintOf(onEdt(new Callable<JPanel>() {
+            public JPanel call() {
+                return new BuilderPanel();
+            }
+        })).lintEntries();
+        List<String> rows = new ArrayList<String>();
+        for (LintEntry e : lint) rows.add(e.field + " " + e.label + " " + e.proposedName + " " + e.source);
+        assertEquals(rows.toString(), 3, lint.size());
+        assertTrue(rows.toString(), rows.contains("jButton1 null builder.btn.save text"));
+        assertTrue(rows.toString(), rows.contains("jTextField1 Customer: builder.txt.customer label"));
+        assertTrue(rows.toString(), rows.contains("null Base URL: builder.txt.baseUrl label"));
     }
 
     @Test

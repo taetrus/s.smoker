@@ -55,10 +55,10 @@ public final class HtmlReportWriter {
                 if (!r.lint.isEmpty()) {
                     w.write("<details><summary>Components without a real name: " + r.lint.size() + "</summary>"
                             + "<table><tr><th>Window</th><th>Application class</th><th>Field</th><th>Type</th><th>Text</th>"
-                            + "<th>Automatic name</th><th>Proposed name</th><th>Source</th></tr>");
+                            + "<th>Label</th><th>Automatic name</th><th>Proposed name</th><th>Source</th></tr>");
                     for (LintEntry l : r.lint) {
                         w.write("<tr><td>" + e(l.window) + "</td><td>" + e(simple(l.runtimeClass)) + "</td><td>" + e(l.field)
-                                + "</td><td>" + e(l.type) + "</td><td>" + e(l.text) + "</td><td>" + e(l.autoName)
+                                + "</td><td>" + e(l.type) + "</td><td>" + e(l.text) + "</td><td>" + e(l.label) + "</td><td>" + e(l.autoName)
                                 + "</td><td>" + e(l.proposedName) + "</td><td>" + e(l.source) + "</td></tr>");
                     }
                     w.write("</table></details>");

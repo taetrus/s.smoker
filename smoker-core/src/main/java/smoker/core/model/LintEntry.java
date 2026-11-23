@@ -9,8 +9,10 @@ public class LintEntry {
     /** Simple component class name. */
     public String type;
     public String text;
+    /** The text of the label of the component ({@code JLabel.setLabelFor}), or null. */
+    public String label;
     public String autoName;
     public String proposedName;
-    /** {@code field} or {@code text}. */
+    /** The source of the last part of the proposed name: {@code field}, {@code text} or {@code label}. */
     public String source;
 }

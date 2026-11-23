@@ -180,7 +180,9 @@ final class WaitForPicker {
             if (app == null) return null;
             viewClass = AutoNames.simpleName(app);
         }
-        return NameProposer.propose(viewClass, c, hit == null ? null : hit.field, Locators.textOf(c));
+        NameProposer.Proposal p = NameProposer.propose(viewClass, c, hit == null ? null : hit.field,
+                Locators.textOf(c), Locators.labelOf(c));
+        return p == null ? null : p.name;
     }
 
     // ---- dialog ------------------------------------------------------------------------------

@@ -451,13 +451,26 @@ java -jar smoker-cli.jar lint --run out/ [--emit-patch names.patch]
 ```
 
 `lint` reads the `run-result.json` files and the `*.lint.json` files below the `--run` folder. It prints a table with
-these columns: window, class, field, type, text, automatic name, proposed name and source. The proposed name is
-`<view>.<type>.<field>`. Example: field `saveButton` in `OrdersPanel` gives `orders.btn.save`.
-The last line is a summary: the number of unnamed interactive components, the number with a proposed name,
-and the number with an automatic name. `lint` exits with 0. It exits with 2 if it finds no `run-result.json` and no
+these columns: window, class, field, type, text, label, automatic name, proposed name and source. The proposed name is
+`<view>.<type>.<stem>`. Example: field `saveButton` in `OrdersPanel` gives `orders.btn.save`.
+
+The stem comes from the first source that gives one. The source column shows it:
+
+1. `field`: the field name without its type suffix (`saveButton` gives `save`).
+2. `text`: the visible text of the component, in lower camel case (`Base URL:` gives `baseUrl`).
+3. `label`: the text of the label of the component, from `JLabel.setLabelFor`.
+4. `field`: a generated field name, when no other source gives a stem.
+
+A generated field name comes from a GUI builder (`jButton1`, `btnNewButton_1`) or only names the type
+(`textField_1`, `comboBox`, `tabs`). It gives a poor name, so the text and the label come first.
+Example: field `jButton1` with the text `Save` gives `orders.btn.save`. HTML tags in a text do not count.
+
+The last line is a summary: the number of unnamed interactive components, the number with a proposed name (by
+source: fields, text, labels), and the number with an automatic name. `lint` exits with 0. It exits with 2 if it finds no `run-result.json` and no
 `*.lint.json`, or if it cannot write the file.
 `--emit-patch` writes one Java line for each proposed name, for example `saveButton.setName("orders.btn.save");`,
-with the class where the developer must add it.
+with the class where the developer must add it. A component with a generated field also gets this line
+(`jButton1.setName("orders.btn.save");`). A component without a field gets a comment with its text or its label.
 One field gives one line, also when the component shows in more than one window.
 In one window, the second equal proposal gets the suffix `2`, the third `3` (`orders.btn.ok2`).
 

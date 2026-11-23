@@ -402,6 +402,7 @@ final class SnapshotTaker {
         e.window = windowPart;
         e.type = Locators.classNameOf(c);
         e.text = Locators.textOf(c);
+        e.label = Locators.labelOf(c);
         AutoNames.Hit hit = AutoNames.of(c);
         String viewClass;
         if (hit != null) {
@@ -416,8 +417,11 @@ final class SnapshotTaker {
             e.runtimeClass = app.getName();
             viewClass = AutoNames.simpleName(app);
         }
-        e.source = NameProposer.source(e.field, e.text);
-        e.proposedName = NameProposer.propose(viewClass, c, e.field, e.text);
+        NameProposer.Proposal p = NameProposer.propose(viewClass, c, e.field, e.text, e.label);
+        if (p != null) {
+            e.proposedName = p.name;
+            e.source = p.source;
+        }
         return e;
     }
 
