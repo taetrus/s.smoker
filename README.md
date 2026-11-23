@@ -389,6 +389,30 @@ Password fields (`JPasswordField`): the snapshot gives the text `***` when the f
 The recorder does not record typing in a password field. If a scenario must fill one, add the `SET_TEXT` step by hand.
 Do not put a real password in a scenario file.
 
+### Recorder toolbar
+
+- The recorder starts paused. Click `Record` to record the clicks. The title of the toolbar ends with `paused` or
+  `RECORDING`, and the toggle shows `● Record` or `❚❚ Pause`. At the start, the status line shows
+  `paused: click Record to record the clicks`.
+- `Save` with no steps while the recorder is paused adds `no steps: the recorder is paused, click Record to record the clicks`
+  to the save message. A save with no steps still writes the lint file (see "Lint without a run").
+- A modal dialog of the application can block the toolbar. Close the dialog, then click `Save`.
+- The status line shows `password field: typing is not recorded` at the first key that changes a password field:
+  a character, Backspace or Delete. It shows the warning once each time the field gets the focus.
+- The toolbar writes its status line, the Record toggle and the step list to the record log.
+
+### Remote desktop
+
+Through a remote desktop, for example Chrome Remote Desktop, the windows of the application can show no content.
+Turn off the Direct3D pipeline of Java 2D in the application JVM:
+
+- Set the environment variable `J2D_D3D=false` before you start `record` or `run`. The application inherits it.
+- Or add `-Dsun.java2d.d3d=false` to the JVM options of the application: in `--app` before `{agent}`, or in
+  `eclipse.ini` after `-vmargs`.
+
+The Windows check of the WP-09 follow-up (`docs/wp-09-windows-report.md`) used `J2D_D3D=false`. That check did not
+test the cause separately.
+
 ### Wait for a condition
 
 Use `WAIT_FOR` when the application needs time after a step. The player polls each 100 ms until the condition is true.
@@ -486,10 +510,14 @@ is for the lint only: it gives no golden. A record session with no steps thus al
 To find the components that need a name, without a scenario:
 
 1. Start `record`.
-2. Open each window, dialog and tab of the application. A click on a tab is a step, and each step takes a snapshot.
-3. Click `Save` while the last window shows. Then close the application.
-4. `record` prints the summary line and the path of the lint file.
-5. Run `lint --run scenarios/ --emit-patch names.patch` for the table and the patch.
+2. Click `Record` in the toolbar. The title of the toolbar must end with `RECORDING`.
+3. Open each window, dialog and tab of the application. Each click is a step, and each step takes a snapshot.
+4. Close the dialogs, and click `Save`. The snapshot of the step that opened a dialog keeps the dialog in the lint.
+   Then close the application.
+5. `record` prints the summary line and the path of the lint file.
+6. Run `lint --run scenarios/ --emit-patch names.patch` for the table and the patch.
+
+`Save` without `Record` writes the lint of the windows that show at the save only.
 
 The lint only sees the components that showed. A tab that you did not open is not in the lint.
 Each save replaces the lint file: it holds the last record session only.

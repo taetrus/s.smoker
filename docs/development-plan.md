@@ -250,6 +250,7 @@ Follow-up (2026-11-22), so that a team can use the naming assistant before versi
 10. DONE: a generated field name (`jButton1`, `btnNewButton_1`, `textField_1`, `tabs`) gives way to the visible text and the label. It is the last source. `jButton1` with the text `Save` gives `orders.btn.save`, and the patch line stays `jButton1.setName(...)`.
 11. DONE: a component with a label (`JLabel.setLabelFor`) gets the text of the label when it has no field and no text (source `label`). A labeled text field in a local variable now gets a proposal.
 12. DONE: `record` creates the scenario folder before the application starts. Before, a scenario folder that did not exist gave a stack trace: the CLI could not create `<scenario>.record.log`.
+13. DONE: findings of the Windows check (`docs/wp-09-windows-report.md`, 2026-11-23). The password warning comes at the first key that changes a password field, not at the focus. The toolbar shows `paused` or `RECORDING` in its title, and a save with no steps while paused gives a hint. `README.md` describes the remote desktop workaround (`J2D_D3D=false`, `-Dsun.java2d.d3d=false`).
 
 ## 5. Risks
 

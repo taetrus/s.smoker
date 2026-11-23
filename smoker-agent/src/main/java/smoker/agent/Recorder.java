@@ -70,6 +70,8 @@ final class Recorder implements AWTEventListener {
     // text editing state
     private JTextComponent editing;
     private String textAtFocusGain;
+    /** The password warning was given since the last password field got the focus (F-19). */
+    private boolean passwordWarned;
 
     /** @param golden the existing golden snapshots of {@code scenario}; empty for a new scenario */
     Recorder(AgentConfig cfg, Scenario scenario, Map<String, Snapshot> golden) {
@@ -141,13 +143,15 @@ final class Recorder implements AWTEventListener {
         Json.write(cfg.scenarios.get(0), scenario);
         ScenarioFiles.writeGolden(cfg.scenarios.get(0), scenario.name, golden);
         String saved = "saved " + cfg.scenarios.get(0) + " (" + scenario.steps.size() + " steps, " + golden.size() + " snapshots)";
+        // A save without steps while paused: the person can think that the clicks were recorded (WP-09 Windows check).
+        String hint = scenario.steps.isEmpty() && !recording ? "; no steps: the recorder is paused, click Record to record the clicks" : "";
         Path lintFile = ScenarioFiles.lintPath(cfg.scenarios.get(0));
         try {
             LintFile lint = lint();
             Json.write(lintFile, lint);
-            say(saved + "; " + lint.lint.size() + " component(s) without a real name in " + lintFile);
+            say(saved + "; " + lint.lint.size() + " component(s) without a real name in " + lintFile + hint);
         } catch (Exception e) {
-            say(saved + "; cannot write " + lintFile + ": " + e);
+            say(saved + "; cannot write " + lintFile + ": " + e + hint);
         }
     }
 
@@ -206,9 +210,11 @@ final class Recorder implements AWTEventListener {
     private void onFocus(FocusEvent e, Component src) {
         if (e.getID() == FocusEvent.FOCUS_GAINED && src instanceof JPasswordField) {
             // Do not record a password: the scenario file would contain it in plain text (F-19).
+            // The warning comes at the first key that edits the field (onKey), not here: a dialog can give the
+            // focus to a password field without input (Windows check of WP-09, 2026-11-23).
             if (editing != null) flushText();
             editing = null;
-            say("password field: typing is not recorded. Add a SET_TEXT step by hand, or set the value outside the scenario.");
+            passwordWarned = false;
         } else if (e.getID() == FocusEvent.FOCUS_GAINED && src instanceof JTextComponent) {
             editing = (JTextComponent) src;
             textAtFocusGain = editing.getText();
@@ -231,6 +237,10 @@ final class Recorder implements AWTEventListener {
         if (e.getID() != KeyEvent.KEY_PRESSED) return;
         int code = e.getKeyCode();
         boolean modifier = (e.getModifiersEx() & (KeyEvent.CTRL_DOWN_MASK | KeyEvent.ALT_DOWN_MASK | KeyEvent.META_DOWN_MASK)) != 0;
+        if (src instanceof JPasswordField && !passwordWarned && editsText(e, modifier)) {
+            passwordWarned = true;
+            say("password field: typing is not recorded. Add a SET_TEXT step by hand, or set the value outside the scenario.");
+        }
         boolean special = code == KeyEvent.VK_ENTER || code == KeyEvent.VK_ESCAPE || code == KeyEvent.VK_TAB
                 || code == KeyEvent.VK_DELETE || (code >= KeyEvent.VK_F1 && code <= KeyEvent.VK_F12);
         if (!modifier && !special) return;
@@ -246,6 +256,14 @@ final class Recorder implements AWTEventListener {
         Action a = Action.key(vk, e.getModifiersEx());
         a.locator = target;
         add(a);
+    }
+
+    /** True for a key that changes the text of a field: a printable character, Backspace or Delete. */
+    static boolean editsText(KeyEvent e, boolean modifier) {
+        int code = e.getKeyCode();
+        if (code == KeyEvent.VK_BACK_SPACE || code == KeyEvent.VK_DELETE) return true;
+        char ch = e.getKeyChar();
+        return !modifier && ch != KeyEvent.CHAR_UNDEFINED && !Character.isISOControl(ch);
     }
 
     private static java.util.Map<Integer, String> VK_NAMES;
