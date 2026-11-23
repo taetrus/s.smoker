@@ -230,6 +230,13 @@ public final class Main {
                 return 2;
             }
         }
+        // The record log goes beside the scenario: the folder must exist before the application starts.
+        try {
+            Files.createDirectories(scenario.getParent());
+        } catch (IOException e) {
+            System.err.println("record: cannot create " + scenario.getParent() + ": " + e);
+            return 2;
+        }
         LinkedHashMap<String, String> cfg = agentConfig(o, Arrays.asList(scenario), null);
         cfg.put("mode", "record");
         Path log = scenario.getParent().resolve(stripExt(scenario.getFileName().toString()) + ".record.log");

@@ -157,6 +157,26 @@ public class MainTest {
         assertFalse(Files.exists(tmp.getRoot().toPath().resolve("old.record.log")));
     }
 
+    /** WP-09 follow-up: a scenario in a folder that does not exist. Before, the record log could not be created. */
+    @Test
+    public void recordCreatesTheScenarioFolder() throws Exception {
+        Path sc = tmp.getRoot().toPath().resolve("names/new/walk.json");
+        assertEquals(0, Main.record(options("agent", "agent.jar", "app", FakeCommand.line("exit", "0"),
+                "scenario", sc.toString())));
+        assertTrue(Files.isDirectory(sc.getParent()));
+        assertTrue(Files.exists(sc.getParent().resolve("walk.record.log")));
+        assertTrue(out(), out().contains("application exited with"));
+    }
+
+    /** A file where the scenario folder must be: a message and exit code 2, no stack trace. */
+    @Test
+    public void recordWithAFileAsScenarioFolderExitsTwo() throws Exception {
+        Path blocker = file("blocker", "x");
+        assertEquals(2, Main.record(options("agent", "agent.jar", "app", "no-such-command-smoker",
+                "scenario", blocker.resolve("walk.json").toString())));
+        assertTrue(err(), err().contains("record: cannot create " + blocker));
+    }
+
     @Test
     public void recordRefusesAnOldGoldenBeforeTheApplicationStarts() throws Exception {
         Path sc = file("g.json", "{'schemaVersion': 2, 'name': 'g', 'steps': []}");

@@ -249,7 +249,7 @@ Follow-up (2026-11-22), so that a team can use the naming assistant before versi
 9. DONE: `JSpinner` and `JSlider` are interactive components. They get lint entries and proposals (`spn`, `sld`).
 10. OPEN: a field name from a GUI builder (`jButton1`) gives a poor proposal (`orders.btn.jButton1`). Use the visible text for such a field.
 11. OPEN: a text field in a local variable gets no proposal. Use the text of the label that refers to it (`JLabel.setLabelFor`).
-12. OPEN: `record` with a scenario folder that does not exist stops with a stack trace: the CLI cannot create `<scenario>.record.log`.
+12. DONE: `record` creates the scenario folder before the application starts. Before, a scenario folder that did not exist gave a stack trace: the CLI could not create `<scenario>.record.log`.
 
 ## 5. Risks
 
