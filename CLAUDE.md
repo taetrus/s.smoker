@@ -67,14 +67,15 @@ after every change to `smoker-agent` or `smoker-core`.
   `run --suite`, the reset step, the three-stage stop and the agent configuration file (`config=<file>`).
   The Windows check on `p2.product` (2026-11-22, commit 8799100): R-36 (20 scenarios, 1 start), R-38 (20 stops),
   R-39 (`out` path with `;` and a space) pass; R-37 passes in the Windows CI with `DemoSimulator`. See `docs/wp-05-windows-report.md`.
-  `p2.product` does not stop Equinox when its windows close: each stop ends at stage 2, about `stopTimeoutMs` (10 s) later.
+  `p2.product` does not stop Equinox when its windows close: each stop ends at stage 2. Stage 1 now ends when no main
+  frame shows, so stage 2 starts at once, not after `stopTimeoutMs` (branch `stop-stage1-early`; not yet checked on Windows).
 - WP-03 (`WAIT_FOR`, F-02, R-23a) was merged on 2026-11-17 (PR #5). R-23a passes on the demo (`wait.json`, SelfTestIT).
   Windows run and manual walkthrough of `Wait for…`: pass (`docs/wp-03-windows-report.md`). Follow-ups from the
   walkthrough: the toolbar writes what it shows to the record log (PR #6), the picker gives no border to a `JViewport` (PR #7).
 - WP-04 (log analysis) is complete; F-08, F-09, F-22 and F-24 are closed. Merged in PR #11; PR #13 keeps the console
   lines of each thread apart. Demo checks pass (SelfTestIT). The Windows check on the pilot (2026-11-22, after PR #13):
   5 of 5 runs pass, and 3 of 3 `jre8` runs give 28 hits. See `docs/wp-04-windows-report.md`.
-- Tests: 86 in `smoker-core`, 268 in `smoker-agent`, 78 in `smoker-cli`, 16 IT. They pass on macOS (JDK 27 default
+- Tests: 86 in `smoker-core`, 270 in `smoker-agent`, 78 in `smoker-cli`, 16 IT. They pass on macOS (JDK 27 default
   locale and `-Plocale-tr`) and in the Windows CI (PR #15: default, `-Plocale-tr`, tr_TR with JRE 8u341 as test JVM).
 - The record log and `app-output.log` are in the console charset of the application (Cp1252 on Windows), not UTF-8.
   PR #8 (merged 2026-11-19) makes the `[smoker]` texts ASCII and documents this in `README.md`.

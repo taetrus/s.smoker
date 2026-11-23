@@ -16,7 +16,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Stops the application in three stages (WP-05, F-10, R-38): WINDOW_CLOSING to the frames, stop of the OSGi system
- * bundle, {@code System.exit}. A daemon thread calls {@code halt} when {@code exit} does not return.
+ * bundle, {@code System.exit}. Stage 1 ends early when no main window shows. A daemon thread calls {@code halt} when {@code exit} does not return.
  * The sleeps run on the calling thread, not on the EDT. The class does not depend on the player.
  */
 final class AppStopper {
@@ -54,12 +54,13 @@ final class AppStopper {
      */
     void stop(final int code, boolean edtBlocked) {
         try {
+            // Before stage 1: the class loaders of the showing windows lead to the framework.
+            Object bundle = findSystemBundle();
             if (!edtBlocked) {
                 SmokerAgent.log("stop: closing the windows");
                 closeFrames();
-                sleep(stopTimeoutMs);
+                waitWhileAMainWindowShows(stopTimeoutMs);
             }
-            Object bundle = findSystemBundle();
             if (bundle != null) {
                 SmokerAgent.log("stop: stopping the OSGi framework");
                 try {
@@ -106,6 +107,40 @@ final class AppStopper {
                 }
             }
         });
+    }
+
+    /**
+     * Waits at most {@code maxMs}, and less when no main window shows any more: an application that closes its windows
+     * but keeps the JVM alive (an Equinox product) goes to stage 2 at once. An EDT that does not answer counts as
+     * "a window shows".
+     */
+    private static void waitWhileAMainWindowShows(long maxMs) {
+        long end = System.currentTimeMillis() + maxMs;
+        while (System.currentTimeMillis() < end) {
+            if (!aMainWindowShows(Math.min(1000, Math.max(1, end - System.currentTimeMillis())))) return;
+            sleep(Math.min(100, Math.max(0, end - System.currentTimeMillis())));
+        }
+    }
+
+    private static boolean aMainWindowShows(long maxWaitMs) {
+        FutureTask<Boolean> task = new FutureTask<Boolean>(new Callable<Boolean>() {
+            @Override
+            public Boolean call() {
+                for (Window w : Window.getWindows()) if (Player.isMainWindow(w)) return true;
+                return false;
+            }
+        });
+        SwingUtilities.invokeLater(task);
+        try {
+            return task.get(maxWaitMs, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            task.cancel(false);
+            Thread.currentThread().interrupt();
+            return true;
+        } catch (Exception e) { // timeout or failure: do not end the wait early
+            task.cancel(false);
+            return true;
+        }
     }
 
     private static void sleep(long ms) {

@@ -149,12 +149,14 @@ application at start with exit code 2. System.err then has one line `[smoker] fa
 ### Stop of the application
 
 When `exitWhenDone` is true, the agent stops the application after it writes the result. The stop has three stages.
-After stages 1 and 2, the agent waits `stopTimeoutMs`.
+After stages 1 and 2, the agent waits at most `stopTimeoutMs`.
 
 1. The agent sends `WINDOW_CLOSING` to each main frame. The application can close itself and release its resources.
-   The agent skips this stage when the status is HANG: the EDT is blocked.
-2. The agent stops the OSGi system bundle by reflection. It finds the bundle through the class loaders of the windows
-   and through `EclipseStarter`. Without an OSGi framework, it goes to stage 3 at once.
+   When no main frame shows any more, the agent goes to stage 2 at once: an Equinox product can close its windows
+   and keep the JVM alive. A frame that stays open (for example behind a "Save changes?" dialog) makes the agent wait
+   `stopTimeoutMs`. The agent skips this stage when the status is HANG: the EDT is blocked.
+2. The agent stops the OSGi system bundle by reflection. It finds the bundle before stage 1, through the class loaders
+   of the windows, and else through `EclipseStarter`. Without an OSGi framework, it goes to stage 3 at once.
 3. The agent calls `System.exit(code)`. The code is 0 for PASS and NO_GOLDEN, and 1 for all other statuses.
    A thread `smoker-halt` calls `Runtime.halt(code)` after `stopTimeoutMs`, when `System.exit` does not return.
 
