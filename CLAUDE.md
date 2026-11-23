@@ -11,6 +11,7 @@ compares semantic component snapshots with golden snapshots, and reads the appli
    `docs/wp-03-windows-report.md` — WP-03 test report (Windows).
    `docs/wp-04-windows-report.md` — WP-04 test report (Windows, pilot applications).
    `docs/wp-05-windows-report.md` — WP-05 test report (Windows, pilot application).
+   `docs/wp-09-windows-report.md` — WP-09 follow-up test report (Windows, pilot application).
 4. `docs/architecture.md` — design decisions and class map of the current skeleton.
 5. `docs/requirements.md` — original requirements. The development plan wins where they differ.
 6. `README.md` — build and CLI usage.
@@ -79,7 +80,10 @@ after every change to `smoker-agent` or `smoker-core`.
   locale and `-Plocale-tr`) and in the Windows CI (PR #18: default, `-Plocale-tr`, tr_TR with JRE 8u341 as test JVM).
 - WP-09 follow-up, PR #17 (merged 2026-11-23): `Save` in the recorder writes `<scenario>.lint.json`, so the
   naming assistant operates without a run; `record` prints the lint summary. `JSpinner` and `JSlider` are interactive
-  (lint entries). `record` creates the scenario folder. Windows CI passes; no record session on a pilot product yet.
+  (lint entries). `record` creates the scenario folder. Windows CI passes. The Windows check on `p2.product`
+  (2026-11-23, commit 5daf8df): N-1 to N-6 pass; the record session gives 14 components, 14 proposals (100 %), the
+  same table as on macOS. See `docs/wp-09-windows-report.md`. Through Chrome Remote Desktop the application windows
+  looked empty; the record sessions with the environment variable `J2D_D3D=false` operated.
 - WP-09 follow-up, PR #18 (merged 2026-11-23), items 10 and 11 of the plan: a generated field name
   (`jButton1`) gives way to the text and the label; a labeled component without a field gets the label text
   (source `label`). The lint table and the report have a `label` column; the summary counts `from labels`.
