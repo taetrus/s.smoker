@@ -22,6 +22,7 @@ import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
+import javax.swing.JPasswordField;
 import javax.swing.JPopupMenu;
 import javax.swing.MenuElement;
 import javax.swing.MenuSelectionManager;
@@ -293,6 +294,99 @@ public class RecorderWindowTest {
         assertTrue(entries.toString(), entries.contains("JButton Clear null null"));
         assertFalse("a named field is not in the lint: " + entries, entries.toString().contains("t.name"));
         assertTrue(ScenarioFiles.readGolden(Paths.get("target/recorder-window-test.json")).isEmpty());
+    }
+
+    private List<String> captureStatus() {
+        final List<String> said = java.util.Collections.synchronizedList(new ArrayList<String>());
+        recorder.setListener(new Recorder.Listener() {
+            public void stepAdded(Step s) {
+            }
+
+            public void stepUpdated(Step s) {
+            }
+
+            public void status(String text) {
+                said.add(text);
+            }
+        });
+        return said;
+    }
+
+    private static int countStartingWith(List<String> said, String prefix) {
+        int n = 0;
+        synchronized (said) {
+            for (String s : said) if (s.startsWith(prefix)) n++;
+        }
+        return n;
+    }
+
+    /**
+     * F-19, WP-09 Windows check (2026-11-23): a dialog gave the focus to a password field, and the warning came without
+     * input. The warning comes at the first key that edits the field, once per focus.
+     */
+    @Test
+    public void passwordWarningComesWithTheFirstEditingKey() throws Exception {
+        final JPasswordField[] pw = new JPasswordField[1];
+        onEdt(new Runnable() {
+            public void run() {
+                pw[0] = new JPasswordField(8);
+                frame.getContentPane().add(pw[0], java.awt.BorderLayout.NORTH);
+                frame.pack();
+            }
+        });
+        List<String> said = captureStatus();
+        dispatch(new FocusEvent(pw[0], FocusEvent.FOCUS_GAINED));
+        dispatch(new KeyEvent(pw[0], KeyEvent.KEY_PRESSED, System.currentTimeMillis(), 0, KeyEvent.VK_SHIFT, KeyEvent.CHAR_UNDEFINED));
+        assertEquals("focus and Shift give no warning: " + said, 0, countStartingWith(said, "password field:"));
+        dispatch(new KeyEvent(pw[0], KeyEvent.KEY_PRESSED, System.currentTimeMillis(), 0, KeyEvent.VK_S, 's'));
+        dispatch(new KeyEvent(pw[0], KeyEvent.KEY_PRESSED, System.currentTimeMillis(), 0, KeyEvent.VK_E, 'e'));
+        assertEquals(said.toString(), 1, countStartingWith(said, "password field: typing is not recorded."));
+        dispatch(new FocusEvent(pw[0], FocusEvent.FOCUS_GAINED));
+        dispatch(new KeyEvent(pw[0], KeyEvent.KEY_PRESSED, System.currentTimeMillis(), 0, KeyEvent.VK_BACK_SPACE, '\b'));
+        assertEquals("a new focus warns again: " + said, 2, countStartingWith(said, "password field:"));
+        assertTrue(describe(recorder.scenario().steps), recorder.scenario().steps.isEmpty());
+    }
+
+    /** WP-09 Windows check: a save without steps while paused tells the person to click Record. */
+    @Test
+    public void saveWithoutStepsWhilePausedGivesAHint() throws Exception {
+        recorder.pause();
+        List<String> said = captureStatus();
+        recorder.save();
+        assertEquals(said.toString(), 1, countStartingWith(said, "saved "));
+        String line = said.get(said.size() - 1);
+        assertTrue(line, line.endsWith("; no steps: the recorder is paused, click Record to record the clicks"));
+        recorder.start();
+        said.clear();
+        recorder.save();
+        assertFalse(said.toString(), said.toString().contains("no steps"));
+    }
+
+    /** WP-09 Windows check: the title and the toggle show whether the recorder records. */
+    @Test
+    public void toolbarShowsWhetherTheRecorderRecords() throws Exception {
+        recorder.pause();
+        final String[] seen = new String[5];
+        onEdt(new Runnable() {
+            public void run() {
+                toolbar = new RecorderToolbar(recorder);
+                seen[0] = toolbar.getTitle();
+                seen[1] = toolbar.recordToggle().getText();
+            }
+        });
+        onEdt(new Runnable() {
+            public void run() {
+                seen[2] = toolbar.statusText();
+                toolbar.recordToggle().doClick();
+                seen[3] = toolbar.getTitle();
+                seen[4] = String.valueOf(recorder.isRecording());
+            }
+        });
+        assertTrue(seen[0], seen[0].endsWith(" — paused"));
+        assertEquals("● Record", seen[1]);
+        assertEquals("paused: click Record to record the clicks", seen[2]);
+        assertTrue(seen[3], seen[3].endsWith(" — RECORDING"));
+        assertEquals("true", seen[4]);
     }
 
     /** WP-03, spec 6.5: the snapshot of a WAIT_FOR step shows the state after the condition matched. */

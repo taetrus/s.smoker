@@ -76,14 +76,17 @@ after every change to `smoker-agent` or `smoker-core`.
 - WP-04 (log analysis) is complete; F-08, F-09, F-22 and F-24 are closed. Merged in PR #11; PR #13 keeps the console
   lines of each thread apart. Demo checks pass (SelfTestIT). The Windows check on the pilot (2026-11-22, after PR #13):
   5 of 5 runs pass, and 3 of 3 `jre8` runs give 28 hits. See `docs/wp-04-windows-report.md`.
-- Tests: 87 in `smoker-core`, 277 in `smoker-agent`, 87 in `smoker-cli`, 16 IT. They pass on Linux with Xvfb (default
+- Tests: 87 in `smoker-core`, 280 in `smoker-agent`, 87 in `smoker-cli`, 16 IT. They pass on Linux with Xvfb (default
   locale and `-Plocale-tr`) and in the Windows CI (PR #18: default, `-Plocale-tr`, tr_TR with JRE 8u341 as test JVM).
 - WP-09 follow-up, PR #17 (merged 2026-11-23): `Save` in the recorder writes `<scenario>.lint.json`, so the
   naming assistant operates without a run; `record` prints the lint summary. `JSpinner` and `JSlider` are interactive
   (lint entries). `record` creates the scenario folder. Windows CI passes. The Windows check on `p2.product`
   (2026-11-23, commit 5daf8df): N-1 to N-6 pass; the record session gives 14 components, 14 proposals (100 %), the
   same table as on macOS. See `docs/wp-09-windows-report.md`. Through Chrome Remote Desktop the application windows
-  looked empty; the record sessions with the environment variable `J2D_D3D=false` operated.
+  looked empty; the record sessions with the environment variable `J2D_D3D=false` operated (now in `README.md`,
+  "Remote desktop"). Follow-ups of that check, plan item 13 (branch `claude/kind-hopper-mabw35`): the password
+  warning comes at the first editing key, the toolbar shows `paused` or `RECORDING`, a save with no steps while
+  paused gives a hint.
 - WP-09 follow-up, PR #18 (merged 2026-11-23), items 10 and 11 of the plan: a generated field name
   (`jButton1`) gives way to the text and the label; a labeled component without a field gets the label text
   (source `label`). The lint table and the report have a `label` column; the summary counts `from labels`.

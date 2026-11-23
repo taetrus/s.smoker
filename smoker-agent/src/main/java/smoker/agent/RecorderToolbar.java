@@ -43,6 +43,7 @@ final class RecorderToolbar extends JFrame implements Recorder.Listener {
     private final DefaultListModel<Step> model = new DefaultListModel<Step>();
     private final JList<Step> list = new JList<Step>(model);
     private final JLabel status = new JLabel(" ");
+    private final String baseTitle;
     private final JLabel pickerLabel = new JLabel(" ");
     private final JToggleButton rec = new JToggleButton("● Record");
     private final JToggleButton pick = new JToggleButton("Pick");
@@ -62,6 +63,7 @@ final class RecorderToolbar extends JFrame implements Recorder.Listener {
     RecorderToolbar(Recorder recorder) {
         super("s.smoker recorder — " + recorder.scenario().name);
         this.recorder = recorder;
+        this.baseTitle = getTitle();
         setName("smoker.toolbar");
         setAlwaysOnTop(true);
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
@@ -85,8 +87,9 @@ final class RecorderToolbar extends JFrame implements Recorder.Listener {
         rec.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                if (rec.isSelected()) { RecorderToolbar.this.recorder.start(); rec.setText("❚❚ Pause"); }
-                else { RecorderToolbar.this.recorder.pause(); rec.setText("● Record"); }
+                if (rec.isSelected()) RecorderToolbar.this.recorder.start();
+                else RecorderToolbar.this.recorder.pause();
+                showRecordState();
             }
         });
         pick.addActionListener(new ActionListener() {
@@ -159,6 +162,24 @@ final class RecorderToolbar extends JFrame implements Recorder.Listener {
         setSize(620, 300);
         setLocation(20, 20);
         recorder.setListener(this);
+        showRecordState();
+        if (!recorder.isRecording()) showStatus("paused: click Record to record the clicks");
+    }
+
+    /**
+     * Shows in the title and on the toggle whether the recorder records. A click on Record that did not arrive left a
+     * record session without steps (WP-09 Windows check, 2026-11-23). Must run on the EDT.
+     */
+    private void showRecordState() {
+        boolean on = recorder.isRecording();
+        rec.setSelected(on);
+        rec.setText(on ? "❚❚ Pause" : "● Record");
+        setTitle(baseTitle + (on ? " — RECORDING" : " — paused"));
+    }
+
+    /** The Record/Pause toggle, for tests. */
+    JToggleButton recordToggle() {
+        return rec;
     }
 
     private void renameSelected() {
