@@ -70,10 +70,20 @@ public class HtmlReportWriterTest {
         l.proposedName = "settings.btn.cancel";
         l.source = "text";
         r.lint.add(l);
+        smoker.core.model.LintEntry t = new smoker.core.model.LintEntry();
+        t.window = "[Settings]";
+        t.runtimeClass = "app.SettingsDialog";
+        t.type = "JTextField";
+        t.label = "Base URL:";
+        t.proposedName = "settings.txt.baseUrl";
+        t.source = "label";
+        r.lint.add(t);
         Path f = tmp.getRoot().toPath().resolve("report.html");
         HtmlReportWriter.write(f, Collections.singletonList(r));
         String html = new String(Files.readAllBytes(f), StandardCharsets.UTF_8);
         assertTrue(html, html.contains("settings.btn.cancel"));
+        assertTrue(html, html.contains("<th>Label</th>"));
+        assertTrue(html, html.contains("<td>Base URL:</td>"));
         assertTrue(html, html.contains("<td>SettingsDialog</td>"));
         assertTrue(!html.contains("null"));
     }

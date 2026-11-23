@@ -105,10 +105,11 @@ final class Lint {
             }
         });
         List<String[]> rows = new ArrayList<String[]>();
-        rows.add(new String[] {"window", "class", "field", "type", "text", "automatic name", "proposed name", "source"});
+        rows.add(new String[] {"window", "class", "field", "type", "text", "label", "automatic name", "proposed name",
+                "source"});
         for (LintEntry e : sorted) {
             rows.add(new String[] {cell(e.window), cell(simple(e.runtimeClass)), cell(e.field), cell(e.type),
-                    cell(e.text), cell(e.autoName), cell(e.proposedName), cell(e.source)});
+                    cell(e.text), cell(e.label), cell(e.autoName), cell(e.proposedName), cell(e.source)});
         }
         int cols = rows.get(0).length;
         int[] width = new int[cols];
@@ -129,18 +130,21 @@ final class Lint {
         int n = entries.size();
         int fields = 0;
         int texts = 0;
+        int labels = 0;
         int auto = 0;
         for (LintEntry e : entries) {
             if (e.proposedName != null) {
                 if ("field".equals(e.source)) fields++;
                 else if ("text".equals(e.source)) texts++;
+                else if ("label".equals(e.source)) labels++;
             }
             if (e.autoName != null) auto++;
         }
-        int p = fields + texts;
+        int p = fields + texts + labels;
         int percent = n == 0 ? 0 : 100 * p / n;
         return n + " unnamed interactive component(s), " + p + " with a proposed name (" + percent + " %: "
-                + fields + " from fields, " + texts + " from text), " + auto + " with an automatic name";
+                + fields + " from fields, " + texts + " from text, " + labels + " from labels), " + auto
+                + " with an automatic name";
     }
 
     static String patch(List<LintEntry> entries) {
@@ -176,6 +180,10 @@ final class Lint {
                     }
                 } else if ("text".equals(e.source)) {
                     sb.append("// ").append(e.type).append(" \"").append(lit(e.text))
+                            .append("\" has no field: setName(\"").append(lit(e.proposedName))
+                            .append("\") where it is created\n");
+                } else if ("label".equals(e.source)) {
+                    sb.append("// ").append(e.type).append(" with the label \"").append(lit(e.label))
                             .append("\" has no field: setName(\"").append(lit(e.proposedName))
                             .append("\") where it is created\n");
                 }

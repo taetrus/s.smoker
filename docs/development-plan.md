@@ -247,8 +247,8 @@ Follow-up (2026-11-22), so that a team can use the naming assistant before versi
 
 8. DONE: `Save` in the recorder writes `<scenario>.lint.json` with the lint of the record session, and of one snapshot at the save. `lint --run` reads these files too. `record` prints the summary line. A record session with no steps gives a lint.
 9. DONE: `JSpinner` and `JSlider` are interactive components. They get lint entries and proposals (`spn`, `sld`).
-10. OPEN: a field name from a GUI builder (`jButton1`) gives a poor proposal (`orders.btn.jButton1`). Use the visible text for such a field.
-11. OPEN: a text field in a local variable gets no proposal. Use the text of the label that refers to it (`JLabel.setLabelFor`).
+10. DONE: a generated field name (`jButton1`, `btnNewButton_1`, `textField_1`, `tabs`) gives way to the visible text and the label. It is the last source. `jButton1` with the text `Save` gives `orders.btn.save`, and the patch line stays `jButton1.setName(...)`.
+11. DONE: a component with a label (`JLabel.setLabelFor`) gets the text of the label when it has no field and no text (source `label`). A labeled text field in a local variable now gets a proposal.
 12. DONE: `record` creates the scenario folder before the application starts. Before, a scenario folder that did not exist gave a stack trace: the CLI could not create `<scenario>.record.log`.
 
 ## 5. Risks

@@ -75,12 +75,15 @@ after every change to `smoker-agent` or `smoker-core`.
 - WP-04 (log analysis) is complete; F-08, F-09, F-22 and F-24 are closed. Merged in PR #11; PR #13 keeps the console
   lines of each thread apart. Demo checks pass (SelfTestIT). The Windows check on the pilot (2026-11-22, after PR #13):
   5 of 5 runs pass, and 3 of 3 `jre8` runs give 28 hits. See `docs/wp-04-windows-report.md`.
-- Tests: 87 in `smoker-core`, 272 in `smoker-agent`, 85 in `smoker-cli`, 16 IT. They pass on Linux with Xvfb (default
-  locale and `-Plocale-tr`, PR #17 after the merge of PR #16). Before PR #17 (86, 270, 78): macOS (JDK 27 default
-  locale and `-Plocale-tr`) and the Windows CI (PR #15: default, `-Plocale-tr`, tr_TR with JRE 8u341 as test JVM).
-- WP-09 follow-up (PR #17): `Save` in the recorder writes `<scenario>.lint.json`, so the
+- Tests: 87 in `smoker-core`, 277 in `smoker-agent`, 87 in `smoker-cli`, 16 IT. They pass on Linux with Xvfb (default
+  locale and `-Plocale-tr`, branch `claude/kind-hopper-mabw35`). PR #17 (87, 272, 85) passed the Windows CI
+  (default, `-Plocale-tr`, tr_TR with JRE 8u341 as test JVM).
+- WP-09 follow-up, PR #17 (merged 2026-11-23): `Save` in the recorder writes `<scenario>.lint.json`, so the
   naming assistant operates without a run; `record` prints the lint summary. `JSpinner` and `JSlider` are interactive
-  (lint entries). `record` creates the scenario folder. Not yet checked on Windows or on a pilot product.
+  (lint entries). `record` creates the scenario folder. Windows CI passes; no record session on a pilot product yet.
+- WP-09 follow-up, items 10 and 11 of the plan (branch `claude/kind-hopper-mabw35`): a generated field name
+  (`jButton1`) gives way to the text and the label; a labeled component without a field gets the label text
+  (source `label`). The lint table and the report have a `label` column; the summary counts `from labels`.
 - The record log and `app-output.log` are in the console charset of the application (Cp1252 on Windows), not UTF-8.
   PR #8 (merged 2026-11-19) makes the `[smoker]` texts ASCII and documents this in `README.md`.
   Windows record session: the record log has no non-ASCII byte (PR #8 comment).

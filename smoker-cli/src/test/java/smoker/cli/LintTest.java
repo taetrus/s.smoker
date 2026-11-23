@@ -100,8 +100,9 @@ public class LintTest {
         l.add(entry("w", "p.A", "p.A", "b", "JButton", "B", null, "w.btn.b", "field"));
         l.add(entry("w", "p.A", null, null, "JButton", "C", "y", "w.btn.c", "text"));
         l.add(entry("w", "p.A", null, null, "JButton", "D", null, null, null));
-        assertEquals("4 unnamed interactive component(s), 3 with a proposed name (75 %: 2 from fields, 1 from text),"
-                + " 2 with an automatic name", Lint.summary(l));
+        l.add(entry("w", "p.A", null, null, "JTextField", null, null, "w.txt.e", "label"));
+        assertEquals("5 unnamed interactive component(s), 4 with a proposed name (80 %: 2 from fields, 1 from text,"
+                + " 1 from labels), 2 with an automatic name", Lint.summary(l));
     }
 
     @Test
@@ -158,6 +159,26 @@ public class LintTest {
                 + "okButton.setName(\"bar.btn.ok\");\n"
                 + "// JButton \"Go\" has no field: setName(\"bar.btn.go\") where it is created\n"
                 + "// JButton \"Go\" has no field: setName(\"bar.btn.go2\") where it is created\n", p);
+    }
+
+    /** WP-09 follow-up: a label proposal without a field gives a comment with the label. */
+    @Test
+    public void labelProposalGivesAComment() {
+        LintEntry e = entry("settings", "nametest.SettingsPanel", null, null, "JTextField", null, null,
+                "settings.txt.baseUrl", "label");
+        e.label = "Base URL:";
+        String p = Lint.patch(Arrays.asList(e));
+        assertTrue(p, p.contains("// JTextField with the label \"Base URL:\" has no field: setName(\"settings.txt.baseUrl\")"
+                + " where it is created\n"));
+        assertTrue(Lint.table(Arrays.asList(e)).contains("Base URL:"));
+    }
+
+    /** WP-09 follow-up: a generated field with a text proposal still gives a setName line on the field. */
+    @Test
+    public void generatedFieldWithATextProposalGivesASetNameLine() {
+        String p = Lint.patch(Arrays.asList(entry("orders", "nametest.OrdersPanel", "nametest.OrdersPanel", "jButton1",
+                "JButton", "Save", "@OrdersPanel.jButton1", "orders.btn.save", "text")));
+        assertTrue(p, p.contains("jButton1.setName(\"orders.btn.save\");\n"));
     }
 
     @Test

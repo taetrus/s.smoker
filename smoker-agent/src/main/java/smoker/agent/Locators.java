@@ -225,6 +225,16 @@ final class Locators {
         return null;
     }
 
+    /**
+     * The text of the label of {@code c}, or null. {@code JLabel.setLabelFor(c)} puts the label into the client
+     * property {@code labeledBy} of {@code c} (WP-09). Must run on the EDT.
+     */
+    static String labelOf(Component c) {
+        if (!(c instanceof javax.swing.JComponent)) return null;
+        Object l = ((javax.swing.JComponent) c).getClientProperty("labeledBy");
+        return l instanceof JLabel ? nz(((JLabel) l).getText()) : null;
+    }
+
     /** A component that the user changes or acts on. It needs a real name (lint, WP-09). */
     static boolean isInteractive(Component c) {
         return c instanceof AbstractButton || c instanceof JTextComponent || c instanceof JComboBox
