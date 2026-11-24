@@ -471,7 +471,10 @@ Do not put a real password in a scenario file.
 
 - Give each item of a context menu a name (`setName`). The replay does not find an item without a name in a
   heavyweight popup (a popup that does not fit in the window: Swing shows it in a window of its own).
-- The recorder does not record the keys inside a cell edit. The edit gives one `SET_CELL` when it ends.
+- The recorder does not record the keys inside a cell edit. The edit gives one `SET_CELL` when it ends. Enter or Tab
+  that moves the selection is the exception (see above).
+- Enter or Tab that ends a cell edit with no change of the value gives no step, also when it moves the selection.
+  Add a `SELECT` step for the new row if a later step needs it.
 - A password field as cell editor gives no step. The status line shows `password field: a table cell edit is not
   recorded. Add a SET_CELL step by hand, or set the value outside the scenario.`
 - A spinner with a custom editor (not a `JSpinner.DefaultEditor`) gives no step for an arrow click or a typed value.
