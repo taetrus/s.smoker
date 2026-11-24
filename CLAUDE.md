@@ -72,7 +72,7 @@ after every change to `smoker-agent` or `smoker-core`.
   move and group) are code complete on branch `wp-06-recorder` (not merged yet). WP-06 is not complete: the usability test
   and the corrections (tasks 1 and 8) come in the field phase (decision 8). F-13 and F-21 stay open until then.
   R-20a passes on the demo (SelfTestIT, `recorder.json`).
-- Tests: 92 in `smoker-core`, 378 in `smoker-agent`, 87 in `smoker-cli`, 17 IT. They pass on macOS (default locale and
+- Tests: 92 in `smoker-core`, 385 in `smoker-agent`, 87 in `smoker-cli`, 17 IT. They pass on macOS (default locale and
   `-Plocale-tr`). Earlier results: Linux with Xvfb and the Windows CI (PR #18) passed with the earlier counts.
 
 ## State on 2026-11-23

@@ -456,11 +456,32 @@ Do not put a real password in a scenario file.
   both and marks them `(no golden: run and approve)`. `Save` writes the golden file without them. The next run gives
   `NO_GOLDEN` for them, and `approve` repairs them.
 - `Delete` keeps the goldens of the later steps.
+- A recorded `SET_CELL` has no golden. The input that ends the cell edit acts before the recorder can take the
+  snapshot: a check box toggles, Enter moves the selection, a button acts. The step shows
+  `(no golden: run and approve)`. The next run gives `NO_GOLDEN` for it, and `approve` repairs it.
 - A cell edit that a button action ends (for example a click on `Save` while the cell is open) gives `SET_CELL`
-  directly before the `CLICK`. The recorder cannot see the state between the commit and the action. This `SET_CELL`
-  has no golden and shows `(no golden: run and approve)`. The next run gives `NO_GOLDEN`, and `approve` repairs it.
+  directly before the `CLICK`.
+- Enter or Tab that ends a cell edit and moves the selection of the table gives a `KEY` step after `SET_CELL`
+  (`ENTER` or `TAB`, on the table when it has a name). The replay then moves the selection too. This `KEY` step gets
+  its golden at record time. Escape cancels the edit and gives no step.
 - The step ids can be out of order after a move or after such an insert. The ids stay as they are.
 - The toolbar writes its status line, the Record toggle and the step list to the record log.
+
+### Recorder notes
+
+- Give each item of a context menu a name (`setName`). The replay does not find an item without a name in a
+  heavyweight popup (a popup that does not fit in the window: Swing shows it in a window of its own).
+- The recorder does not record the keys inside a cell edit. The edit gives one `SET_CELL` when it ends.
+- A password field as cell editor gives no step. The status line shows `password field: a table cell edit is not
+  recorded. Add a SET_CELL step by hand, or set the value outside the scenario.`
+- A spinner with a custom editor (not a `JSpinner.DefaultEditor`) gives no step for an arrow click or a typed value.
+  The status line shows `spinner with a custom editor: the value is not recorded` once for each spinner.
+- The recorder records a right-click at the press, on each platform.
+- The recorder does not record an expand or a collapse of a tree node through its handle. The snapshot shows the
+  rows of the tree, so the golden of the next step has the change.
+- A cell edit that stays open while you act outside the table is part of the goldens of these actions. Its `SET_CELL`
+  comes where the edit ends. While the editor of one table stays open, the recorder does not record an edit in a
+  second table.
 
 ### Remote desktop
 

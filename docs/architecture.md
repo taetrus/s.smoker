@@ -156,12 +156,13 @@ sub-second attribution and MDC fields if needed.
 | picks a combo item, list row, table row, tab | `SELECT #name = value/index` (read back after Swing processed the click) |
 | selects a node of a `JTree` | `SELECT #name` with `path` (labels from the root) |
 | double-click, or right-click, with a place (tree node, table cell, list row) | `CLICK #name` with `count` 2 or `button` 3 and `path`, or `row` and `column` |
-| ends a table cell edit with a new value | `SET_CELL #name` with `row`, `column` and `value` (`CellEditTracker`) |
+| ends a table cell edit with a new value | `SET_CELL #name` with `row`, `column` and `value` (`CellEditTracker`); no golden at record time; Enter or Tab that moves the selection adds `KEY` |
 | changes a `JSpinner` value | `SET_TEXT #name = "…"` |
 | ENTER / ESC / TAB / DELETE / F-keys / Ctrl+… | `KEY value` (VK name, modifiers) |
 
 The recorder takes the golden snapshot of a step at the first input of the next step (F-21), before that input changes the UI.
 If no input comes, a background thread takes it when the UI is quiet.
+A recorded `SET_CELL` gets no golden: the input that ends the edit acts first. It shows `no golden: run and approve`.
 Save writes the scenario and the golden file `<scenario>.golden.json` (the recording run defines v1 of the golden). `RecorderToolbar` (named `smoker.toolbar`, always-on-top) offers
 Record/Pause, Pick (hover → red border + locator + "unnamed" warning), Rename, Delete, Save, `Group...`, `Up` and `Down`.
 A preview pane shows the changes of the golden of the selected step. `Places` finds the place of a click (tree path, table cell,

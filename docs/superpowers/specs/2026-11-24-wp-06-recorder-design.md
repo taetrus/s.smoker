@@ -305,3 +305,22 @@ The goldens in the repository (`docs/wp-01-pilot/`, `smoker-demo/`) have no `JTr
 - The exact `toString` texts and status texts (ASCII).
 - The split of `Recorder` and `ActionExecutor` into smaller classes if the new code makes them hard to read.
 - Task order and commit split.
+
+## 12. Changes after approval
+
+The controller made these rulings during the build. Each line tells what changed against the text above.
+
+- Ruling 3 (7.3): after a move, the recorder checks the swapped pair and the step before it. A checked step directly
+  before a `WAIT_FOR` loses its golden and gets no mark. Another checked step without a golden that is not pending gets
+  the mark `(no golden: run and approve)`.
+- Ruling 4 (6.4): when the action of the next input ends the edit (a button that stops the edit at the release), its
+  step is already recorded. `SET_CELL` goes directly before that step, with no golden and the mark.
+- Ruling 6 (6.5, Names): the snapshot of a `JSpinner` gets `text`, the text of its `JSpinner.DefaultEditor` field.
+  The field stays skipped. An existing golden with a spinner fails one time; `approve` repairs it.
+- Ruling 7 (6.4): replay of `SET_CELL` first selects the cell (`changeSelection`), as a real edit does. A recorded
+  `SET_CELL` never gets a golden at record time: it gets the mark, and the next run plus `approve` gives its golden.
+  Enter or Tab of the edit that moves the selection of the table gives a `KEY` step after `SET_CELL`, with the
+  normal golden. This replaces "no `KEY` for ENTER, TAB" in 6.4 for that case. Escape still gives no step.
+- Ruling 8 (6.3): the replay does not find a context-menu item without a name in a heavyweight popup. `README.md`
+  tells the user to name these items. `Locators` stay unchanged in this work package (F-23); a follow-up comes after
+  the Windows check.

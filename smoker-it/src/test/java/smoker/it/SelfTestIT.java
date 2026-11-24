@@ -381,7 +381,7 @@ public class SelfTestIT {
             if ("demo.tree".equals(n.name) && Integer.valueOf(2).equals(n.selectedIndex)) selected = true;
         }
         assertTrue("tree selectedIndex 2 in s001", selected);
-        // Ruling 6: the snapshot of a spinner has its text.
+        // The snapshot of a spinner has its text (README, "Scenario file": spinner node).
         assertEquals("7", nodeText(golden.get("s009"), "demo.count"));
 
         Cli run2 = run(scenario, dir.resolve("run2"), log, panel);
