@@ -356,6 +356,40 @@ second hit on `stderr`.
 Actions: `CLICK`, `SET_TEXT`, `SELECT` (combo/list/tab by text or index, table by row), `KEY` (VK name, `modifiers` =
 `InputEvent.*_DOWN_MASK`), `WAIT` (ms), `CLOSE_WINDOW`, `WAIT_FOR` (see "Wait for a condition").
 
+Optional action fields (all are absent in an old scenario):
+
+| Field | Type | Used by | Meaning |
+|---|---|---|---|
+| `count` | integer | `CLICK` | Click count. Absent means 1. The recorder writes only 2. |
+| `button` | integer | `CLICK` | Mouse button: 1 or 3. Absent means 1. The recorder writes only 3. |
+| `row` | integer | `CLICK`, `SET_CELL` | View row index of a `JTable` or a `JList`. |
+| `column` | string | `CLICK`, `SET_CELL` | Column of a `JTable`. |
+| `path` | array of strings | `SELECT`, `CLICK` | Node of a `JTree`: the labels from the root to the node. |
+
+`SET_CELL` sets one cell of a `JTable`. It has `locator`, `row`, `column` and `value`.
+`SET_TEXT` accepts a `JSpinner`. `SELECT` accepts a `JTree` with `path`.
+
+```json
+{ "type": "SELECT",   "locator": {"name": "files.tree"},   "path": ["Root", "src", "Main.java"] }
+{ "type": "CLICK",    "locator": {"name": "orders.table"}, "row": 2, "column": "Status", "count": 2 }
+{ "type": "CLICK",    "locator": {"name": "files.tree"},   "path": ["Root", "src"], "button": 3 }
+{ "type": "SET_CELL", "locator": {"name": "orders.table"}, "row": 2, "column": "Qty", "value": "5" }
+{ "type": "SET_TEXT", "locator": {"name": "orders.count"}, "value": "7" }
+```
+
+Tree path: each label is the text that the tree shows for the node (the same text as in the snapshot). The path
+starts with the root label, also when the root is hidden. Replay starts at the model root. The root label must equal
+the first label. For each next label, replay takes the first child with that label. A node that is not found gives
+ERROR `tree node not found: Root/src/X`.
+
+Table column: the recorder writes the header text when it is not empty and no other column has the same text.
+Otherwise it writes the view index as a decimal string. Replay takes the first view column whose header text equals
+`column`. If there is none and `column` is an integer, replay takes the view column with that index. Otherwise the
+step gives ERROR `column not found: <column>`.
+
+Step `group` (string, optional): a step with `group` starts a group. The steps after it belong to the group until the
+next step with `group`. The report shows a header row for each group. Replay ignores the field.
+
 `schemaVersion` is 2. The scenario file has no golden snapshots. s.smoker refuses a file without `schemaVersion`,
 with `schemaVersion` 1, or with an `expected` block in a step: that is the old format. To convert an old file,
 add `"schemaVersion": 2` as the first field, remove each `expected` block, then run and `approve` again.

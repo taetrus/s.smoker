@@ -26,6 +26,7 @@ public final class HtmlReportWriter {
                     + "table{border-collapse:collapse;width:100%}td,th{border:1px solid #ddd;padding:6px 8px;text-align:left;vertical-align:top}"
                     + ".PASS{background:#e6f4ea}.FAIL,.HANG,.ERROR{background:#fce8e6}.NO_GOLDEN{background:#fff4e5}"
                     + "pre{white-space:pre-wrap;margin:0;font-size:12px}img{max-width:480px;border:1px solid #ccc}"
+                    + "tr.group td{background:#eee;font-weight:bold}"
                     + "details summary{cursor:pointer}</style></head><body>");
             w.write("<h1>s.smoker report</h1>");
             w.write("<table><tr><th>Scenario</th><th>Status</th><th>Steps</th><th>Java</th><th>OS</th><th>Duration</th></tr>");
@@ -71,6 +72,7 @@ public final class HtmlReportWriter {
                 }
                 w.write("<table><tr><th style='width:160px'>Step</th><th style='width:90px'>Status</th><th>Details</th><th>Screenshot</th></tr>");
                 for (RunResult.StepResult s : r.steps) {
+                    if (s.group != null) w.write("<tr class='group'><td colspan='4'>" + e(s.group) + "</td></tr>");
                     w.write("<tr class='" + s.status + "'><td>" + e(s.stepId) + "<br><small>" + e(s.stepName) + "</small></td><td>" + s.status
                             + "<br><small>" + s.durationMs + " ms</small></td><td>");
                     if (!s.differences.isEmpty()) {

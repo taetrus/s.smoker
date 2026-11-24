@@ -20,6 +20,7 @@ public class RunResult {
     public static class StepResult {
         public String stepId;
         public String stepName;
+        public String group;
         public Status status = Status.PASS;
         public long durationMs;
         public List<String> differences = new ArrayList<String>();

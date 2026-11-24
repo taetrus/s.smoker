@@ -476,6 +476,7 @@ final class Player {
         RunResult.StepResult sr = new RunResult.StepResult();
         sr.stepId = step.id;
         sr.stepName = step.name;
+        sr.group = step.group;
         writeProgress(progressId); // a System.exit or a crash in the action leaves a file that names the step
         long t0 = System.currentTimeMillis();
         watchdog.reset();
