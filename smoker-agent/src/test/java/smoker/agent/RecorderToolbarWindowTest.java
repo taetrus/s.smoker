@@ -103,16 +103,16 @@ public class RecorderToolbarWindowTest {
         final Step d = onEdt(new Callable<Step>() {
             public Step call() {
                 label.setText("label d");
-                Step s = recorder.addForTest(Action.click(textLocator("d")));
-                toolbar.stepAdded(s); // the recorder calls this for a recorded step
-                return s;
+                return recorder.addForTest(Action.click(textLocator("d"))); // the recorder calls the toolbar
+
             }
         });
         flush();
         select(3);
         assertEquals("snapshot pending...", preview());
         awaitSnapshot(d);
-        flush();
+        long deadline = System.currentTimeMillis() + 5000;
+        while (preview().equals("snapshot pending...") && System.currentTimeMillis() < deadline) Thread.sleep(50);
         assertFalse(preview(), preview().equals("snapshot pending..."));
     }
 
@@ -161,6 +161,16 @@ public class RecorderToolbarWindowTest {
                 return toolbar.selectedIndex();
             }
         }));
+    }
+
+    @Test
+    public void groupChangesTheHeightOfTheRow() throws Exception {
+        select(1);
+        int plain = rowHeight(1);
+        group("G");
+        assertTrue("taller with header", rowHeight(1) > plain);
+        group("");
+        assertEquals(plain, rowHeight(1));
     }
 
     @Test
@@ -278,6 +288,14 @@ public class RecorderToolbarWindowTest {
             public Void call() {
                 toolbar.setGroupOfSelected(g);
                 return null;
+            }
+        });
+    }
+
+    private int rowHeight(final int i) throws Exception {
+        return onEdt(new Callable<Integer>() {
+            public Integer call() {
+                return toolbar.rowHeight(i);
             }
         });
     }

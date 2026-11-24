@@ -295,6 +295,11 @@ final class RecorderToolbar extends JFrame implements Recorder.Listener {
         return model.get(i).group;
     }
 
+    /** The height of row {@code i} as the list shows it, for tests. */
+    int rowHeight(int i) {
+        return list.getCellBounds(i, i).height;
+    }
+
     int modelSize() {
         return model.size();
     }
@@ -345,9 +350,21 @@ final class RecorderToolbar extends JFrame implements Recorder.Listener {
         StringBuilder sb = new StringBuilder();
         for (String l : lines) sb.append(sb.length() == 0 ? "" : "\n").append(l);
         String text = sb.toString();
-        if (!text.equals(preview.getText())) preview.setText(text);
-        preview.setCaretPosition(0);
+        if (!text.equals(preview.getText())) {
+            preview.setText(text);
+            preview.setCaretPosition(0);
+        }
         previewScroll.setBorder(BorderFactory.createTitledBorder("changes of " + s.id));
+    }
+
+    /**
+     * Tells the list that row of {@code s} changed. A group header changes the height of a cell, and the list keeps the
+     * cell heights until a model change. The selection stays. Must run on the EDT.
+     */
+    private void rowChanged(Step s) {
+        int i = model.indexOf(s);
+        if (i >= 0) model.set(i, s);
+        else list.repaint();
     }
 
     /** Moves the selected step one row and keeps it selected. Must run on the EDT. */
@@ -372,7 +389,7 @@ final class RecorderToolbar extends JFrame implements Recorder.Listener {
         Step s = list.getSelectedValue();
         if (s == null) return;
         recorder.setGroup(s, group);
-        list.repaint();
+        rowChanged(s);
     }
 
     private void groupSelected() {
@@ -512,11 +529,11 @@ final class RecorderToolbar extends JFrame implements Recorder.Listener {
     }
 
     @Override
-    public void stepUpdated(Step s) {
+    public void stepUpdated(final Step s) {
         SwingUtilities.invokeLater(new Runnable() {
             @Override
             public void run() {
-                list.repaint();
+                rowChanged(s);
                 logChangedRows();
                 refreshPreview();
             }
