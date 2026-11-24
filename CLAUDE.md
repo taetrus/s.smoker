@@ -69,7 +69,7 @@ after every change to `smoker-agent` or `smoker-core`.
   The Windows check on `p2.product` (2026-11-22, commit 8799100): R-36 (20 scenarios, 1 start), R-38 (20 stops),
   R-39 (`out` path with `;` and a space) pass; R-37 passes in the Windows CI with `DemoSimulator`. See `docs/wp-05-windows-report.md`.
   `p2.product` does not stop Equinox when its windows close: each stop ends at stage 2. Stage 1 now ends when no main
-  frame shows, so stage 2 starts at once, not after `stopTimeoutMs` (PR #16, merged 2026-11-23; not yet checked on `p2.product`).
+  frame shows, so stage 2 starts at once, not after `stopTimeoutMs` (PR #16, merged 2026-11-23; checked on `p2.product` on 2026-11-24: the stop takes 2 s with a 30 s limit, see the report).
 - WP-03 (`WAIT_FOR`, F-02, R-23a) was merged on 2026-11-17 (PR #5). R-23a passes on the demo (`wait.json`, SelfTestIT).
   Windows run and manual walkthrough of `Wait for…`: pass (`docs/wp-03-windows-report.md`). Follow-ups from the
   walkthrough: the toolbar writes what it shows to the record log (PR #6), the picker gives no border to a `JViewport` (PR #7).
@@ -99,6 +99,8 @@ after every change to `smoker-agent` or `smoker-core`.
   request and each push to `master`, except for a change to `*.md` files only. Self-hosted runner `CARLOSCARMEN` in `D:\Dev\actions-runner` on the Windows PC
   (outside the repository; not a service). Start it with `run.cmd` in the desktop session. When it is offline, the
   checks wait in the queue. Do not type on the PC while a job runs. Follow-up: move `actions/checkout@v4` to v5 (Node.js 20 warning).
+  `.github/workflows/pilot-check.yml` runs checks on `p2.product` through the same runner: push a branch `pilot-check/**`,
+  then read the summary in the log or the artifact `stop-check` (`gh run download`).
 - Pilot goldens approved again on Windows on 2026-11-16 (`docs/wp-01-handoff.md` section 5).
 - Decision 6 (2026-11-15): test reports go into `docs/` on GitHub, not Confluence.
 - Open findings: F-02 fixed in the tool, untested on a product with the simulator. F-08, F-09, F-22, F-24 are closed (WP-04).
