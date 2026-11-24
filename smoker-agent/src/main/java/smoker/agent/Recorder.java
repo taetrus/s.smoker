@@ -33,12 +33,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.function.BooleanSupplier;
 import java.util.regex.Pattern;
@@ -66,7 +68,7 @@ final class Recorder implements AWTEventListener {
     /** Change counter per step id, guarded by {@code pendingSnapshots}: {@link #changed} counts up (spec 6, Events). */
     private final Map<String, Integer> changeCount = new LinkedHashMap<String, Integer>();
     /** Ids of the steps whose golden a move removed. Guarded by {@code snapshots}. */
-    private final java.util.Set<String> goldenRemoved = new java.util.HashSet<String>();
+    private final Set<String> goldenRemoved = new HashSet<String>();
     private volatile boolean recording;
     private Listener listener;
     private int counter;
@@ -184,7 +186,7 @@ final class Recorder implements AWTEventListener {
         }
     }
 
-    /** The snapshot of the nearest earlier step that has one, or null. */
+    /** The snapshot of the nearest earlier step that has one, or null. Must run on the EDT. */
     Snapshot previousSnapshot(Step s) {
         int i = scenario.steps.indexOf(s);
         for (int k = i - 1; k >= 0; k--) {
@@ -198,6 +200,7 @@ final class Recorder implements AWTEventListener {
      * The action of {@code s} changed in place (spec 6, Events). The step gets a new name only when its name was the
      * default name before the change. Its golden goes and the step is pending again, unless a WAIT_FOR step follows
      * (the player takes no snapshot there). A quiet wait that started before this call does not take the snapshot.
+     * Call it for the last step only (Tasks 5 and 7): a step in the middle would get a snapshot of a later state.
      * Must run on the EDT.
      *
      * @param nameBefore {@code s.action.toString()} as it was before the caller changed the action
@@ -221,8 +224,10 @@ final class Recorder implements AWTEventListener {
 
     /**
      * Swaps {@code s} with its neighbour (spec 7.3). The golden of both steps is wrong now: it goes, also a pending
-     * snapshot, and both steps get the mark "golden removed". A step that is now directly before a WAIT_FOR step
-     * loses its golden too. No effect at the list border. Must run on the EDT.
+     * snapshot. The mark "golden removed" means that a step needs a golden and has none because of the move. Both
+     * swapped steps get it, and so does the step before them when it has no golden and is not pending. A checked step
+     * that is directly before a WAIT_FOR step loses its golden and gets no mark: the player takes no snapshot there.
+     * No effect at the list border. Must run on the EDT.
      *
      * @param delta -1 (up) or +1 (down)
      */
@@ -233,32 +238,44 @@ final class Recorder implements AWTEventListener {
         Step other = scenario.steps.get(j);
         scenario.steps.set(i, other);
         scenario.steps.set(j, s);
-        List<Step> updated = new ArrayList<Step>();
-        dropGolden(s);
-        dropGolden(other);
-        updated.add(s);
-        updated.add(other);
-        for (int k = 0; k + 1 < scenario.steps.size(); k++) {
-            Step before = scenario.steps.get(k);
-            if (isWaitFor(scenario.steps.get(k + 1)) && !updated.contains(before) && dropGolden(before)) {
-                updated.add(before);
+        int low = Math.min(i, j);
+        List<Step> checked = new ArrayList<Step>();
+        if (low > 0) checked.add(scenario.steps.get(low - 1));
+        checked.add(scenario.steps.get(low));
+        checked.add(scenario.steps.get(low + 1));
+        for (Step c : checked) {
+            int k = scenario.steps.indexOf(c);
+            boolean beforeWait = k + 1 < scenario.steps.size() && isWaitFor(scenario.steps.get(k + 1));
+            boolean swapped = c == s || c == other;
+            if (beforeWait) {
+                dropGolden(c, false);
+            } else if (swapped) {
+                dropGolden(c, true);
+            } else if (!hasSnapshot(c) && !isPending(c)) {
+                synchronized (snapshots) {
+                    goldenRemoved.add(c.id);
+                }
             }
         }
-        if (listener != null) for (Step u : updated) listener.stepUpdated(u);
+        if (listener != null) for (Step c : checked) listener.stepUpdated(c);
     }
 
-    /** Removes the golden and the pending state of {@code s} and marks it. True when it had a golden or was pending. */
-    private boolean dropGolden(Step s) {
-        boolean pending;
+    private boolean isPending(Step s) {
         synchronized (pendingSnapshots) {
-            pending = pendingSnapshots.remove(s);
+            return pendingSnapshots.contains(s);
         }
-        boolean had;
+    }
+
+    /** Removes the golden and the pending state of {@code s}; the mark "golden removed" is set or cleared. */
+    private void dropGolden(Step s, boolean mark) {
+        synchronized (pendingSnapshots) {
+            pendingSnapshots.remove(s);
+        }
         synchronized (snapshots) {
-            had = snapshots.remove(s.id) != null;
-            if (had || pending) goldenRemoved.add(s.id);
+            snapshots.remove(s.id);
+            if (mark) goldenRemoved.add(s.id);
+            else goldenRemoved.remove(s.id);
         }
-        return had || pending;
     }
 
     private static boolean isWaitFor(Step s) {
@@ -282,6 +299,10 @@ final class Recorder implements AWTEventListener {
         scenario.steps.remove(s);
         synchronized (snapshots) {
             snapshots.remove(s.id);
+            goldenRemoved.remove(s.id);
+        }
+        synchronized (pendingSnapshots) {
+            changeCount.remove(s.id);
         }
     }
 

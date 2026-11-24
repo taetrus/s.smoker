@@ -16,9 +16,9 @@ import javax.swing.JLabel;
 import javax.swing.SwingUtilities;
 import java.awt.GraphicsEnvironment;
 import java.nio.file.Paths;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
 
@@ -35,6 +35,7 @@ public class RecorderStepsTest {
     private static final String FILE = "target/recorder-steps-test.json";
 
     private JFrame frame;
+    private JLabel status;
     private Recorder recorder;
 
     private static AgentConfig recordConfig() {
@@ -51,7 +52,7 @@ public class RecorderStepsTest {
         SwingUtilities.invokeAndWait(new Runnable() {
             public void run() {
                 frame = new JFrame("Steps");
-                JLabel status = new JLabel("idle");
+                status = new JLabel("idle");
                 status.setName("t.status");
                 frame.getContentPane().add(status);
                 frame.pack();
@@ -77,7 +78,7 @@ public class RecorderStepsTest {
         Step b = addWithSnapshot("b");
         Step c = addWithSnapshot("c");
         move(b, -1);
-        assertEquals(java.util.Arrays.asList(b, a, c), recorder.scenario().steps);
+        assertEquals(Arrays.asList(b, a, c), recorder.scenario().steps);
         assertFalse(recorder.hasSnapshot(a));
         assertFalse(recorder.hasSnapshot(b));
         assertTrue(recorder.hasSnapshot(c));
@@ -92,7 +93,7 @@ public class RecorderStepsTest {
         Step b = addWithSnapshot("b");
         move(a, -1);
         move(b, +1);
-        assertEquals(java.util.Arrays.asList(a, b), recorder.scenario().steps);
+        assertEquals(Arrays.asList(a, b), recorder.scenario().steps);
         assertTrue(recorder.hasSnapshot(a));
         assertTrue(recorder.hasSnapshot(b));
         assertFalse(recorder.goldenRemoved(a));
@@ -126,9 +127,67 @@ public class RecorderStepsTest {
         });
         assertTrue(recorder.hasSnapshot(a));
         move(w[0], -1);
-        assertEquals(java.util.Arrays.asList(a, w[0], b), recorder.scenario().steps);
+        assertEquals(Arrays.asList(a, w[0], b), recorder.scenario().steps);
         assertFalse("a is directly before the WAIT_FOR", recorder.hasSnapshot(a));
-        assertTrue(recorder.goldenRemoved(a));
+        assertFalse("a gets no mark: WAIT_FOR follows", recorder.goldenRemoved(a));
+        assertTrue("b needs a golden now", recorder.goldenRemoved(b));
+    }
+
+    @Test
+    public void moveMarksTheStepBeforeThePairAndNotTheOneBeforeTheWaitFor() throws Exception {
+        Step a = addWithSnapshot("a");
+        final Step[] w = new Step[1];
+        final Step[] b = new Step[1];
+        final Step[] c = new Step[1];
+        onEdt(new Callable<Void>() {
+            public Void call() {
+                b[0] = recorder.addForTest(Action.click(textLocator("b")));
+                recorder.addWaitFor(Action.waitFor(named("t.status"), "text", "idle", 1000L));
+                w[0] = recorder.scenario().steps.get(2);
+                c[0] = recorder.addForTest(Action.click(textLocator("c")));
+                return null;
+            }
+        });
+        awaitSnapshot(c[0], 10000);
+        assertFalse(recorder.hasSnapshot(b[0]));
+        move(w[0], +1);
+        assertEquals(Arrays.asList(a, b[0], c[0], w[0]), recorder.scenario().steps);
+        assertTrue(recorder.goldenRemoved(b[0]));
+        assertFalse(recorder.hasSnapshot(c[0]));
+        assertFalse(recorder.goldenRemoved(c[0]));
+    }
+
+    /** A quiet wait that started before changed() must not take the snapshot: it shows the state after the change. */
+    @Test
+    public void changedDuringTheQuietWaitTakesTheSnapshotAfterTheChange() throws Exception {
+        final Step a = onEdt(new Callable<Step>() {
+            public Step call() {
+                return recorder.addForTest(Action.click(textLocator("a")));
+            }
+        });
+        Thread.sleep(100);   // inside the first quiet wait (400 ms)
+        onEdt(new Callable<Void>() {
+            public Void call() {
+                recorder.changed(a, a.action.toString());
+                // The label changes after the first quiet wait would have ended.
+                javax.swing.Timer t = new javax.swing.Timer(600, new java.awt.event.ActionListener() {
+                    public void actionPerformed(java.awt.event.ActionEvent e) {
+                        status.setText("late");
+                    }
+                });
+                t.setRepeats(false);
+                t.start();
+                return null;
+            }
+        });
+        awaitSnapshot(a, 10000);
+        for (smoker.core.model.NodeSnapshot n : recorder.snapshot(a).nodes) {
+            if ("t.status".equals(n.name)) {
+                assertEquals("late", n.text);
+                return;
+            }
+        }
+        fail("no node t.status");
     }
 
     @Test
