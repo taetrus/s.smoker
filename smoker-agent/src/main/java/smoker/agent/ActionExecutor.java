@@ -143,7 +143,7 @@ final class ActionExecutor {
         }
     }
 
-    /** Edits the cell, sets the value in the editor component and stops the edit (spec 6.4). */
+    /** Selects and edits the cell, sets the value in the editor component and stops the edit (spec 6.4). */
     private static void setCell(Component c, Action a) {
         if (!(c instanceof JTable)) throw new IllegalStateException("SET_CELL not supported on " + c.getClass().getSimpleName());
         JTable t = (JTable) c;
@@ -151,7 +151,11 @@ final class ActionExecutor {
         int col = Places.columnOf(t, a.column);
         if (a.row == null || a.row < 0 || a.row >= t.getRowCount()) throw new IllegalStateException("row not found: " + a.row);
         Places.reveal(t, a);
-        if (!t.isCellEditable(a.row, col) || !t.editCellAt(a.row, col)) {
+        if (!t.isCellEditable(a.row, col)) {
+            throw new IllegalStateException("cell not editable: row " + a.row + ", column " + a.column);
+        }
+        t.changeSelection(a.row, col, false, false);   // a real edit selects the cell (Ruling 7)
+        if (!t.editCellAt(a.row, col)) {
             throw new IllegalStateException("cell not editable: row " + a.row + ", column " + a.column);
         }
         Component ed = t.getEditorComponent();

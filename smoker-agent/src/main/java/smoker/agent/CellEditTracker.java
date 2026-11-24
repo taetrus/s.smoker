@@ -49,13 +49,6 @@ final class CellEditTracker {
     private boolean seen;
     private boolean password;
 
-    /** Forgets the watched cell and the table (pause). */
-    void reset() {
-        table = null;
-        editor = null;
-        watching = false;
-    }
-
     /**
      * Called for each event before the recorder rules. Returns true if the event belongs to a cell edit: its source
      * is a table in a cell edit, or is in the editor component (also in the popup of an editor combo box). The

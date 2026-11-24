@@ -198,6 +198,32 @@ public class RecorderSpinnerTest {
         assertEquals(statuses.toString(), 1, n);
     }
 
+    /** Review M5: a typed value in a spinner with a custom editor gives the status text once, as the arrows do. */
+    @Test
+    public void customEditorTypedValueGivesTheStatusOnce() throws Exception {
+        final javax.swing.JTextField tf = new javax.swing.JTextField("1", 4);
+        SwingUtilities.invokeAndWait(new Runnable() {
+            public void run() {
+                JSpinner typed = new JSpinner(new SpinnerNumberModel(1, 0, 10, 1));
+                typed.setName("t.typed");
+                typed.setEditor(tf);
+                frame.getContentPane().add(typed, java.awt.BorderLayout.SOUTH);
+                frame.pack();
+            }
+        });
+        for (String t : new String[] {"5", "6"}) {
+            dispatch(new FocusEvent(tf, FocusEvent.FOCUS_GAINED));
+            setText(tf, t);
+            dispatch(new FocusEvent(tf, FocusEvent.FOCUS_LOST));
+        }
+        assertEquals(describe(steps()), 0, steps().size());
+        int n = 0;
+        synchronized (statuses) {
+            for (String s : statuses) if (s.equals("spinner with a custom editor: the value is not recorded")) n++;
+        }
+        assertEquals(statuses.toString(), 1, n);
+    }
+
     // ---- helpers --------------------------------------------------------------------------------
 
     /** Press and release on the up arrow, then wait until the EDT has run the tasks of the click. */

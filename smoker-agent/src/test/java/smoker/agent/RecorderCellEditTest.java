@@ -178,7 +178,10 @@ public class RecorderCellEditTest {
         assertEquals("Ana", valueAt(1, NAME));
     }
 
-    /** Review Focus 2, F-21: the press on a button ends the edit. SET_CELL comes first and shows the state before the action. */
+    /**
+     * Review Focus 2, F-21: the press on a button ends the edit. SET_CELL comes first. Ruling 7: SET_CELL has no
+     * golden and the mark "golden removed"; the CLICK golden shows the state after the action.
+     */
     @Test
     public void editEndedByAButtonClick() throws Exception {
         clickCell(0, QTY, 1);
@@ -206,12 +209,11 @@ public class RecorderCellEditTest {
         assertSetCell(cell.action, 0, "Qty", "5");
         assertEquals(describe(steps), Action.Type.CLICK, click.action.type);
         assertEquals("t.ok", click.action.locator.name);
-        awaitSnapshot(cell, 10000);
-        Snapshot snap = recorder.snapshot(cell);
-        assertEquals("5", node(snap, "t.items").cells.get(0).get(QTY));
-        assertEquals("idle", node(snap, "t.label").text);
         awaitSnapshot(click, 10000);
-        assertEquals("ok", node(recorder.snapshot(click), "t.label").text);
+        Snapshot snap = recorder.snapshot(click);
+        assertEquals("ok", node(snap, "t.label").text);
+        assertEquals("5", node(snap, "t.items").cells.get(0).get(QTY));
+        assertNoGolden(cell);
     }
 
     /**
@@ -273,10 +275,11 @@ public class RecorderCellEditTest {
     /**
      * Fix round 1, Important 1: with terminateEditOnFocusLost, the focus change of the press stops the edit. The
      * FOCUS_LOST of the editor and the FOCUS_GAINED of the button come one after the other; the stop is in the
-     * FOCUS_GAINED handling. The SET_CELL golden shows the state before the button action.
+     * FOCUS_GAINED handling. Ruling 7: SET_CELL has no golden and the mark "golden removed"; the CLICK golden shows
+     * the state after the action.
      */
     @Test
-    public void editEndedByTheFocusChangeHasTheGoldenOfBeforeTheAction() throws Exception {
+    public void editEndedByTheFocusChangeGivesSetCellWithoutAGolden() throws Exception {
         onEdt(new Runnable() {
             public void run() {
                 table.putClientProperty("terminateEditOnFocusLost", Boolean.TRUE);
@@ -312,10 +315,73 @@ public class RecorderCellEditTest {
         Step click = steps.get(steps.size() - 1);
         assertSetCell(cell.action, 0, "Qty", "5");
         assertEquals("t.ok", click.action.locator.name);
-        awaitSnapshot(cell, 10000);
-        Snapshot snap = recorder.snapshot(cell);
+        awaitSnapshot(click, 10000);
+        Snapshot snap = recorder.snapshot(click);
         assertEquals("5", node(snap, "t.items").cells.get(0).get(QTY));
-        assertEquals("idle", node(snap, "t.label").text);
+        assertEquals("ok", node(snap, "t.label").text);
+        assertNoGolden(cell);
+    }
+
+    /**
+     * Ruling 7: one click on a check box cell of a row that is not selected toggles the value and selects the row.
+     * SET_CELL has no golden; the replay of the recorded steps gives the state of the recording.
+     */
+    @Test
+    public void checkBoxCellRoundTrip() throws Exception {
+        clickCell(1, DONE, 1);
+        assertEquals(Boolean.TRUE, valueAt(1, DONE));
+        int recordedRow = selectedRow();
+        assertEquals(1, recordedRow);
+        List<Step> steps = steps();
+        assertEquals(describe(steps), 2, steps.size());
+        Step cell = steps.get(0);
+        Step select = steps.get(1);
+        assertSetCell(cell.action, 1, "Done", "true");
+        assertEquals(describe(steps), Action.Type.SELECT, select.action.type);
+        assertEquals("1", select.action.value);
+        awaitSnapshot(select, 10000);
+        assertNoGolden(cell);
+        replay(steps);
+        assertEquals(recordedRow, selectedRow());
+        assertEquals(Boolean.TRUE, valueAt(1, DONE));
+    }
+
+    /**
+     * Ruling 7: with the focus on the table, Enter ends the edit and JTable moves the selection down
+     * (selectNextRowCell). The recorder adds KEY ENTER on the table after SET_CELL, so the replay moves it too.
+     */
+    @Test
+    public void enterEndsTheEditAndMovesDown() throws Exception {
+        clickCell(1, NAME, 1);
+        onEdt(new Runnable() {
+            public void run() {
+                table.editCellAt(1, NAME);   // the focus stays on the table, as for an edit that typing starts
+            }
+        });
+        dispatch(key(table, KeyEvent.VK_A, 'A'));
+        onEdt(new Runnable() {
+            public void run() {
+                ((JTextComponent) table.getEditorComponent()).setText("Ana");
+            }
+        });
+        dispatch(key(table, KeyEvent.VK_ENTER, '\n'));
+        flush();
+        assertFalse("ENTER stopped the edit", isEditing());
+        assertEquals("Ana", valueAt(1, NAME));
+        assertEquals("JTable moved the selection down", 2, selectedRow());
+        List<Step> steps = steps();
+        assertTrue(describe(steps), steps.size() >= 2);
+        Step cell = steps.get(steps.size() - 2);
+        Step enter = steps.get(steps.size() - 1);
+        assertSetCell(cell.action, 1, "Name", "Ana");
+        assertEquals(describe(steps), Action.Type.KEY, enter.action.type);
+        assertEquals("ENTER", enter.action.value);
+        assertEquals("t.items", enter.action.locator.name);
+        awaitSnapshot(enter, 10000);
+        assertNoGolden(cell);
+        replay(steps);
+        assertEquals("Ana", valueAt(1, NAME));
+        assertEquals(2, selectedRow());
     }
 
     /** Fix round 1, Important 2: the editable rule of the JTable (as the replay uses it), not only of the model. */
@@ -442,6 +508,20 @@ public class RecorderCellEditTest {
         int selects = 0;
         for (Step s : steps) if (s.action.type == Action.Type.SELECT && "2".equals(s.action.value)) selects++;
         assertEquals(describe(steps), 1, selects);
+    }
+
+    /** Review I2: an edit that stays open across a pause is recorded when it ends after the resume. */
+    @Test
+    public void editOpenAcrossAPauseIsRecorded() throws Exception {
+        clickCell(1, NAME, 1);
+        startEdit(1, NAME);
+        type("Ana");
+        recorder.pause();
+        flush();
+        recorder.start();
+        enter();
+        List<Step> steps = steps();
+        assertSetCell(last(steps).action, 1, "Name", "Ana");
     }
 
     /** Fix round 1: the application changes the pressed cell, with no edit: no SET_CELL. */
@@ -582,6 +662,7 @@ public class RecorderCellEditTest {
         for (Step s : steps()) {
             if (s.action.type == Action.Type.CLICK) fail("no CLICK: " + describe(steps()));
         }
+        startEdit(1, NAME);   // the editor field gets the focus, as the press reposted by Swing gives it
         type("Zed");
         enter();
         List<Step> steps = steps();
@@ -627,14 +708,11 @@ public class RecorderCellEditTest {
             assertFalse(describe(steps), String.valueOf(s.action.value).contains("secret"));
             assertFalse(describe(steps), String.valueOf(s.name).contains("secret"));
         }
-        boolean warned = false;
         synchronized (statuses) {
-            for (String s : statuses) {
-                if (s.startsWith("password field:")) warned = true;
-                assertFalse(s, s.contains("secret"));
-            }
+            for (String s : statuses) assertFalse(s, s.contains("secret"));
+            assertTrue(statuses.toString(), statuses.contains("password field: a table cell edit is not recorded."
+                    + " Add a SET_CELL step by hand, or set the value outside the scenario."));
         }
-        assertTrue(statuses.toString(), warned);
         String log;
         synchronized (buf) { log = buf.toString("UTF-8"); }
         assertFalse(log, log.contains("secret"));
@@ -679,6 +757,43 @@ public class RecorderCellEditTest {
     }
 
     // ---- helpers --------------------------------------------------------------------------------
+
+    /** Ruling 7: a recorded SET_CELL has no golden and the mark "golden removed". */
+    private void assertNoGolden(Step cell) {
+        assertFalse("SET_CELL gets no golden", recorder.hasSnapshot(cell));
+        assertTrue("SET_CELL has the mark golden removed", recorder.goldenRemoved(cell));
+    }
+
+    /**
+     * Pauses the recorder, gives the table the values and the selection of before the recording, and replays the
+     * actions of {@code steps} through ActionExecutor.
+     */
+    private void replay(final List<Step> steps) throws Exception {
+        recorder.pause();
+        onEdt(new Callable<Void>() {
+            public Void call() throws Exception {
+                if (table.isEditing()) table.getCellEditor().cancelCellEditing();
+                Object[][] start = {{"a", 1, false, "a", "f"}, {"b", 2, false, "a", "f"}, {"c", 3, false, "a", "f"}};
+                for (int r = 0; r < start.length; r++) {
+                    for (int c = 0; c < start[r].length; c++) model.setValueAt(start[r][c], r, c);
+                }
+                table.clearSelection();
+                table.getSelectionModel().setAnchorSelectionIndex(-1);
+                table.getSelectionModel().setLeadSelectionIndex(-1);
+                for (Step s : steps) ActionExecutor.execute(s.action);
+                return null;
+            }
+        });
+        flush();
+    }
+
+    private int selectedRow() throws Exception {
+        return onEdt(new Callable<Integer>() {
+            public Integer call() {
+                return table.getSelectedRow();
+            }
+        });
+    }
 
     private static void assertSetCell(Action a, int row, String column, String value) {
         assertEquals(String.valueOf(a), Action.Type.SET_CELL, a.type);

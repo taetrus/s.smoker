@@ -146,6 +146,35 @@ public class ActionExecutorCellTest {
         assertNotEditing();
     }
 
+    /** Ruling 7: a real edit selects the cell, so the replay selects it too. */
+    @Test
+    public void setCellSelectsTheCell() throws Exception {
+        run(cell(1, "Name", "Ana"));
+        assertEquals(Integer.valueOf(1), onEdt(new Callable<Integer>() {
+            public Integer call() { return table.getSelectedRow(); }
+        }));
+        assertEquals(Integer.valueOf(0), onEdt(new Callable<Integer>() {
+            public Integer call() { return table.getSelectedColumn(); }
+        }));
+    }
+
+    /** Plan Review Focus 1: after a column move, the header text finds the moved column. */
+    @Test
+    public void movedColumns() throws Exception {
+        onEdt(new Callable<Object>() {
+            public Object call() {
+                table.moveColumn(0, 1);   // view: Qty, Name, Done, Kind, Fixed
+                return null;
+            }
+        });
+        run(cell(1, "Name", "Ana"));
+        assertEquals("Ana", valueAt(1, 0));
+        assertEquals(Integer.valueOf(2), valueAt(1, 1));
+        run(cell(0, "Qty", "7"));
+        assertEquals(Integer.valueOf(7), valueAt(0, 1));
+        assertEquals("a", valueAt(0, 0));
+    }
+
     @Test
     public void integerCellGoesThroughTheEditor() throws Exception {
         run(cell(0, "Qty", "5"));
@@ -188,6 +217,12 @@ public class ActionExecutorCellTest {
     @Test
     public void unknownColumn() throws Exception {
         expectFailure(cell(0, "Nope", "x"), "column not found: Nope");
+    }
+
+    /** Review M1: a SET_CELL without a column gives a clear failure. */
+    @Test
+    public void nullColumn() throws Exception {
+        expectFailure(cell(0, null, "x"), "column not found: null");
     }
 
     @Test

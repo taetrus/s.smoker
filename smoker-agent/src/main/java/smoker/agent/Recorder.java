@@ -114,28 +114,32 @@ final class Recorder implements AWTEventListener {
         return scenario;
     }
 
+    /**
+     * Starts or resumes the recording. On the EDT, before the first event: the tracker drops an edit that ended during
+     * the pause (the recorder saw no event of it) and keeps an open edit watched.
+     */
     void start() {
-        // AWT calls a listener once per registration: after pause and start, each event came twice.
-        Toolkit.getDefaultToolkit().removeAWTEventListener(this);
-        Toolkit.getDefaultToolkit().addAWTEventListener(this,
-                AWTEvent.MOUSE_EVENT_MASK | AWTEvent.KEY_EVENT_MASK | AWTEvent.FOCUS_EVENT_MASK);
-        recording = true;
+        try {
+            Quiescence.onEdt(new Callable<Void>() {
+                @Override
+                public Void call() {
+                    cells.check();
+                    // AWT calls a listener once per registration: after pause and start, each event came twice.
+                    Toolkit.getDefaultToolkit().removeAWTEventListener(Recorder.this);
+                    Toolkit.getDefaultToolkit().addAWTEventListener(Recorder.this,
+                            AWTEvent.MOUSE_EVENT_MASK | AWTEvent.KEY_EVENT_MASK | AWTEvent.FOCUS_EVENT_MASK);
+                    recording = true;
+                    return null;
+                }
+            });
+        } catch (Exception e) {
+            throw new IllegalStateException("cannot start the recorder", e);
+        }
         say("recording");
     }
 
     void pause() {
         recording = false;
-        // The recorder sees no event while paused: an edit that ends now must give no SET_CELL after the resume.
-        if (SwingUtilities.isEventDispatchThread()) {
-            cells.reset();
-        } else {
-            SwingUtilities.invokeLater(new Runnable() {
-                @Override
-                public void run() {
-                    cells.reset();
-                }
-            });
-        }
         say("paused");
     }
 
@@ -341,9 +345,7 @@ final class Recorder implements AWTEventListener {
         // An event of a cell edit records no other step; the edit gives one SET_CELL at its end (spec 6.4).
         final boolean cellEdit = cells.event(event, src);
         final int stepsBefore = scenario.steps.size();
-        // A key or a mouse event in the edit is the input of SET_CELL. Another event (for example the focus change of
-        // a press on a button) can end the edit before the action of the next input: the snapshot comes at once.
-        final boolean editInput = cellEdit && (event instanceof KeyEvent || event instanceof MouseEvent);
+        final EndKey endKey = cellEdit ? EndKey.of(event, src) : null;
         if (id == MouseEvent.MOUSE_PRESSED && editing != null && !SwingUtilities.isDescendingFrom(src, editing)) {
             // A target that takes no focus (menu item, toolbar button) gives the field no FOCUS_LOST.
             // Flush the typed text now, so that SET_TEXT comes before the click and has its own snapshot (F-21).
@@ -358,7 +360,7 @@ final class Recorder implements AWTEventListener {
             SwingUtilities.invokeLater(new Runnable() {
                 @Override
                 public void run() {
-                    endOfCellEdit(!cellEdit, editInput, stepsBefore);
+                    endOfCellEdit(!cellEdit, stepsBefore, endKey);
                 }
             });
         }
@@ -392,43 +394,66 @@ final class Recorder implements AWTEventListener {
      * Adds SET_CELL when a cell edit ended with a new value (spec 6.4). A password field as editor gives the
      * warning and no step (F-19).
      *
+     * <p>SET_CELL never gets a golden at record time (Ruling 7). The input that ends the edit acts before this task
+     * runs: a check box toggles, Enter moves the selection, a button acts. So SET_CELL gets the mark "golden removed"
+     * (run and approve), and the replay gives its golden.
      * <p>The input of a step can end the edit in its own action, for example a button whose action listener stops the
-     * edit at the release. Its step is already in the list: SET_CELL goes directly before it (spec 6.4). The state
-     * before the action is gone, so SET_CELL gets no golden and the mark "golden removed" (run and approve).
+     * edit at the release. Its step is already in the list: SET_CELL goes directly before it (spec 6.4).
+     * <p>Enter or Tab of the edit that moved the selection of the table comes after SET_CELL as a KEY step with the
+     * normal snapshot, so that the replay moves the selection too.
      *
      * @param byOtherInput the event that ended the edit is not part of the edit, for example the press on a button
-     * @param editInput    the event is a key or mouse event of the edit; else the state now is the state of SET_CELL,
-     *                     before the action of the next input (F-21), and the snapshot comes at once
      * @param stepsBefore  the number of steps before that event
+     * @param endKey       the Enter or Tab key of the edit, or null
      */
-    private void endOfCellEdit(boolean byOtherInput, boolean editInput, int stepsBefore) {
-        if (!recording) return;   // pause() clears the tracker
+    private void endOfCellEdit(boolean byOtherInput, int stepsBefore, EndKey endKey) {
+        if (!recording) return;   // start() drops an edit that ended during the pause
         CellEditTracker.Edit e = cells.check();
         if (e == null) return;
         if (e.password) {
             say("password field: a table cell edit is not recorded. Add a SET_CELL step by hand, or set the value outside the scenario.");
             return;
         }
-        Action cell = Action.setCell(Locators.resolve(e.table), e.row, e.column, e.value);
-        if (byOtherInput && stepsBefore < scenario.steps.size()) {
-            Step s = newStep(cell);
-            scenario.steps.add(stepsBefore, s);
-            synchronized (snapshots) {
-                goldenRemoved.add(s.id);
-            }
-            if (listener != null) listener.stepAdded(s);
-            return;
+        Step s = newStep(Action.setCell(Locators.resolve(e.table), e.row, e.column, e.value));
+        int at = byOtherInput && stepsBefore < scenario.steps.size() ? stepsBefore : scenario.steps.size();
+        scenario.steps.add(at, s);
+        synchronized (snapshots) {
+            goldenRemoved.add(s.id);
         }
-        add(cell);
-        if (editInput) return;
-        Step s = scenario.steps.get(scenario.steps.size() - 1);
-        synchronized (pendingSnapshots) {
-            pendingSnapshots.remove(s);
+        if (listener != null) listener.stepAdded(s);
+        if (endKey != null && endKey.table == e.table && endKey.moved()) add(endKey.key);
+    }
+
+    /** An Enter or Tab key of a cell edit, and the lead cell of its table before the table processed the key. */
+    private static final class EndKey {
+        final Action key;
+        final JTable table;
+        final int row;
+        final int column;
+
+        private EndKey(Action key, JTable table) {
+            this.key = key;
+            this.table = table;
+            this.row = table.getSelectionModel().getLeadSelectionIndex();
+            this.column = table.getColumnModel().getSelectionModel().getLeadSelectionIndex();
         }
-        try {
-            store(Collections.singletonList(s), taker.take());
-        } catch (RuntimeException ex) {
-            say("snapshot failed: " + ex);
+
+        /** The KEY step for a KEY_PRESSED of Enter or Tab in a table, else null. Must run on the EDT. */
+        static EndKey of(AWTEvent event, Component src) {
+            if (event.getID() != KeyEvent.KEY_PRESSED) return null;
+            KeyEvent k = (KeyEvent) event;
+            if (k.getKeyCode() != KeyEvent.VK_ENTER && k.getKeyCode() != KeyEvent.VK_TAB) return null;
+            JTable t = src instanceof JTable ? (JTable) src : (JTable) SwingUtilities.getAncestorOfClass(JTable.class, src);
+            if (t == null) return null;
+            Action a = Action.key(vkName(k.getKeyCode()), k.getModifiersEx());
+            a.locator = Locators.nameOf(t) != null ? Locators.resolve(t) : null;   // the rule of onKey
+            return new EndKey(a, t);
+        }
+
+        /** True if the key moved the lead cell, as JTable does for Enter and Tab with the focus on the table. */
+        boolean moved() {
+            return table.getSelectionModel().getLeadSelectionIndex() != row
+                    || table.getColumnModel().getSelectionModel().getLeadSelectionIndex() != column;
         }
     }
 
@@ -442,6 +467,8 @@ final class Recorder implements AWTEventListener {
                 add(Action.setText(Locators.resolve(editing), now));
             } else if (spinner.getEditor() instanceof JSpinner.DefaultEditor) {
                 spinnerValue(spinner, now, false);    // the locator is the spinner, not the field (spec 6.5)
+            } else {
+                customSpinner(spinner);
             }
             textAtFocusGain = now;
         }
@@ -476,7 +503,7 @@ final class Recorder implements AWTEventListener {
      */
     private void onSpinnerArrow(final JSpinner spinner) {
         if (!(spinner.getEditor() instanceof JSpinner.DefaultEditor)) {
-            if (spinnersSaid.add(spinner)) say("spinner with a custom editor: the value is not recorded");
+            customSpinner(spinner);
             return;
         }
         final JTextComponent field = ((JSpinner.DefaultEditor) spinner.getEditor()).getTextField();
@@ -491,6 +518,11 @@ final class Recorder implements AWTEventListener {
                 spinnerValue(spinner, now, true);
             }
         });
+    }
+
+    /** A spinner with a custom editor: the replay cannot set its value (spec 6.5). The status text comes once. */
+    private void customSpinner(JSpinner spinner) {
+        if (spinnersSaid.add(spinner)) say("spinner with a custom editor: the value is not recorded");
     }
 
     private void onKey(KeyEvent e, Component src) {
@@ -559,7 +591,8 @@ final class Recorder implements AWTEventListener {
         }
         if (e.getButton() != MouseEvent.BUTTON1) return;
         if (src instanceof AbstractButton && spinnerOf(src) != null) {
-            // The spinner changes its value on the press and, with auto-repeat, until the release (spec 6.5).
+            // The spinner changes its value in the button action at the release; auto-repeat changes it while the
+            // button stays pressed (spec 6.5). The recorder reads the value after the press and after the release.
             if (e.getID() == MouseEvent.MOUSE_PRESSED || e.getID() == MouseEvent.MOUSE_RELEASED) onSpinnerArrow(spinnerOf(src));
             return;
         }

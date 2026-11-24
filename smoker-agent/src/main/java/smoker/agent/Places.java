@@ -21,6 +21,7 @@ final class Places {
 
     /** The view column for {@code column}: the first header text that equals it, else the index (spec 5.3). */
     static int columnOf(JTable t, String column) {
+        if (column == null) throw new IllegalStateException("column not found: null");
         for (int i = 0; i < t.getColumnCount(); i++) {
             if (t.getColumnName(i).equals(column)) return i;
         }
