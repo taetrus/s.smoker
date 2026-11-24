@@ -126,8 +126,14 @@ public class RecorderSpinnerTest {
         assertEquals(describe(steps), 1, steps.size());
         assertEquals("10", steps.get(0).action.value);
         awaitSnapshot(steps.get(0), 10000);
-        // The snapshot of a spinner has no field text (spec 6.5: the snapshot does not change). The golden exists after
-        // the step changed in place, and the field shows the value of the step.
+        boolean found = false;
+        for (smoker.core.model.NodeSnapshot n : recorder.snapshot(steps.get(0)).nodes) {
+            if ("t.count".equals(n.name)) {
+                assertEquals("10", n.text);
+                found = true;
+            }
+        }
+        assertTrue("no node t.count", found);
         assertEquals("10", field(count).getText());
     }
 

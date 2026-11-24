@@ -13,6 +13,8 @@ import javax.swing.JLabel;
 import javax.swing.JLayeredPane;
 import javax.swing.JList;
 import javax.swing.JPasswordField;
+import javax.swing.JSpinner;
+import javax.swing.SpinnerNumberModel;
 import javax.swing.JTable;
 import javax.swing.JToolTip;
 import javax.swing.JTree;
@@ -80,6 +82,28 @@ public class SnapshotTakerContentTest {
         assertEquals(20, n.cells.size());
         assertEquals("r19", n.cells.get(19).get(0));
         assertEquals(Integer.valueOf(25), n.rowCount);
+    }
+
+    @Test
+    public void spinnerGivesTheTextOfItsEditorField() throws Exception {
+        NodeSnapshot n = take(20, "s", new Callable<java.awt.Component>() {
+            public java.awt.Component call() {
+                return new JSpinner(new SpinnerNumberModel(3, 0, 10, 1));
+            }
+        });
+        assertEquals("3", n.text);
+    }
+
+    @Test
+    public void spinnerWithACustomEditorGivesNoText() throws Exception {
+        NodeSnapshot custom = take(20, "s", new Callable<java.awt.Component>() {
+            public java.awt.Component call() {
+                JSpinner sp = new JSpinner(new SpinnerNumberModel(3, 0, 10, 1));
+                sp.setEditor(new JLabel("x"));
+                return sp;
+            }
+        });
+        assertNull(custom.text);
     }
 
     @Test

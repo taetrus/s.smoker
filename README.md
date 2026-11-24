@@ -424,6 +424,8 @@ A list or a tree gives `items`. A tree row has two spaces of indent per level. T
 A tree also gives `selectedIndex`: the smallest selected row, only when a row is selected. A tree without a selected row
 does not change. An existing golden with a tree that has a selected row fails one time with `CHANGED ... .selectedIndex: expected=null`.
 Run `approve` to repair it.
+A spinner node gives `text`: the text of its editor field. A spinner with a custom editor gives no text. An existing golden
+with a spinner fails one time with `CHANGED ... .text: expected=null`. Run `approve` to repair it.
 
 Password fields (`JPasswordField`): the snapshot gives the text `***` when the field has a value, and `""` when it is empty.
 The recorder does not record typing in a password field. If a scenario must fill one, add the `SET_TEXT` step by hand.
