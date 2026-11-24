@@ -63,6 +63,10 @@ final class Recorder implements AWTEventListener {
     private final LinkedHashMap<String, Snapshot> snapshots = new LinkedHashMap<String, Snapshot>();
     /** Steps without a snapshot yet. Only the EDT removes a step from it (F-21), together with its snapshot. */
     private final List<Step> pendingSnapshots = new LinkedList<Step>();
+    /** Change counter per step id, guarded by {@code pendingSnapshots}: {@link #changed} counts up (spec 6, Events). */
+    private final Map<String, Integer> changeCount = new LinkedHashMap<String, Integer>();
+    /** Ids of the steps whose golden a move removed. Guarded by {@code snapshots}. */
+    private final java.util.Set<String> goldenRemoved = new java.util.HashSet<String>();
     private volatile boolean recording;
     private Listener listener;
     private int counter;
@@ -171,6 +175,107 @@ final class Recorder implements AWTEventListener {
         f.scenarioName = scenario.name;
         f.lint.addAll(taker.lintEntries());
         return f;
+    }
+
+    /** True after a move removed the golden of {@code s}, until {@link #changed} clears the mark (spec 7.3). */
+    boolean goldenRemoved(Step s) {
+        synchronized (snapshots) {
+            return goldenRemoved.contains(s.id);
+        }
+    }
+
+    /** The snapshot of the nearest earlier step that has one, or null. */
+    Snapshot previousSnapshot(Step s) {
+        int i = scenario.steps.indexOf(s);
+        for (int k = i - 1; k >= 0; k--) {
+            Snapshot snap = snapshot(scenario.steps.get(k));
+            if (snap != null) return snap;
+        }
+        return null;
+    }
+
+    /**
+     * The action of {@code s} changed in place (spec 6, Events). The step gets a new name only when its name was the
+     * default name before the change. Its golden goes and the step is pending again, unless a WAIT_FOR step follows
+     * (the player takes no snapshot there). A quiet wait that started before this call does not take the snapshot.
+     * Must run on the EDT.
+     *
+     * @param nameBefore {@code s.action.toString()} as it was before the caller changed the action
+     */
+    void changed(Step s, String nameBefore) {
+        if (s.name == null || s.name.equals(nameBefore)) s.name = s.action.toString();
+        synchronized (snapshots) {
+            snapshots.remove(s.id);
+            goldenRemoved.remove(s.id);
+        }
+        int i = scenario.steps.indexOf(s);
+        boolean beforeWait = i >= 0 && i + 1 < scenario.steps.size() && isWaitFor(scenario.steps.get(i + 1));
+        synchronized (pendingSnapshots) {
+            Integer n = changeCount.get(s.id);
+            changeCount.put(s.id, n == null ? 1 : n + 1);
+            if (!beforeWait && !pendingSnapshots.contains(s)) pendingSnapshots.add(s);
+            pendingSnapshots.notifyAll();
+        }
+        if (listener != null) listener.stepUpdated(s);
+    }
+
+    /**
+     * Swaps {@code s} with its neighbour (spec 7.3). The golden of both steps is wrong now: it goes, also a pending
+     * snapshot, and both steps get the mark "golden removed". A step that is now directly before a WAIT_FOR step
+     * loses its golden too. No effect at the list border. Must run on the EDT.
+     *
+     * @param delta -1 (up) or +1 (down)
+     */
+    void move(Step s, int delta) {
+        int i = scenario.steps.indexOf(s);
+        int j = i + delta;
+        if (i < 0 || j < 0 || j >= scenario.steps.size()) return;
+        Step other = scenario.steps.get(j);
+        scenario.steps.set(i, other);
+        scenario.steps.set(j, s);
+        List<Step> updated = new ArrayList<Step>();
+        dropGolden(s);
+        dropGolden(other);
+        updated.add(s);
+        updated.add(other);
+        for (int k = 0; k + 1 < scenario.steps.size(); k++) {
+            Step before = scenario.steps.get(k);
+            if (isWaitFor(scenario.steps.get(k + 1)) && !updated.contains(before) && dropGolden(before)) {
+                updated.add(before);
+            }
+        }
+        if (listener != null) for (Step u : updated) listener.stepUpdated(u);
+    }
+
+    /** Removes the golden and the pending state of {@code s} and marks it. True when it had a golden or was pending. */
+    private boolean dropGolden(Step s) {
+        boolean pending;
+        synchronized (pendingSnapshots) {
+            pending = pendingSnapshots.remove(s);
+        }
+        boolean had;
+        synchronized (snapshots) {
+            had = snapshots.remove(s.id) != null;
+            if (had || pending) goldenRemoved.add(s.id);
+        }
+        return had || pending;
+    }
+
+    private static boolean isWaitFor(Step s) {
+        return s.action != null && s.action.type == Action.Type.WAIT_FOR;
+    }
+
+    /** Sets the group label of {@code s}; blank text or null removes it. Must run on the EDT. */
+    void setGroup(Step s, String group) {
+        String g = group == null ? "" : group.trim();
+        s.group = g.isEmpty() ? null : g;
+        if (listener != null) listener.stepUpdated(s);
+    }
+
+    /** Test hook: adds a step as the recorder does for a recorded action. Must run on the EDT. */
+    Step addForTest(Action a) {
+        add(a);
+        return scenario.steps.get(scenario.steps.size() - 1);
     }
 
     void remove(Step s) {
@@ -464,11 +569,13 @@ final class Recorder implements AWTEventListener {
     private void snapshotLoop() {
         while (true) {
             final Step s;
+            final int changesBefore;
             synchronized (pendingSnapshots) {
                 while (pendingSnapshots.isEmpty()) {
                     try { pendingSnapshots.wait(); } catch (InterruptedException e) { return; }
                 }
                 s = pendingSnapshots.get(0);
+                changesBefore = changeCountOf(s);
             }
             try {
                 if (s.action != null && s.action.type == Action.Type.WAIT_FOR) awaitCondition(s);
@@ -477,7 +584,10 @@ final class Recorder implements AWTEventListener {
                     @Override
                     public Void call() {
                         synchronized (pendingSnapshots) {
-                            if (!pendingSnapshots.remove(s)) return null;
+                            if (!pendingSnapshots.contains(s)) return null;
+                            // changed() came during the quiet wait: wait again (the step stays pending)
+                            if (changeCountOf(s) != changesBefore) return null;
+                            pendingSnapshots.remove(s);
                         }
                         store(Collections.singletonList(s), taker.take());
                         return null;
@@ -487,6 +597,12 @@ final class Recorder implements AWTEventListener {
                 say("snapshot failed: " + e);
             }
         }
+    }
+
+    /** Must hold the lock of {@code pendingSnapshots}. */
+    private int changeCountOf(Step s) {
+        Integer n = changeCount.get(s.id);
+        return n == null ? 0 : n;
     }
 
     private static final BooleanSupplier NO_HANG = new BooleanSupplier() {
