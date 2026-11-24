@@ -382,6 +382,9 @@ starts with the root label, also when the root is hidden. Replay starts at the m
 the first label. For each next label, replay takes the first child with that label. A node that is not found gives
 ERROR `tree node not found: Root/src/X`.
 
+Tree limit: a tree that loads its children in a background thread is not supported. Replay looks for the node at once
+and gives ERROR `tree node not found` when the children are not in the model yet.
+
 Table column: the recorder writes the header text when it is not empty and no other column has the same text.
 Otherwise it writes the view index as a decimal string. Replay takes the first view column whose header text equals
 `column`. If there is none and `column` is an integer, replay takes the view column with that index. Otherwise the
@@ -418,6 +421,9 @@ The first `pattern` (Java regex, matches the whole title) gives the `key`. The k
 
 Tables, lists and trees: the snapshot holds the text of the first `maxRows` rows (default 20). A table gives `cells`.
 A list or a tree gives `items`. A tree row has two spaces of indent per level. The diff reports `.items[i]` and `.cells[row][col]`.
+A tree also gives `selectedIndex`: the smallest selected row, only when a row is selected. A tree without a selected row
+does not change. An existing golden with a tree that has a selected row fails one time with `CHANGED ... .selectedIndex: expected=null`.
+Run `approve` to repair it.
 
 Password fields (`JPasswordField`): the snapshot gives the text `***` when the field has a value, and `""` when it is empty.
 The recorder does not record typing in a password field. If a scenario must fill one, add the `SET_TEXT` step by hand.

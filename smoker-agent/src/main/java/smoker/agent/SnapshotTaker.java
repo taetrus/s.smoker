@@ -391,6 +391,8 @@ final class SnapshotTaker {
             n.text = tp.getSelectedIndex() >= 0 ? tp.getTitleAt(tp.getSelectedIndex()) : null;
         } else if (c instanceof JTree) {
             n.rowCount = ((JTree) c).getRowCount();
+            int sel = ((JTree) c).getMinSelectionRow();
+            n.selectedIndex = sel >= 0 ? Integer.valueOf(sel) : null;
             n.items = treeRows((JTree) c, maxRows);
         }
         return n;

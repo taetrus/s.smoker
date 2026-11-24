@@ -9,15 +9,19 @@ import javax.swing.JList;
 import javax.swing.JMenu;
 import javax.swing.JTabbedPane;
 import javax.swing.JTable;
+import javax.swing.JTree;
+import javax.swing.tree.TreePath;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.text.JTextComponent;
 import java.awt.Component;
 import java.awt.KeyboardFocusManager;
+import java.awt.Rectangle;
 import java.awt.Window;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
 import java.awt.event.WindowEvent;
+import java.util.Locale;
 
 /**
  * Semantic replay (R-31): invokes the component API on the EDT instead of moving the OS mouse,
@@ -32,9 +36,9 @@ final class ActionExecutor {
     /** Must be called on the EDT. */
     static void execute(Action a) throws Exception {
         switch (a.type) {
-            case CLICK: click(require(a.locator)); break;
+            case CLICK: click(require(a.locator), a); break;
             case SET_TEXT: setText(require(a.locator), a.value == null ? "" : a.value); break;
-            case SELECT: select(require(a.locator), a.value); break;
+            case SELECT: select(require(a.locator), a); break;
             case KEY: key(a); break;
             case WAIT: Thread.sleep(Long.parseLong(a.value)); break;
             case CLOSE_WINDOW: closeWindow(a.locator); break;
@@ -49,7 +53,16 @@ final class ActionExecutor {
         return c;
     }
 
-    private static void click(Component c) {
+    /** True on Windows: a popup menu opens at the release. Elsewhere it opens at the press. */
+    static boolean popupOnRelease() {
+        return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith("windows");
+    }
+
+    private static void click(Component c, Action a) {
+        if (a.clickCount() != 1 || a.mouseButton() != 1 || a.hasPlace()) {
+            placeClick(c, a);
+            return;
+        }
         if (c instanceof JMenu) {
             ((JMenu) c).doClick();
             return;
@@ -67,6 +80,24 @@ final class ActionExecutor {
         c.dispatchEvent(new MouseEvent(c, MouseEvent.MOUSE_PRESSED, t, MouseEvent.BUTTON1_DOWN_MASK, x, y, 1, false, MouseEvent.BUTTON1));
         c.dispatchEvent(new MouseEvent(c, MouseEvent.MOUSE_RELEASED, t, 0, x, y, 1, false, MouseEvent.BUTTON1));
         c.dispatchEvent(new MouseEvent(c, MouseEvent.MOUSE_CLICKED, t, 0, x, y, 1, false, MouseEvent.BUTTON1));
+    }
+
+    /** Press, release and click at the centre of the place, once for each click of the count (spec 6.2, 6.3). */
+    private static void placeClick(Component c, Action a) {
+        Rectangle r = Places.reveal(c, a);
+        int x = r.x + r.width / 2, y = r.y + r.height / 2;
+        int button = a.mouseButton() == 3 ? MouseEvent.BUTTON3 : MouseEvent.BUTTON1;
+        int down = button == MouseEvent.BUTTON3 ? MouseEvent.BUTTON3_DOWN_MASK : MouseEvent.BUTTON1_DOWN_MASK;
+        boolean popup = button == MouseEvent.BUTTON3;
+        c.requestFocusInWindow();
+        int n = a.clickCount();
+        for (int i = 1; i <= n; i++) {
+            boolean last = i == n;
+            long t = System.currentTimeMillis();
+            c.dispatchEvent(new MouseEvent(c, MouseEvent.MOUSE_PRESSED, t, down, x, y, i, popup && last && !popupOnRelease(), button));
+            c.dispatchEvent(new MouseEvent(c, MouseEvent.MOUSE_RELEASED, t, 0, x, y, i, popup && last && popupOnRelease(), button));
+            c.dispatchEvent(new MouseEvent(c, MouseEvent.MOUSE_CLICKED, t, 0, x, y, i, false, button));
+        }
     }
 
     /** After a JMenuItem.doClick() the menu hierarchy is normally closed by Swing; make sure. */
@@ -87,7 +118,16 @@ final class ActionExecutor {
         throw new IllegalStateException("SET_TEXT not supported on " + c.getClass().getSimpleName());
     }
 
-    private static void select(Component c, String value) {
+    private static void select(Component c, Action a) {
+        String value = a.value;
+        if (c instanceof JTree) {
+            if (a.path == null) throw new IllegalStateException("JTree SELECT needs a path");
+            JTree t = (JTree) c;
+            TreePath p = Places.findPath(t, a.path);
+            t.setSelectionPath(p);
+            t.scrollPathToVisible(p);
+            return;
+        }
         Integer idx = asInt(value);
         if (c instanceof JComboBox) {
             JComboBox<?> cb = (JComboBox<?>) c;

@@ -121,6 +121,32 @@ public class SnapshotTakerContentTest {
     }
 
     @Test
+    public void treeGivesTheSelectedRow() throws Exception {
+        NodeSnapshot n = take(20, "tr", new Callable<java.awt.Component>() {
+            public java.awt.Component call() {
+                DefaultMutableTreeNode root = new DefaultMutableTreeNode("r");
+                root.add(new DefaultMutableTreeNode("a"));
+                root.add(new DefaultMutableTreeNode("b"));
+                JTree t = new JTree(new DefaultTreeModel(root));
+                t.expandRow(0);
+                t.setSelectionRow(2);
+                return t;
+            }
+        });
+        assertEquals(Integer.valueOf(2), n.selectedIndex);
+    }
+
+    @Test
+    public void treeWithoutASelectionGivesNoSelectedIndex() throws Exception {
+        NodeSnapshot n = take(20, "tr", new Callable<java.awt.Component>() {
+            public java.awt.Component call() {
+                return new JTree(new DefaultTreeModel(new DefaultMutableTreeNode("r")));
+            }
+        });
+        assertNull(n.selectedIndex);
+    }
+
+    @Test
     public void treeWithHiddenRootStartsAtDepthZero() throws Exception {
         NodeSnapshot n = take(20, "tr", new Callable<java.awt.Component>() {
             public java.awt.Component call() {
