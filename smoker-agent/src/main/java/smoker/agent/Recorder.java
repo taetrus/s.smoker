@@ -19,10 +19,13 @@ import javax.swing.JPasswordField;
 import javax.swing.JPopupMenu;
 import javax.swing.JTabbedPane;
 import javax.swing.JTable;
+import javax.swing.JTree;
 import javax.swing.SwingUtilities;
 import javax.swing.text.JTextComponent;
+import javax.swing.tree.TreePath;
 import java.awt.AWTEvent;
 import java.awt.Component;
+import java.awt.Point;
 import java.awt.Toolkit;
 import java.awt.Window;
 import java.awt.event.AWTEventListener;
@@ -412,21 +415,64 @@ final class Recorder implements AWTEventListener {
     }
 
     private void onMouse(MouseEvent e, Component src) {
-        if (e.getButton() != MouseEvent.BUTTON1) return;
         final Component target = interactiveAncestor(src);
+        if (e.getButton() == MouseEvent.BUTTON3) {
+            // Spec 6.3: the press records the right-click on each platform; isPopupTrigger is not read.
+            if (e.getID() != MouseEvent.MOUSE_PRESSED) return;
+            Component on = target != null ? target : src;
+            Action a = Action.click(Locators.resolve(on));
+            a.button = 3;
+            Places.fill(a, on, SwingUtilities.convertPoint(src, e.getPoint(), on));
+            add(a);
+            return;
+        }
+        if (e.getButton() != MouseEvent.BUTTON1) return;
         if (actsOnRelease(target)) {
             if (firesActionOnRelease(e, target)) add(Action.click(Locators.resolve(target)));
             return;
         }
         if (e.getID() != MouseEvent.MOUSE_CLICKED) return;
+        boolean second = e.getClickCount() == 2;
         if (target == null) {
-            add(Action.click(Locators.resolve(src)));
+            Locator l = Locators.resolve(src);
+            if (second) doubleClick(l);
+            else add(Action.click(l));
             return;
         }
         if (target instanceof JTextComponent) return;          // typing is captured as SET_TEXT
         if (target instanceof AbstractButton) {
             add(Action.click(Locators.resolve(target)));
             return;
+        }
+        Point p = SwingUtilities.convertPoint(src, e.getPoint(), target);
+        if ((target instanceof JTable || target instanceof JList || target instanceof JTree) && comboOf(target) == null) {
+            if (second) {
+                // Spec 6.2: the second click adds a CLICK with the place; the first click gave the SELECT.
+                final Action a = Action.click(Locators.resolve(target));
+                a.count = 2;
+                if (!Places.fill(a, target, p)) return;
+                SwingUtilities.invokeLater(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (target instanceof JTable && ((JTable) target).isEditing()) return;   // SET_CELL replaces it (6.4)
+                        add(a);
+                    }
+                });
+                return;
+            }
+            if (target instanceof JTree) {
+                // Spec 6.1: a click on a row records SELECT with the lead selection path, read after Swing processed the click.
+                final JTree tree = (JTree) target;
+                if (tree.getPathForLocation(p.x, p.y) == null) return;   // for example the expand handle
+                SwingUtilities.invokeLater(new Runnable() {
+                    @Override
+                    public void run() {
+                        TreePath lead = tree.getLeadSelectionPath();
+                        if (lead != null) add(Action.select(Locators.resolve(tree), Places.labels(tree, lead)));
+                    }
+                });
+                return;
+            }
         }
         // Selections: read the new state after Swing has processed the click.
         SwingUtilities.invokeLater(new Runnable() {
@@ -435,9 +481,8 @@ final class Recorder implements AWTEventListener {
                 Action a = new Action();
                 a.type = Action.Type.SELECT;
                 if (target instanceof JList) {
-                    JPopupMenu popup = (JPopupMenu) SwingUtilities.getAncestorOfClass(JPopupMenu.class, target);
-                    if (popup != null && popup.getInvoker() instanceof JComboBox) {
-                        JComboBox<?> cb = (JComboBox<?>) popup.getInvoker();
+                    JComboBox<?> cb = comboOf(target);
+                    if (cb != null) {
                         a.locator = Locators.resolve(cb);
                         a.value = String.valueOf(cb.getSelectedItem());
                     } else {
@@ -458,6 +503,38 @@ final class Recorder implements AWTEventListener {
                 if (a.value == null || !"-1".equals(a.value)) add(a);
             }
         });
+    }
+
+    /** The combo box whose popup holds {@code c}, or null. */
+    private static JComboBox<?> comboOf(Component c) {
+        JPopupMenu popup = (JPopupMenu) SwingUtilities.getAncestorOfClass(JPopupMenu.class, c);
+        return popup != null && popup.getInvoker() instanceof JComboBox ? (JComboBox<?>) popup.getInvoker() : null;
+    }
+
+    /**
+     * The second click on a component with no interactive ancestor (spec 6.2). If the last step is the plain click of
+     * the first click, it becomes a double-click and is pending again: its snapshot showed the state between the two
+     * clicks. Else a new step comes; no earlier step changes.
+     */
+    private void doubleClick(Locator l) {
+        Step last = scenario.steps.isEmpty() ? null : scenario.steps.get(scenario.steps.size() - 1);
+        if (last != null && last.action != null && last.action.type == Action.Type.CLICK && last.action.count == null
+                && last.action.button == null && !last.action.hasPlace() && sameLocator(last.action.locator, l)) {
+            String before = last.action.toString();
+            last.action.count = 2;
+            changed(last, before);
+            return;
+        }
+        Action a = Action.click(l);
+        a.count = 2;
+        add(a);
+    }
+
+    private static boolean sameLocator(Locator a, Locator b) {
+        if (a == null || b == null) return a == b;
+        return Locators.eq(a.name, b.name) && Locators.eq(a.windowTitle, b.windowTitle)
+                && Locators.eq(a.className, b.className) && Locators.eq(a.text, b.text)
+                && Locators.eq(a.index, b.index) && Locators.eq(a.x, b.x) && Locators.eq(a.y, b.y);
     }
 
     /**
