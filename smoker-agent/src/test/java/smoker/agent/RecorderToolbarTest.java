@@ -1,8 +1,13 @@
 package smoker.agent;
 
 import org.junit.Test;
+import smoker.core.model.IgnoreRules;
 import smoker.core.model.Locator;
+import smoker.core.model.NodeSnapshot;
+import smoker.core.model.Snapshot;
 
+import java.util.Arrays;
+import java.util.List;
 import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
@@ -52,10 +57,39 @@ public class RecorderToolbarTest {
 
     @Test
     public void snapshotSuffixDependsOnTheNextStep() {
-        assertEquals("", RecorderToolbar.snapshotSuffix(true, false));
-        assertEquals("", RecorderToolbar.snapshotSuffix(true, true));
-        assertEquals("  (snapshot pending...)", RecorderToolbar.snapshotSuffix(false, false));
-        assertEquals("  (no snapshot: WAIT_FOR follows)", RecorderToolbar.snapshotSuffix(false, true));
+        assertEquals("", RecorderToolbar.snapshotSuffix(true, false, false));
+        assertEquals("", RecorderToolbar.snapshotSuffix(true, true, false));
+        assertEquals("  (snapshot pending...)", RecorderToolbar.snapshotSuffix(false, false, false));
+        assertEquals("  (no snapshot: WAIT_FOR follows)", RecorderToolbar.snapshotSuffix(false, true, false));
+        assertEquals("  (no golden: run and approve)", RecorderToolbar.snapshotSuffix(false, false, true));
+    }
+
+    private static Snapshot labelSnapshot(String text) {
+        NodeSnapshot n = new NodeSnapshot();
+        n.path = "[F]/#l";
+        n.type = "JLabel";
+        n.name = "l";
+        n.text = text;
+        Snapshot s = new Snapshot();
+        s.nodes.add(n);
+        return s;
+    }
+
+    @Test
+    public void previewLinesTellTheReason() {
+        IgnoreRules rules = new IgnoreRules();
+        assertEquals(Arrays.asList("first golden: no earlier step to compare"),
+                RecorderToolbar.previewLines(null, labelSnapshot("x"), rules, "x"));
+        assertEquals(Arrays.asList("snapshot pending..."),
+                RecorderToolbar.previewLines(labelSnapshot("x"), null, rules, "snapshot pending..."));
+        Snapshot s = labelSnapshot("x");
+        assertEquals(Arrays.asList("no changes"), RecorderToolbar.previewLines(s, s, rules, "x"));
+        List<String> d = RecorderToolbar.previewLines(labelSnapshot(""), labelSnapshot("Draft"), rules, "x");
+        assertEquals(d.toString(), 1, d.size());
+        assertTrue(d.get(0), d.get(0).startsWith("CHANGED ") && d.get(0).contains(".text"));
+        IgnoreRules ignoring = new IgnoreRules();
+        ignoring.paths.add("\\[F\\]/#l");
+        assertEquals(Arrays.asList("no changes"), RecorderToolbar.previewLines(labelSnapshot(""), labelSnapshot("Draft"), ignoring, "x"));
     }
 
     /**
@@ -66,8 +100,10 @@ public class RecorderToolbarTest {
     public void snapshotSuffixIsAscii() {
         for (boolean has : new boolean[] {true, false}) {
             for (boolean follows : new boolean[] {true, false}) {
-                String s = RecorderToolbar.snapshotSuffix(has, follows);
-                assertTrue(s, s.matches("\\p{ASCII}*"));
+                for (boolean removed : new boolean[] {true, false}) {
+                    String s = RecorderToolbar.snapshotSuffix(has, follows, removed);
+                    assertTrue(s, s.matches("\\p{ASCII}*"));
+                }
             }
         }
     }

@@ -441,6 +441,16 @@ Do not put a real password in a scenario file.
 - A modal dialog of the application can block the toolbar. Close the dialog, then click `Save`.
 - The status line shows `password field: typing is not recorded` at the first key that changes a password field:
   a character, Backspace or Delete. It shows the warning once each time the field gets the focus.
+- The right pane of the toolbar shows the changes of the selected step: the difference between its golden and the golden
+  of the nearest earlier step. It shows `no changes`, `first golden: no earlier step to compare`, or the reason why the
+  step has no golden (`snapshot pending...`, `no snapshot: WAIT_FOR follows`, `no golden: run and approve`).
+- `Group...` sets the group of the selected step. An empty name removes the group. The list shows the group as a
+  header line above the step. A header is not a row: you cannot select it.
+- `Up` and `Down` move the selected step one row. The step keeps its id, its name and its group. A golden holds the
+  state after all steps before it, so the goldens of the two steps that changed places are wrong. The recorder removes
+  both and marks them `(no golden: run and approve)`. `Save` writes the golden file without them. The next run gives
+  `NO_GOLDEN` for them, and `approve` repairs them.
+- `Delete` keeps the goldens of the later steps.
 - The toolbar writes its status line, the Record toggle and the step list to the record log.
 
 ### Remote desktop

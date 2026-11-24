@@ -1,7 +1,10 @@
 package smoker.agent;
 
+import smoker.core.diff.SnapshotDiff;
 import smoker.core.model.Action;
+import smoker.core.model.IgnoreRules;
 import smoker.core.model.Locator;
+import smoker.core.model.Snapshot;
 import smoker.core.model.Step;
 
 import javax.swing.BorderFactory;
@@ -14,8 +17,11 @@ import javax.swing.JList;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
+import javax.swing.JSplitPane;
+import javax.swing.JTextArea;
 import javax.swing.JToggleButton;
 import javax.swing.JViewport;
+import javax.swing.ListCellRenderer;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
 import javax.swing.border.Border;
@@ -25,6 +31,8 @@ import java.awt.Color;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.FlowLayout;
+import java.util.ArrayList;
+import java.util.List;
 import java.awt.Toolkit;
 import java.awt.event.AWTEventListener;
 import java.awt.event.ActionEvent;
@@ -48,6 +56,10 @@ final class RecorderToolbar extends JFrame implements Recorder.Listener {
     private final JToggleButton rec = new JToggleButton("● Record");
     private final JToggleButton pick = new JToggleButton("Pick");
     private final WaitForPicker waitFor;
+    private final JTextArea preview = new JTextArea();
+    private final JScrollPane previewScroll = new JScrollPane(preview);
+    private final JButton up = new JButton("Up");
+    private final JButton down = new JButton("Down");
 
     private JComponent highlighted;
     private Border highlightedBorder;
@@ -78,9 +90,16 @@ final class RecorderToolbar extends JFrame implements Recorder.Listener {
         JButton waitForButton = new JButton("Wait for…");
         buttons.add(waitForButton);
         JButton rename = new JButton("Rename");
+        JButton group = new JButton("Group...");
+        group.setName("smoker.toolbar.group");
+        up.setName("smoker.toolbar.up");
+        down.setName("smoker.toolbar.down");
         JButton delete = new JButton("Delete");
         JButton save = new JButton("Save");
         buttons.add(rename);
+        buttons.add(group);
+        buttons.add(up);
+        buttons.add(down);
         buttons.add(delete);
         buttons.add(save);
 
@@ -111,6 +130,24 @@ final class RecorderToolbar extends JFrame implements Recorder.Listener {
                 renameSelected();
             }
         });
+        group.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                groupSelected();
+            }
+        });
+        up.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                moveSelected(-1);
+            }
+        });
+        down.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                moveSelected(+1);
+            }
+        });
         delete.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -119,6 +156,7 @@ final class RecorderToolbar extends JFrame implements Recorder.Listener {
                     RecorderToolbar.this.recorder.remove(s);
                     model.removeElement(s);
                     loggedRows.remove(s);
+                    refreshPreview();
                     SmokerAgent.log("step list: deleted " + s.id);
                     logChangedRows();
                 }
@@ -135,10 +173,33 @@ final class RecorderToolbar extends JFrame implements Recorder.Listener {
             }
         });
         list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        list.setCellRenderer(new javax.swing.DefaultListCellRenderer() {
+        list.setCellRenderer(new ListCellRenderer<Step>() {
+            private final javax.swing.DefaultListCellRenderer row = new javax.swing.DefaultListCellRenderer();
+            private final JLabel header = new JLabel();
+            private final JPanel cell = new JPanel(new BorderLayout());
+
             @Override
-            public Component getListCellRendererComponent(JList<?> l, Object v, int i, boolean sel, boolean foc) {
-                return super.getListCellRendererComponent(l, listText(i), i, sel, foc);
+            public Component getListCellRendererComponent(JList<? extends Step> l, Step v, int i, boolean sel, boolean foc) {
+                Component r = row.getListCellRendererComponent(l, listText(i), i, sel, foc);
+                String g = headerOf(i);
+                if (g == null) return r;
+                // A header is part of the cell of its step, not a row of the model (spec 7.2).
+                header.setText("-- " + g + " --");
+                header.setFont(l.getFont().deriveFont(java.awt.Font.BOLD));
+                header.setForeground(new Color(0x1a, 0x5f, 0xb4));
+                header.setOpaque(true);
+                header.setBackground(l.getBackground());
+                cell.removeAll();
+                cell.add(header, BorderLayout.NORTH);
+                cell.add(r, BorderLayout.CENTER);
+                return cell;
+            }
+        });
+        list.addListSelectionListener(new javax.swing.event.ListSelectionListener() {
+            @Override
+            public void valueChanged(javax.swing.event.ListSelectionEvent e) {
+                if (e.getValueIsAdjusting()) return;
+                refreshPreview();
             }
         });
         list.addMouseListener(new MouseAdapter() {
@@ -157,12 +218,18 @@ final class RecorderToolbar extends JFrame implements Recorder.Listener {
 
         Container cp = getContentPane();
         cp.add(buttons, BorderLayout.NORTH);
-        cp.add(new JScrollPane(list), BorderLayout.CENTER);
+        preview.setEditable(false);
+        preview.setName("smoker.toolbar.preview");
+        JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, new JScrollPane(list), previewScroll);
+        split.setResizeWeight(0.5);
+        cp.add(split, BorderLayout.CENTER);
         cp.add(south, BorderLayout.SOUTH);
-        setSize(620, 300);
+        setSize(980, 300);
+        split.setDividerLocation(480);
         setLocation(20, 20);
         recorder.setListener(this);
         showRecordState();
+        refreshPreview();
         if (!recorder.isRecording()) showStatus("paused: click Record to record the clicks");
     }
 
@@ -200,18 +267,128 @@ final class RecorderToolbar extends JFrame implements Recorder.Listener {
         }
     }
 
-    /** The list text after a step name. A step before a WAIT_FOR never gets a snapshot (WP-03). */
-    static String snapshotSuffix(boolean hasSnapshot, boolean waitForFollows) {
+    /**
+     * The list text after a step name. A step before a WAIT_FOR never gets a snapshot (WP-03). A move removes a golden
+     * (spec 7.3); the move wins over pending.
+     */
+    static String snapshotSuffix(boolean hasSnapshot, boolean waitForFollows, boolean removedByMove) {
         if (hasSnapshot) return "";
-        return waitForFollows ? "  (no snapshot: WAIT_FOR follows)" : "  (snapshot pending...)";
+        if (waitForFollows) return "  (no snapshot: WAIT_FOR follows)";
+        return removedByMove ? "  (no golden: run and approve)" : "  (snapshot pending...)";
+    }
+
+    private String suffix(int i) {
+        Step s = model.get(i);
+        int next = i + 1;
+        boolean waitForFollows = next < model.size() && model.get(next).action.type == Action.Type.WAIT_FOR;
+        return snapshotSuffix(recorder.hasSnapshot(s), waitForFollows, recorder.goldenRemoved(s));
     }
 
     /** The text of row {@code i} of the step list. Must run on the EDT. */
     String listText(int i) {
         Step s = model.get(i);
-        int next = i + 1;
-        boolean waitForFollows = next < model.size() && model.get(next).action.type == Action.Type.WAIT_FOR;
-        return s.id + "  " + s.name + snapshotSuffix(recorder.hasSnapshot(s), waitForFollows);
+        return s.id + "  " + s.name + suffix(i);
+    }
+
+    /** The group header above row {@code i}, or null. Must run on the EDT. */
+    String headerOf(int i) {
+        return model.get(i).group;
+    }
+
+    int modelSize() {
+        return model.size();
+    }
+
+    int selectedIndex() {
+        return list.getSelectedIndex();
+    }
+
+    void selectStep(int index) {
+        list.setSelectedIndex(index);
+        refreshPreview();
+    }
+
+    String previewText() {
+        return preview.getText();
+    }
+
+    /**
+     * The lines of the preview. {@code current} is the golden of the step, {@code previous} the golden before it.
+     * {@code noGoldenReason} is shown when the step has no golden.
+     */
+    static List<String> previewLines(Snapshot previous, Snapshot current, IgnoreRules rules, String noGoldenReason) {
+        List<String> out = new ArrayList<String>();
+        if (current == null) {
+            out.add(noGoldenReason);
+        } else if (previous == null) {
+            out.add("first golden: no earlier step to compare");
+        } else {
+            out.addAll(SnapshotDiff.diff(previous, current, rules));
+            if (out.isEmpty()) out.add("no changes");
+        }
+        return out;
+    }
+
+    /** Shows the changes of the selected step and sets the Up and Down buttons. Must run on the EDT. */
+    private void refreshPreview() {
+        int i = list.getSelectedIndex();
+        up.setEnabled(i > 0);
+        down.setEnabled(i >= 0 && i < model.size() - 1);
+        if (i < 0 || i >= model.size()) {
+            preview.setText("");
+            previewScroll.setBorder(BorderFactory.createTitledBorder("changes"));
+            return;
+        }
+        Step s = model.get(i);
+        String reason = suffix(i).replaceAll("^\\s*\\(|\\)$", "");
+        List<String> lines = previewLines(recorder.previousSnapshot(s), recorder.snapshot(s), recorder.scenario().ignore, reason);
+        StringBuilder sb = new StringBuilder();
+        for (String l : lines) sb.append(sb.length() == 0 ? "" : "\n").append(l);
+        String text = sb.toString();
+        if (!text.equals(preview.getText())) preview.setText(text);
+        preview.setCaretPosition(0);
+        previewScroll.setBorder(BorderFactory.createTitledBorder("changes of " + s.id));
+    }
+
+    /** Moves the selected step one row and keeps it selected. Must run on the EDT. */
+    void moveSelected(int delta) {
+        int i = list.getSelectedIndex();
+        if (i < 0) return;
+        int j = i + delta;
+        if (j < 0 || j >= model.size()) return;
+        Step s = model.get(i);
+        recorder.move(s, delta);
+        model.remove(i);
+        model.add(j, s);
+        list.setSelectedIndex(j);
+        list.ensureIndexIsVisible(j);
+        SmokerAgent.log("step list: moved " + s.id + (delta < 0 ? " up" : " down"));
+        logChangedRows();
+        refreshPreview();
+    }
+
+    /** Sets the group of the selected step; an empty text removes it. Must run on the EDT. */
+    void setGroupOfSelected(String group) {
+        Step s = list.getSelectedValue();
+        if (s == null) return;
+        recorder.setGroup(s, group);
+        list.repaint();
+    }
+
+    private void groupSelected() {
+        Step s = list.getSelectedValue();
+        if (s == null) return;
+        JOptionPane pane = new JOptionPane("Group name (empty: no group)", JOptionPane.PLAIN_MESSAGE, JOptionPane.OK_CANCEL_OPTION);
+        pane.setWantsInput(true);
+        pane.setInitialSelectionValue(s.group == null ? "" : s.group);
+        javax.swing.JDialog d = pane.createDialog(this, "Group of step");
+        d.setName("smoker.group"); // keep smoker's own dialogs out of snapshots and recordings
+        d.setVisible(true);
+        d.dispose();
+        Object v = pane.getInputValue();
+        Object choice = pane.getValue();
+        if (v == JOptionPane.UNINITIALIZED_VALUE || v == null || !Integer.valueOf(JOptionPane.OK_OPTION).equals(choice)) return;
+        setGroupOfSelected(v.toString());
     }
 
     /**
@@ -329,6 +506,7 @@ final class RecorderToolbar extends JFrame implements Recorder.Listener {
                 model.add(i, s);
                 list.ensureIndexIsVisible(i);
                 logChangedRows();
+                refreshPreview();
             }
         });
     }
@@ -340,6 +518,7 @@ final class RecorderToolbar extends JFrame implements Recorder.Listener {
             public void run() {
                 list.repaint();
                 logChangedRows();
+                refreshPreview();
             }
         });
     }
