@@ -86,6 +86,33 @@ The 20 runs added no file to `configuration\`, removed no file and changed no fi
 
 https://github.com/taetrus/s.smoker/actions/runs/45058894259 (PR #15, commit `8799100`).
 
+## Shorter stop (PR #16)
+
+Date: 2026-11-24. Commit `aa62080` (`master` 88102b3 and the workflow `pilot-check.yml`).
+The self-hosted runner ran the check in the desktop session of the Windows PC:
+https://github.com/taetrus/s.smoker/actions/runs/45449817266.
+
+The job runs `pilot.json` one time in the `p2.product` folder with `--stopTimeoutMs 30000`. With the old stop,
+stage 1 waited the full limit, so the stop took at least 30 s.
+
+| Value | Result |
+|---|---|
+| Status, exit code | PASS, 0 |
+| Total time of the CLI run | 7.2 s |
+| Scenario time (`finishedAt` - `startedAt`) | 4.9 s |
+| Stop time (total - scenario) | 2.3 s |
+| Time from `finishedAt` to the end of the CLI | 1.8 s |
+
+Stop lines in `app-output.log`:
+
+```
+[smoker] stop: closing the windows
+[smoker] stop: stopping the OSGi framework
+```
+
+There is no `stop: System.exit(` line and no `stop: halt(` line. Stage 1 ends when no main frame shows,
+and stage 2 stops the Equinox framework at once. Result: **Pass**. The stop of `p2.product` no longer waits `stopTimeoutMs`.
+
 ## Not tested
 
 - A product with the hardware simulator. R-37 ran with the demo simulator (`DemoSimulator`) only.
