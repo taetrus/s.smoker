@@ -5,6 +5,8 @@ import smoker.core.model.Locator;
 
 import javax.swing.AbstractButton;
 import javax.swing.JComboBox;
+import javax.swing.JFormattedTextField;
+import javax.swing.JSpinner;
 import javax.swing.JList;
 import javax.swing.JMenu;
 import javax.swing.JTabbedPane;
@@ -21,6 +23,7 @@ import java.awt.Window;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
 import java.awt.event.WindowEvent;
+import java.text.ParseException;
 import java.util.Locale;
 
 /**
@@ -39,6 +42,7 @@ final class ActionExecutor {
             case CLICK: click(require(a.locator), a); break;
             case SET_TEXT: setText(require(a.locator), a.value == null ? "" : a.value); break;
             case SELECT: select(require(a.locator), a); break;
+            case SET_CELL: setCell(require(a.locator), a); break;
             case KEY: key(a); break;
             case WAIT: Thread.sleep(Long.parseLong(a.value)); break;
             case CLOSE_WINDOW: closeWindow(a.locator); break;
@@ -115,7 +119,77 @@ final class ActionExecutor {
             ((JComboBox<?>) c).getEditor().setItem(text);
             return;
         }
+        if (c instanceof JSpinner) {
+            setSpinner((JSpinner) c, text);
+            return;
+        }
         throw new IllegalStateException("SET_TEXT not supported on " + c.getClass().getSimpleName());
+    }
+
+    /** Sets the text of the editor field, then commits it (spec 6.5). A refused text leaves the old text. */
+    private static void setSpinner(JSpinner s, String text) {
+        if (!(s.getEditor() instanceof JSpinner.DefaultEditor)) {
+            throw new IllegalStateException("SET_TEXT needs the default editor of a JSpinner, not "
+                    + s.getEditor().getClass().getSimpleName());
+        }
+        JFormattedTextField f = ((JSpinner.DefaultEditor) s.getEditor()).getTextField();
+        String old = f.getText();
+        f.setText(text);
+        try {
+            s.commitEdit();
+        } catch (ParseException e) {
+            f.setText(old);
+            throw new IllegalStateException("the spinner refused the value \"" + text + "\"");
+        }
+    }
+
+    /** Edits the cell, sets the value in the editor component and stops the edit (spec 6.4). */
+    private static void setCell(Component c, Action a) {
+        if (!(c instanceof JTable)) throw new IllegalStateException("SET_CELL not supported on " + c.getClass().getSimpleName());
+        JTable t = (JTable) c;
+        String value = a.value == null ? "" : a.value;
+        int col = Places.columnOf(t, a.column);
+        if (a.row == null || a.row < 0 || a.row >= t.getRowCount()) throw new IllegalStateException("row not found: " + a.row);
+        Places.reveal(t, a);
+        if (!t.isCellEditable(a.row, col) || !t.editCellAt(a.row, col)) {
+            throw new IllegalStateException("cell not editable: row " + a.row + ", column " + a.column);
+        }
+        Component ed = t.getEditorComponent();
+        boolean accepted = false;
+        try {
+            if (ed instanceof JTextComponent) {
+                ((JTextComponent) ed).setText(value);
+                accepted = true;
+            } else if (ed instanceof AbstractButton) {
+                ((AbstractButton) ed).setSelected(Boolean.parseBoolean(value));
+                accepted = true;
+            } else if (ed instanceof JComboBox) {
+                accepted = chooseItem((JComboBox<?>) ed, value);
+            } else {
+                throw new IllegalStateException("SET_CELL not supported on editor "
+                        + (ed == null ? "null" : ed.getClass().getSimpleName()));
+            }
+            // a combo box editor may end the edit itself when it takes an item
+            if (accepted && t.getCellEditor() != null) accepted = t.getCellEditor().stopCellEditing();
+        } finally {
+            if (!accepted && t.getCellEditor() != null) t.getCellEditor().cancelCellEditing();
+        }
+        if (!accepted) throw new IllegalStateException("the cell editor refused the value \"" + value + "\"");
+    }
+
+    /** An editable combo box takes the text; another one takes the item whose text equals it. */
+    private static boolean chooseItem(JComboBox<?> cb, String value) {
+        if (cb.isEditable()) {
+            cb.getEditor().setItem(value);
+            return true;
+        }
+        for (int i = 0; i < cb.getItemCount(); i++) {
+            if (value.equals(String.valueOf(cb.getItemAt(i)))) {
+                cb.setSelectedIndex(i);
+                return true;
+            }
+        }
+        return false;
     }
 
     private static void select(Component c, Action a) {
