@@ -323,8 +323,11 @@ final class RecorderToolbar extends JFrame implements Recorder.Listener {
         SwingUtilities.invokeLater(new Runnable() {
             @Override
             public void run() {
-                model.addElement(s);
-                list.ensureIndexIsVisible(model.size() - 1);
+                // A SET_CELL can come before the last step (spec 6.4): the row goes to the place of the step.
+                int i = recorder.scenario().steps.indexOf(s);
+                if (i < 0 || i > model.size()) i = model.size();
+                model.add(i, s);
+                list.ensureIndexIsVisible(i);
                 logChangedRows();
             }
         });

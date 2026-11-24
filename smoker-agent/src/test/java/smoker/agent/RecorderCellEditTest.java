@@ -214,6 +214,62 @@ public class RecorderCellEditTest {
         assertEquals("ok", node(recorder.snapshot(click), "t.label").text);
     }
 
+    /**
+     * Ruling 4: the button action stops the edit at the release, after the CLICK step came. SET_CELL goes directly
+     * before the CLICK, with no golden and the mark "golden removed". The toolbar list shows the same order.
+     */
+    @Test
+    public void editEndedByTheButtonActionComesBeforeTheClick() throws Exception {
+        final RecorderToolbar[] toolbar = new RecorderToolbar[1];
+        onEdt(new Runnable() {
+            public void run() {
+                ok.addActionListener(new ActionListener() {
+                    public void actionPerformed(ActionEvent e) {
+                        if (table.isEditing()) table.getCellEditor().stopCellEditing();
+                    }
+                });
+                toolbar[0] = new RecorderToolbar(recorder);
+            }
+        });
+        try {
+            clickCell(0, QTY, 1);
+            startEdit(0, QTY);
+            type("5");
+            dispatch(mouse(ok, MouseEvent.MOUSE_PRESSED, new Point(5, 5), 1));
+            flush();
+            assertTrue("the press did not end the edit", isEditing());
+            dispatch(mouse(ok, MouseEvent.MOUSE_RELEASED, new Point(5, 5), 1));
+            dispatch(mouse(ok, MouseEvent.MOUSE_CLICKED, new Point(5, 5), 1));
+            flush();
+            assertFalse("the action stopped the edit", isEditing());
+            assertEquals(5, valueAt(0, QTY));
+            final List<Step> steps = steps();
+            assertTrue(describe(steps), steps.size() >= 2);
+            final Step cell = steps.get(steps.size() - 2);
+            Step click = steps.get(steps.size() - 1);
+            assertSetCell(cell.action, 0, "Qty", "5");
+            assertEquals(describe(steps), Action.Type.CLICK, click.action.type);
+            assertEquals("t.ok", click.action.locator.name);
+            awaitSnapshot(click, 10000);
+            assertEquals("ok", node(recorder.snapshot(click), "t.label").text);
+            assertFalse("SET_CELL gets no golden", recorder.hasSnapshot(cell));
+            assertTrue(recorder.goldenRemoved(cell));
+            String[] rows = onEdt(new Callable<String[]>() {
+                public String[] call() {
+                    return new String[] {toolbar[0].listText(steps.size() - 2), toolbar[0].listText(steps.size() - 1)};
+                }
+            });
+            assertTrue(rows[0], rows[0].startsWith(cell.id + " "));
+            assertTrue(rows[1], rows[1].startsWith(click.id + " "));
+        } finally {
+            onEdt(new Runnable() {
+                public void run() {
+                    toolbar[0].dispose();
+                }
+            });
+        }
+    }
+
     @Test
     public void cancelledEditRecordsNothing() throws Exception {
         clickCell(1, NAME, 1);

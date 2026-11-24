@@ -56,6 +56,7 @@ import java.util.regex.Pattern;
 final class Recorder implements AWTEventListener {
 
     interface Listener {
+        /** A new step. It is the last step, or a SET_CELL directly before the last step (spec 6.4). */
         void stepAdded(Step s);
         void stepUpdated(Step s);
         void status(String text);
@@ -322,6 +323,7 @@ final class Recorder implements AWTEventListener {
         int id = event.getID();
         // An event of a cell edit records no other step; the edit gives one SET_CELL at its end (spec 6.4).
         final boolean cellEdit = cells.event(event, src);
+        final int stepsBefore = scenario.steps.size();
         if (id == MouseEvent.MOUSE_PRESSED && editing != null && !SwingUtilities.isDescendingFrom(src, editing)) {
             // A target that takes no focus (menu item, toolbar button) gives the field no FOCUS_LOST.
             // Flush the typed text now, so that SET_TEXT comes before the click and has its own snapshot (F-21).
@@ -336,7 +338,7 @@ final class Recorder implements AWTEventListener {
             SwingUtilities.invokeLater(new Runnable() {
                 @Override
                 public void run() {
-                    endOfCellEdit(!cellEdit);
+                    endOfCellEdit(!cellEdit, stepsBefore);
                 }
             });
         }
@@ -370,17 +372,32 @@ final class Recorder implements AWTEventListener {
      * Adds SET_CELL when a cell edit ended with a new value (spec 6.4). A password field as editor gives the
      * warning and no step (F-19).
      *
+     * <p>The input of a step can end the edit in its own action, for example a button whose action listener stops the
+     * edit at the release. Its step is already in the list: SET_CELL goes directly before it (spec 6.4). The state
+     * before the action is gone, so SET_CELL gets no golden and the mark "golden removed" (run and approve).
+     *
      * @param byOtherInput the event that ended the edit is not part of the edit, for example the press on a button.
      *                     The step of that input comes later: the state now is the state of SET_CELL (F-21).
+     * @param stepsBefore  the number of steps before that event
      */
-    private void endOfCellEdit(boolean byOtherInput) {
+    private void endOfCellEdit(boolean byOtherInput, int stepsBefore) {
         CellEditTracker.Edit e = cells.check();   // also while paused: an edit of before a pause gives no step later
         if (e == null || !recording) return;
         if (e.password) {
             say("password field: a table cell edit is not recorded. Add a SET_CELL step by hand, or set the value outside the scenario.");
             return;
         }
-        add(Action.setCell(Locators.resolve(e.table), e.row, e.column, e.value));
+        Action cell = Action.setCell(Locators.resolve(e.table), e.row, e.column, e.value);
+        if (byOtherInput && stepsBefore < scenario.steps.size()) {
+            Step s = newStep(cell);
+            scenario.steps.add(stepsBefore, s);
+            synchronized (snapshots) {
+                goldenRemoved.add(s.id);
+            }
+            if (listener != null) listener.stepAdded(s);
+            return;
+        }
+        add(cell);
         if (!byOtherInput) return;
         Step s = scenario.steps.get(scenario.steps.size() - 1);
         synchronized (pendingSnapshots) {
@@ -614,13 +631,17 @@ final class Recorder implements AWTEventListener {
     // ---- steps -------------------------------------------------------------------------------
 
     private void add(Action a) {
-        Step s = new Step(String.format(Locale.ROOT, "s%03d", ++counter), a.toString(), a);
+        Step s = newStep(a);
         scenario.steps.add(s);
         if (listener != null) listener.stepAdded(s);
         synchronized (pendingSnapshots) {
             pendingSnapshots.add(s);
             pendingSnapshots.notifyAll();
         }
+    }
+
+    private Step newStep(Action a) {
+        return new Step(String.format(Locale.ROOT, "s%03d", ++counter), a.toString(), a);
     }
 
     /**
