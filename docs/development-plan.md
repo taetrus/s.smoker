@@ -70,11 +70,11 @@ Priority M = necessary for version 1.0. Priority S = necessary for version 1.1. 
 | R-37 | M | The suite file shall contain `before`, `after` and `reset` commands. | The `before` command starts the simulator. The `after` command stops it also after a failure. |
 | R-38 | M | The agent shall stop an OSGi application through the framework before it calls `System.exit`. | No lock file remains in the workspace after 20 runs. |
 | R-39 | M | The agent shall get its configuration from one properties file. | A path with `;` and spaces operates correctly on Windows. |
-| R-02a | M | The CI pipeline shall run the integration test on JRE 8, 11, 17 and 21, on Windows (decision 5). | All four jobs pass. |
+| R-02a | M | The CI pipeline shall run the integration test on JRE 8 and 21, on Windows (decisions 5 and 9). | Both jobs pass. |
 | R-22a | S | The lint shall report missing names and names that are not unique. An option shall change lint results into failures. | A window with two components named `x` gives one lint result. |
 | R-20a | S | The recorder shall record tree selection, the double-click, the context menu, table cell edits and spinner values. | A replay of each recorded type passes on the demo application. |
 | R-34 | S | The agent shall set locale, time zone, look and feel and window size from the configuration. | The same scenario passes with operating system locale `tr_TR` and `en_US`. |
-| R-41, R-42 | S | The report shall join the results of all matrix jobs. It shall show the step results of the last 20 runs. | One report shows four matrix columns. |
+| R-41, R-42 | S | The report shall join the results of all matrix jobs. It shall show the step results of the last 20 runs. | One report shows two matrix columns. |
 | R-05, R-15 | C | Hints API and Logback fragment (see WP-08). | See WP-08. |
 | R-40a | M | The build shall prevent the release of an application that contains the agent option. | A release build with `-javaagent:smoker` in `eclipse.ini` fails. |
 
@@ -90,15 +90,19 @@ flowchart LR
   WP02 --> WP05["WP-05 Suite mode and lifecycle"]
   WP03 --> WP05
   WP04 --> WP05
-  WP05 --> M1(["Milestone 1: version 1.0, pilot on one application"])
-  M1 --> WP06["WP-06 Recorder"]
-  M1 --> WP07["WP-07 CI matrix and report"]
-  WP06 --> M2(["Milestone 2: version 1.1, all teams"])
-  WP07 --> M2
+  WP05 --> WP06["WP-06 Recorder (code tasks)"]
+  WP06 --> WP07["WP-07 CI matrix and report (code tasks)"]
+  WP07 --> F(["Field phase: Milestone 1, WP-06 tasks 1 and 8, WP-07 task 4"])
+  F --> M2(["Milestone 2: version 1.1, all teams"])
   M2 --> WP08["WP-08 Extensions"]
 ```
 
 WP-02, WP-03 and WP-04 are independent. Three developers can do them at the same time.
+
+Decision 8 (2026-11-24) changes the order after WP-05. The code tasks of WP-06 and WP-07 come first.
+The field phase comes after them. It contains the tasks that need people or the corporate pipeline:
+Milestone 1, the usability test of WP-06 (tasks 1 and 8, and its completion criterion) and WP-07 task 4.
+A work package is "code complete" when its code tasks are done. It is complete only when its completion criterion passes.
 
 ### 4.2 Work packages
 
@@ -190,7 +194,7 @@ Completion criterion: R-36, R-37, R-38 and R-39 pass. 20 scenarios on the pilot 
 
 State on 2026-11-22: WP-05 is on branch `wp-05-suite-mode` (PR #15). On the demo, `SelfTestIT` shows that 20 scenarios use one startup, that a failure in a shared JVM runs again in a new JVM, and that `before`, `reset` and `after` operate with `DemoSimulator` (R-37, also in the Windows CI). The Windows check on `p2.product` passed: 20 scenarios use one startup (R-36), 20 stops end without `System.exit` (R-38), and an `out` path with `;` and a space operates (R-39) (`docs/wp-05-windows-report.md`). WP-05 is complete; F-03, F-04, F-10 and F-11 are closed. `p2.product` does not stop Equinox when its windows close, so each stop ends at stage 2. F-04 is not tested with the hardware simulator.
 
-**Milestone 1: version 1.0.** One team uses the tool on one application in its merge request pipeline for two weeks. Measure the false failures. The target is fewer than 2 % of the runs.
+**Milestone 1: version 1.0.** Field phase (decision 8): after the code tasks of WP-06 and WP-07. One team uses the tool on one application in its merge request pipeline for two weeks. Measure the false failures. The target is fewer than 2 % of the runs.
 
 **WP-06 Recorder (10 pd)**
 
@@ -210,7 +214,7 @@ Completion criterion: R-20a passes. A developer who did not see the tool before 
 1. Add the parameter `--label` to the CLI. Write the label into `run-result.json`.
 2. Add the command `report --merge <dirs>`. It joins the results of all jobs into one HTML file.
 3. Keep the step results of the last 20 runs in `history.json`. Show them in the report.
-4. Add the four matrix jobs (Windows, JRE 8, 11, 17, 21) to `.gitlab-ci.yml`. Remove the job `smoke:linux`.
+4. Add the two matrix jobs (Windows, JRE 8 and 21) to `.gitlab-ci.yml`. Remove the job `smoke:linux` (field phase, decisions 8 and 9).
 5. Add the locale, time zone, look and feel and window size parameters (R-34).
 6. Add a Maven Enforcer rule or a script that finds `-javaagent:smoker` in a release build and fails the build.
 7. Add the command `lint --baseline <file>`. It writes the current lint results to a baseline file. The pipeline fails only for a result that is not in the baseline file.
@@ -270,7 +274,7 @@ Follow-up (2026-11-22), so that a team can use the naming assistant before versi
    WP-01 does not test the simulator risks (F-02, F-04). WP-03 and WP-05 must test them on a product with a simulator.
 5. DECIDED 2026-11-15: the smoke tests run on Windows only. The target applications load Windows DLLs and cannot start on Linux.
    s.smoker operates in the JVM of the application, so a Linux runner cannot test them.
-   Effects: WP-01 task 5 and the completion criterion have no Linux replay. R-02a has four jobs, not eight. R-41 shows four columns.
+   Effects: WP-01 task 5 and the completion criterion have no Linux replay. R-02a has four jobs, not eight. R-41 shows four columns. (Decision 9 changes this to two jobs and two columns.)
    WP-07 removes the job `smoke:linux`. s.smoker itself continues to build and test on macOS and Linux (`xvfb-run`) for its developers.
 6. DECIDED 2026-11-15: test reports go into the GitHub repository (`docs/`), not into Confluence. Confluence is not available on the Atlassian site now.
    Move the reports to Confluence when the space `s.smoker` exists.
@@ -279,3 +283,11 @@ Follow-up (2026-11-22), so that a team can use the naming assistant before versi
 2. Select the number of developers who build s.smoker (not the developers of the application). With three developers, version 1.0 needs approximately three to four calendar weeks. With one developer, it needs approximately seven weeks.
 3. DECIDED 2026-11-12: the naming rule `<view>.<widget>` applies to all teams. WP-09 refines it: the proposed names are `<view>.<type>.<field>`, for example `orders.btn.save`. The lint uses a baseline file. Only new lint results fail the pipeline.
 4. DECIDED 2026-11-12: lint results fail the pipeline from version 1.1.
+8. DECIDED 2026-11-24: development continues before Milestone 1. The owner has no pilot team now.
+   Order: the code tasks of WP-06 (2 to 7), the code tasks of WP-07 (1 to 3, 5 to 7), then the field phase.
+   The field phase contains Milestone 1, WP-06 tasks 1 and 8 with the WP-06 completion criterion, and WP-07 task 4.
+   Effects: field feedback (false failures, usability) arrives after the code. Rework of the recorder toolbar (WP-06 tasks 6 and 7) is possible.
+   WP-06 and WP-07 are "code complete" until the field phase passes their completion criteria.
+9. DECIDED 2026-11-24: the matrix has JRE 8 and JRE 21, not JRE 8, 11, 17 and 21. JRE 8 is the JRE of the products.
+   JRE 21 covers the changes after Java 8 (module system, reflective access) and runs JavaSE-17 bundles (spike.master).
+   Effects: R-02a has two jobs. R-41 shows two columns. If a product ships its own JRE 11 or 17, add that JRE to the matrix.
