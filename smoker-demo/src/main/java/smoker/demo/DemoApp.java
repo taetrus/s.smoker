@@ -10,7 +10,15 @@ import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
+import javax.swing.JSpinner;
+import javax.swing.JTree;
+import javax.swing.SpinnerNumberModel;
+import javax.swing.event.TableModelEvent;
+import javax.swing.event.TableModelListener;
+import javax.swing.tree.DefaultMutableTreeNode;
+import javax.swing.tree.TreePath;
 import javax.swing.JTable;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
@@ -19,6 +27,8 @@ import java.awt.BorderLayout;
 import java.awt.FlowLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -40,6 +50,8 @@ public class DemoApp {
     private static final boolean EXTRA_PANEL = Boolean.getBoolean("demo.extraPanel");
     // -Ddemo.logPanel=true: the "Log" panel with the buttons of the log scenarios (off: the other goldens stay as they are).
     private static final boolean LOG_PANEL = Boolean.getBoolean("demo.logPanel");
+    // -Ddemo.recorderPanel=true: a tree, an editable table and a spinner for the recorder scenarios (WP-06, R-20a).
+    private static final boolean RECORDER_PANEL = Boolean.getBoolean("demo.recorderPanel");
     // -Ddemo.equinoxError=true: the application prints an Equinox start error to System.out before the UI (F-22).
     private static final boolean EQUINOX_ERROR = Boolean.getBoolean("demo.equinoxError");
 
@@ -76,6 +88,115 @@ public class DemoApp {
             r.close();
         }
         System.out.flush();
+    }
+
+    /** The panel of -Ddemo.recorderPanel=true: tree with popup, table with popup, spinner (spec 9). */
+    private static JPanel recorderPanel() {
+        JPanel p = new JPanel(new BorderLayout());
+        p.setName("demo.recorderPanel");
+        final JLabel picked = new JLabel("-");
+        picked.setName("demo.picked");
+
+        DefaultMutableTreeNode root = new DefaultMutableTreeNode("Root");
+        DefaultMutableTreeNode src = new DefaultMutableTreeNode("src");
+        src.add(new DefaultMutableTreeNode("Main.java"));
+        src.add(new DefaultMutableTreeNode("Util.java"));
+        root.add(src);
+        root.add(new DefaultMutableTreeNode("docs"));
+        final JTree tree = new JTree(root);
+        tree.setName("demo.tree");
+        tree.setVisibleRowCount(4);
+        final JPopupMenu treeMenu = new JPopupMenu();
+        treeMenu.setName("demo.tree.menu");
+        JMenuItem open = new JMenuItem("Open");
+        open.setName("demo.tree.open");
+        open.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                TreePath sel = tree.getSelectionPath();
+                if (sel != null) picked.setText("menu " + sel.getLastPathComponent());
+            }
+        });
+        treeMenu.add(open);
+        tree.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                popup(e);
+            }
+
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                popup(e);
+            }
+
+            private void popup(MouseEvent e) {
+                if (!e.isPopupTrigger()) return;
+                TreePath path = tree.getPathForLocation(e.getX(), e.getY());
+                if (path != null) tree.setSelectionPath(path);
+                treeMenu.show(tree, e.getX(), e.getY());
+            }
+
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() != 2 || e.getButton() != MouseEvent.BUTTON1) return;
+                TreePath path = tree.getPathForLocation(e.getX(), e.getY());
+                if (path == null) return;
+                DefaultMutableTreeNode n = (DefaultMutableTreeNode) path.getLastPathComponent();
+                if (n.isLeaf()) picked.setText("opened " + n);
+            }
+        });
+
+        final DefaultTableModel items = new DefaultTableModel(new Object[][] {{"bolt", 2, false}, {"nut", 3, false}},
+                new Object[] {"Name", "Qty", "Done"}) {
+            @Override
+            public Class<?> getColumnClass(int c) {
+                return c == 1 ? Integer.class : c == 2 ? Boolean.class : String.class;
+            }
+
+            @Override
+            public boolean isCellEditable(int r, int c) {
+                return c != 0;
+            }
+        };
+        JTable table = new JTable(items);
+        table.setName("demo.items");
+        final JLabel total = new JLabel("total 5");
+        total.setName("demo.total");
+        items.addTableModelListener(new TableModelListener() {
+            @Override
+            public void tableChanged(TableModelEvent e) {
+                int sum = 0;
+                for (int r = 0; r < items.getRowCount(); r++) sum += ((Integer) items.getValueAt(r, 1)).intValue();
+                total.setText("total " + sum);
+            }
+        });
+        JPopupMenu itemsMenu = new JPopupMenu();
+        itemsMenu.setName("demo.items.menu");
+        JMenuItem clear = new JMenuItem("Clear quantities");
+        clear.setName("demo.items.clear");
+        clear.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                for (int r = 0; r < items.getRowCount(); r++) items.setValueAt(Integer.valueOf(0), r, 1);
+            }
+        });
+        itemsMenu.add(clear);
+        table.setComponentPopupMenu(itemsMenu);
+
+        JSpinner count = new JSpinner(new SpinnerNumberModel(1, 0, 10, 1));
+        count.setName("demo.count");
+
+        JScrollPane treeScroll = new JScrollPane(tree);
+        JScrollPane tableScroll = new JScrollPane(table);
+        tableScroll.setPreferredSize(new java.awt.Dimension(200, 70));
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        row.add(picked);
+        row.add(total);
+        row.add(count);
+        p.add(treeScroll, BorderLayout.WEST);
+        p.add(tableScroll, BorderLayout.CENTER);
+        p.add(row, BorderLayout.SOUTH);
+        return p;
     }
 
     private static JPanel logPanel() {
@@ -298,6 +419,7 @@ public class DemoApp {
             southAll.add(queryRow, BorderLayout.SOUTH);
         }
         f.getContentPane().add(southAll, BorderLayout.SOUTH);
+        if (RECORDER_PANEL) f.getContentPane().add(recorderPanel(), BorderLayout.EAST);
         f.setSize(640, 400);
         f.setLocation(100, 100);
         f.setVisible(true);

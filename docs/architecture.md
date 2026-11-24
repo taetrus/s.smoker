@@ -51,7 +51,7 @@ Three decisions carry the design:
 | | `smoker.core.io` | `ScenarioFiles` — reads and checks the scenario and golden files (`schemaVersion` 2) |
 | | `smoker.core.diff` | `SnapshotDiff` — path-keyed attribute diff with ignore rules |
 | | `smoker.core.io` / `.report` | `Json` (Gson, pretty, stable), `JUnitXmlWriter`, `HtmlReportWriter` |
-| smoker-agent | `smoker.agent` | `SmokerAgent` (premain), `AgentConfig`, `Observations`, `LogTailer`, `LogPattern`, `LogLevel`, `LogEvent`, `EventJoiner`, `FailRule`, `ConsoleTee`, `EdtWatchdog`, `Quiescence`, `Locators`, `SnapshotTaker`, `ActionExecutor`, `Player`, `Recorder`, `RecorderToolbar`, `Screenshots` |
+| smoker-agent | `smoker.agent` | `SmokerAgent` (premain), `AgentConfig`, `Observations`, `LogTailer`, `LogPattern`, `LogLevel`, `LogEvent`, `EventJoiner`, `FailRule`, `ConsoleTee`, `EdtWatchdog`, `Quiescence`, `Locators`, `SnapshotTaker`, `ActionExecutor`, `Places`, `Player`, `Recorder`, `CellEditTracker`, `RecorderToolbar`, `Screenshots` |
 | | `smoker.agent` | `WindowKeys` — applies the `WindowKey` rules to window titles |
 | | `smoker.agent` | `LogPattern` — converts the Logback `logPattern` into one regex (time, level, logger, thread, message).<br>`LogLevel` — the log levels in Logback order, for `failLevel`.<br>`LogEvent` — one log event: the lines of one entry, joined.<br>`EventJoiner` — joins the lines of one log source into events. A stack trace gives one hit.<br>`FailRule` — decides once for each closed event whether it is a hit (level, `failRegex`, allow rules).<br>`ConsoleTee` — wraps `System.out` and `System.err`. It passes the bytes unchanged. It keeps one line and one joiner for each writing thread, and gives each decoded line to the joiner of its thread. |
 | | `smoker.core.io` | `ConfigFile` — reads and writes the agent configuration file (`key=value`, numbered keys) |
@@ -154,12 +154,18 @@ sub-second attribution and MDC fields if needed.
 | clicks button / menu / menu item | `CLICK #name` |
 | types in a text component, leaves it (or presses ENTER) | `SET_TEXT #name = "…"` (diffed on focus loss) |
 | picks a combo item, list row, table row, tab | `SELECT #name = value/index` (read back after Swing processed the click) |
+| selects a node of a `JTree` | `SELECT #name` with `path` (labels from the root) |
+| double-click, or right-click, with a place (tree node, table cell, list row) | `CLICK #name` with `count` 2 or `button` 3 and `path`, or `row` and `column` |
+| ends a table cell edit with a new value | `SET_CELL #name` with `row`, `column` and `value` (`CellEditTracker`) |
+| changes a `JSpinner` value | `SET_TEXT #name = "…"` |
 | ENTER / ESC / TAB / DELETE / F-keys / Ctrl+… | `KEY value` (VK name, modifiers) |
 
 The recorder takes the golden snapshot of a step at the first input of the next step (F-21), before that input changes the UI.
 If no input comes, a background thread takes it when the UI is quiet.
 Save writes the scenario and the golden file `<scenario>.golden.json` (the recording run defines v1 of the golden). `RecorderToolbar` (named `smoker.toolbar`, always-on-top) offers
-Record/Pause, Pick (hover → red border + locator + "unnamed" warning), Rename, Delete, Save. Everything named
+Record/Pause, Pick (hover → red border + locator + "unnamed" warning), Rename, Delete, Save, `Group...`, `Up` and `Down`.
+A preview pane shows the changes of the golden of the selected step. `Places` finds the place of a click (tree path, table cell,
+list row) for the recorder and for replay. `CellEditTracker` watches the cell edits of a `JTable` and gives `SET_CELL`. Everything named
 `smoker.*` is excluded from recording and snapshots.
 
 ## 7. Run matrix and environment facts
@@ -182,4 +188,4 @@ Record/Pause, Pick (hover → red border + locator + "unnamed" warning), Rename,
 | 2 | Logback fragment bridge | R-15 |
 | 2 | Hints API jar: `Smoker.markDynamic(component)`, `Smoker.busy()/idle()` for long async work | R-05 |
 | 2 | Screenshot oracle with tolerance (opt-in per step) | R-24 |
-| 3 | Recorder: step grouping ("functionality" header), inline rename, snapshot preview tree | R-26 |
+| 3 | Recorder: inline rename, snapshot preview tree (grouping and the golden preview are done in WP-06) | R-26 |

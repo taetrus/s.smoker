@@ -58,8 +58,20 @@ With `DemoSimulator` (`-Ddemo.simPort`), suite `[sim-a, bad, sim-b]`: `before` s
 `sim-a` PASS, `bad` FAIL with attempts 2 and `failed in a shared JVM and in a new JVM`, `sim-b` PASS with attempts 1,
 `applicationStarts` 3, exit code 1, the `after` marker exists and the port is closed.
 A `before` command with exit code 1 gives exit code 2, no `agent-1.cfg`, and the `after` marker exists.
+It checks the WP-06 criterion (R-20a) with `-Ddemo.recorderPanel=true` (`scenarios-recorder/recorder.json`, 9 steps in the groups
+Tree, Table and Spinner): run1 NO_GOLDEN for s001 to s009, `approve`, run2 PASS with three `<tr class='group'>` rows in `report.html`.
+The golden has `demo.picked` `opened Main.java` (s002) and `menu docs` (s004), `demo.total` `total 10` (s005) and `total 0` (s008),
+and `selectedIndex` 2 for `demo.tree` (s001). A copy with the value `9` in s005 gives FAIL with a `demo.total` difference.
+`scenarios-failing-recorder/bad-cell.json` gives ERROR `the cell editor refused the value "abc"`.
 Run `mvn -B verify` and `mvn -B verify -Plocale-tr`
 after every change to `smoker-agent` or `smoker-core`.
+
+## State on 2026-11-25
+
+- WP-06 tasks 2 to 7 (recorder: tree `SELECT`, double-click and right-click, `SET_CELL`, spinner `SET_TEXT`, golden preview,
+  move and group) are code complete on branch `wp-06-recorder` (not merged yet). WP-06 is not complete: the usability test
+  and the corrections (tasks 1 and 8) come in the field phase (decision 8). F-13 and F-21 stay open until then.
+  R-20a passes on the demo (SelfTestIT, `recorder.json`).
 
 ## State on 2026-11-23
 
@@ -76,7 +88,7 @@ after every change to `smoker-agent` or `smoker-core`.
 - WP-04 (log analysis) is complete; F-08, F-09, F-22 and F-24 are closed. Merged in PR #11; PR #13 keeps the console
   lines of each thread apart. Demo checks pass (SelfTestIT). The Windows check on the pilot (2026-11-22, after PR #13):
   5 of 5 runs pass, and 3 of 3 `jre8` runs give 28 hits. See `docs/wp-04-windows-report.md`.
-- Tests: 87 in `smoker-core`, 280 in `smoker-agent`, 87 in `smoker-cli`, 16 IT. They pass on Linux with Xvfb (default
+- Tests: 92 in `smoker-core`, 378 in `smoker-agent`, 87 in `smoker-cli`, 17 IT (state of branch `wp-06-recorder`). They pass on Linux with Xvfb (default
   locale and `-Plocale-tr`) and in the Windows CI (PR #18: default, `-Plocale-tr`, tr_TR with JRE 8u341 as test JVM).
 - WP-09 follow-up, PR #17 (merged 2026-11-23): `Save` in the recorder writes `<scenario>.lint.json`, so the
   naming assistant operates without a run; `record` prints the lint summary. `JSpinner` and `JSlider` are interactive

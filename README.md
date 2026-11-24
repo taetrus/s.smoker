@@ -31,6 +31,11 @@ The demo application has two system properties for the log analysis (WP-04).
 The panel is off by default, so the goldens of the other scenarios do not change.
 `-Ddemo.equinoxError=true` prints an Equinox start error to `System.out` before the UI is built.
 `smoker-demo/scenarios-log/` holds `log.json` and `exit.json`. Both need `-Ddemo.logPanel=true`.
+`-Ddemo.recorderPanel=true` shows a panel on the east side with a tree (`demo.tree`), an editable table (`demo.items`),
+two popup menus and a spinner (`demo.count`) for the recorder scenarios (WP-06). The panel is off by default.
+`smoker-demo/scenarios-recorder/recorder.json` (9 steps in three groups) and `smoker-demo/scenarios-failing-recorder/bad-cell.json`
+need this option. The integration test checks R-20a with them: NO_GOLDEN, then PASS, a changed value gives FAIL,
+and a value that the cell editor refuses gives ERROR.
 The integration test checks these results:
 a JUL error with a 40-line stack trace gives one hit in s001 (`log.json`);
 `Error count 0 of 3` and `Exception handler ready` give no hit;
@@ -354,7 +359,7 @@ second hit on `stderr`.
 ```
 
 Actions: `CLICK`, `SET_TEXT`, `SELECT` (combo/list/tab by text or index, table by row), `KEY` (VK name, `modifiers` =
-`InputEvent.*_DOWN_MASK`), `WAIT` (ms), `CLOSE_WINDOW`, `WAIT_FOR` (see "Wait for a condition").
+`InputEvent.*_DOWN_MASK`), `WAIT` (ms), `CLOSE_WINDOW`, `WAIT_FOR` (see "Wait for a condition"), `SET_CELL` (see below).
 
 Optional action fields (all are absent in an old scenario):
 
@@ -451,6 +456,10 @@ Do not put a real password in a scenario file.
   both and marks them `(no golden: run and approve)`. `Save` writes the golden file without them. The next run gives
   `NO_GOLDEN` for them, and `approve` repairs them.
 - `Delete` keeps the goldens of the later steps.
+- A cell edit that a button action ends (for example a click on `Save` while the cell is open) gives `SET_CELL`
+  directly before the `CLICK`. The recorder cannot see the state between the commit and the action. This `SET_CELL`
+  has no golden and shows `(no golden: run and approve)`. The next run gives `NO_GOLDEN`, and `approve` repairs it.
+- The step ids can be out of order after a move or after such an insert. The ids stay as they are.
 - The toolbar writes its status line, the Record toggle and the step list to the record log.
 
 ### Remote desktop

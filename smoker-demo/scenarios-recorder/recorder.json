@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "name": "recorder",
+  "description": "Tree select, double-click and right-click, table cell edits and a popup, spinner. Needs -Ddemo.recorderPanel=true.",
+  "startupTimeoutMs": 30000,
+  "quietMs": 300,
+  "stepTimeoutMs": 10000,
+  "compare": "all",
+  "maxRows": 20,
+  "windowKeys": [],
+  "ignore": {"paths": [], "attributes": [], "valuePatterns": []},
+  "steps": [
+    {"id": "s001", "name": "select Main.java", "group": "Tree", "action": {"type": "SELECT", "locator": {"name": "demo.tree"}, "path": ["Root", "src", "Main.java"]}},
+    {"id": "s002", "name": "open Main.java", "action": {"type": "CLICK", "locator": {"name": "demo.tree"}, "path": ["Root", "src", "Main.java"], "count": 2}},
+    {"id": "s003", "name": "right-click docs", "action": {"type": "CLICK", "locator": {"name": "demo.tree"}, "path": ["Root", "docs"], "button": 3}},
+    {"id": "s004", "name": "menu open", "action": {"type": "CLICK", "locator": {"name": "demo.tree.open"}}},
+    {"id": "s005", "name": "quantity 7", "group": "Table", "action": {"type": "SET_CELL", "locator": {"name": "demo.items"}, "row": 0, "column": "Qty", "value": "7"}},
+    {"id": "s006", "name": "nut done", "action": {"type": "SET_CELL", "locator": {"name": "demo.items"}, "row": 1, "column": "Done", "value": "true"}},
+    {"id": "s007", "name": "right-click bolt", "action": {"type": "CLICK", "locator": {"name": "demo.items"}, "row": 0, "column": "Name", "button": 3}},
+    {"id": "s008", "name": "clear quantities", "action": {"type": "CLICK", "locator": {"name": "demo.items.clear"}}},
+    {"id": "s009", "name": "count 7", "group": "Spinner", "action": {"type": "SET_TEXT", "locator": {"name": "demo.count"}, "value": "7"}}
+  ]
+}

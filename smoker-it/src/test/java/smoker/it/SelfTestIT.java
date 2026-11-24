@@ -8,6 +8,7 @@ import org.junit.Test;
 import smoker.core.io.Json;
 import smoker.core.io.ScenarioFiles;
 import smoker.core.model.Action;
+import smoker.core.model.NodeSnapshot;
 import smoker.core.model.RunResult;
 import smoker.core.model.Scenario;
 import smoker.core.model.Snapshot;
@@ -353,6 +354,78 @@ public class SelfTestIT {
         assertTrue(lint.output, lint.output.contains("notes.btn.save"));
         assertTrue(lint.output, Pattern.compile("(?m)^\\d+ unnamed interactive component\\(s\\)").matcher(lint.output).find());
         assertTrue(read(patch), read(patch).contains("saveButton.setName(\"notes.btn.save\");"));
+    }
+
+    @Test
+    public void recorderTypesReplayOnTheDemo() throws Exception {
+        Path dir = Files.createDirectories(work.resolve("recorder"));
+        Path scenario = dir.resolve("recorder.json");
+        Files.copy(demoDir.resolve("scenarios-recorder/recorder.json"), scenario);
+        Path log = dir.resolve("demo.log");
+        String panel = "-Ddemo.recorderPanel=true";
+
+        Cli run1 = run(scenario, dir.resolve("run1"), log, panel);
+        assertEquals(run1.output, 0, run1.exit);
+        RunResult r1 = result(dir.resolve("run1/recorder"));
+        for (int i = 1; i <= 9; i++) assertStepStatus(r1, String.format("s%03d", i), RunResult.Status.NO_GOLDEN);
+        Cli approve = cli("approve", "--run", dir.resolve("run1/recorder").toString(), "--scenario", scenario.toString());
+        assertEquals(approve.output, 0, approve.exit);
+
+        LinkedHashMap<String, Snapshot> golden = ScenarioFiles.readGolden(scenario);
+        assertEquals("opened Main.java", nodeText(golden.get("s002"), "demo.picked"));
+        assertEquals("menu docs", nodeText(golden.get("s004"), "demo.picked"));
+        assertEquals("total 10", nodeText(golden.get("s005"), "demo.total"));
+        assertEquals("total 0", nodeText(golden.get("s008"), "demo.total"));
+        boolean selected = false;
+        for (NodeSnapshot n : golden.get("s001").nodes) {
+            if ("demo.tree".equals(n.name) && Integer.valueOf(2).equals(n.selectedIndex)) selected = true;
+        }
+        assertTrue("tree selectedIndex 2 in s001", selected);
+
+        Cli run2 = run(scenario, dir.resolve("run2"), log, panel);
+        assertEquals(run2.output, 0, run2.exit);
+        RunResult r2 = result(dir.resolve("run2/recorder"));
+        assertEquals(run2.output, RunResult.Status.PASS, r2.status);
+        for (int i = 1; i <= 9; i++) assertStepStatus(r2, String.format("s%03d", i), RunResult.Status.PASS);
+        String report = read(dir.resolve("run2/report.html"));
+        assertEquals(3, countOf(report, "<tr class='group'>"));
+        assertTrue(report.contains("Tree"));
+        assertTrue(report.contains("Table"));
+        assertTrue(report.contains("Spinner"));
+
+        // A changed value in s005 gives a difference in demo.total.
+        Path changed = dir.resolve("changed").resolve("recorder.json");
+        Files.createDirectories(changed.getParent());
+        Scenario sc = ScenarioFiles.readScenario(scenario);
+        sc.findStep("s005").action.value = "9";
+        Json.write(changed, sc);
+        Files.copy(ScenarioFiles.goldenPath(scenario), ScenarioFiles.goldenPath(changed));
+        Cli run3 = run(changed, dir.resolve("run3"), log, panel);
+        assertEquals(run3.output, 1, run3.exit);
+        RunResult.StepResult s005 = assertStepStatus(result(dir.resolve("run3/recorder")), "s005", RunResult.Status.FAIL);
+        boolean total = false;
+        for (String d : s005.differences) if (d.contains("demo.total")) total = true;
+        assertTrue(s005.differences.toString(), total);
+
+        // A value that the cell editor refuses gives ERROR.
+        Path bad = dir.resolve("bad-cell.json");
+        Files.copy(demoDir.resolve("scenarios-failing-recorder/bad-cell.json"), bad);
+        Cli runBad = run(bad, dir.resolve("run-bad"), log, panel);
+        RunResult.StepResult b = assertStepStatus(result(dir.resolve("run-bad/bad-cell")), "s001", RunResult.Status.ERROR);
+        assertTrue(runBad.output + b.error, b.error.contains("the cell editor refused the value \"abc\""));
+    }
+
+    private static String nodeText(Snapshot s, String name) {
+        assertNotNull("no golden snapshot", s);
+        for (NodeSnapshot n : s.nodes) if (name.equals(n.name)) return n.text;
+        fail("no node " + name);
+        return null;
+    }
+
+    private static int countOf(String text, String part) {
+        int n = 0;
+        for (int i = text.indexOf(part); i >= 0; i = text.indexOf(part, i + part.length())) n++;
+        return n;
     }
 
     @Test

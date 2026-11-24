@@ -199,13 +199,16 @@ State on 2026-11-22: WP-05 is on branch `wp-05-suite-mode` (PR #15). On the demo
 **WP-06 Recorder (10 pd)**
 
 1. Do a usability test with two developers. Each developer records three scenarios. Write down each problem.
-2. Record tree selection as `SELECT` with the path of labels.
-3. Record the double-click and the right mouse button as `CLICK` with the fields `count` and `button`.
-4. Record a table cell edit as `SET_CELL` with row, column and value.
-5. Record a spinner value as `SET_TEXT`.
-6. Show the changes of the golden snapshot for the selected step in the toolbar.
-7. Add the functions to move a step and to add a step group.
+2. DONE: Record tree selection as `SELECT` with the path of labels.
+3. DONE: Record the double-click and the right mouse button as `CLICK` with the fields `count` and `button`.
+4. DONE: Record a table cell edit as `SET_CELL` with row, column and value.
+5. DONE: Record a spinner value as `SET_TEXT`.
+6. DONE: Show the changes of the golden snapshot for the selected step in the toolbar.
+7. DONE: Add the functions to move a step and to add a step group.
 8. Correct the problems from task 1.
+
+State (2026-11-25): tasks 2 to 7 are code complete on branch `wp-06-recorder` (not merged). `SelfTestIT` checks R-20a on the demo (`recorder.json`).
+F-13 and F-21 stay open until the field phase (tasks 1 and 8, decision 8).
 
 Completion criterion: R-20a passes. A developer who did not see the tool before records a scenario with 10 steps in less than 10 minutes.
 
