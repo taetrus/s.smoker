@@ -81,6 +81,8 @@ final class Recorder implements AWTEventListener {
     private String textAtFocusGain;
     /** The password warning was given since the last password field got the focus (F-19). */
     private boolean passwordWarned;
+    /** Table cell edits (spec 6.4). EDT only. */
+    private final CellEditTracker cells = new CellEditTracker();
 
     /** @param golden the existing golden snapshots of {@code scenario}; empty for a new scenario */
     Recorder(AgentConfig cfg, Scenario scenario, Map<String, Snapshot> golden) {
@@ -318,6 +320,8 @@ final class Recorder implements AWTEventListener {
         if (isSmokerUi(src)) return;
 
         int id = event.getID();
+        // An event of a cell edit records no other step; the edit gives one SET_CELL at its end (spec 6.4).
+        final boolean cellEdit = cells.event(event, src);
         if (id == MouseEvent.MOUSE_PRESSED && editing != null && !SwingUtilities.isDescendingFrom(src, editing)) {
             // A target that takes no focus (menu item, toolbar button) gives the field no FOCUS_LOST.
             // Flush the typed text now, so that SET_TEXT comes before the click and has its own snapshot (F-21).
@@ -327,6 +331,16 @@ final class Recorder implements AWTEventListener {
             // First input of the next step: the component has not processed it yet (F-21).
             takePendingSnapshots(id == FocusEvent.FOCUS_GAINED);
         }
+        if (cells.active()) {
+            // The table processes the event after this listener: read the end of the edit in a later EDT task.
+            SwingUtilities.invokeLater(new Runnable() {
+                @Override
+                public void run() {
+                    endOfCellEdit(!cellEdit);
+                }
+            });
+        }
+        if (cellEdit) return;
         if (event instanceof FocusEvent) {
             onFocus((FocusEvent) event, src);
         } else if (event instanceof KeyEvent) {
@@ -349,6 +363,33 @@ final class Recorder implements AWTEventListener {
             textAtFocusGain = editing.getText();
         } else if (e.getID() == FocusEvent.FOCUS_LOST && src == editing) {
             flushText();
+        }
+    }
+
+    /**
+     * Adds SET_CELL when a cell edit ended with a new value (spec 6.4). A password field as editor gives the
+     * warning and no step (F-19).
+     *
+     * @param byOtherInput the event that ended the edit is not part of the edit, for example the press on a button.
+     *                     The step of that input comes later: the state now is the state of SET_CELL (F-21).
+     */
+    private void endOfCellEdit(boolean byOtherInput) {
+        CellEditTracker.Edit e = cells.check();   // also while paused: an edit of before a pause gives no step later
+        if (e == null || !recording) return;
+        if (e.password) {
+            say("password field: a table cell edit is not recorded. Add a SET_CELL step by hand, or set the value outside the scenario.");
+            return;
+        }
+        add(Action.setCell(Locators.resolve(e.table), e.row, e.column, e.value));
+        if (!byOtherInput) return;
+        Step s = scenario.steps.get(scenario.steps.size() - 1);
+        synchronized (pendingSnapshots) {
+            pendingSnapshots.remove(s);
+        }
+        try {
+            store(Collections.singletonList(s), taker.take());
+        } catch (RuntimeException ex) {
+            say("snapshot failed: " + ex);
         }
     }
 
@@ -506,7 +547,7 @@ final class Recorder implements AWTEventListener {
     }
 
     /** The combo box whose popup holds {@code c}, or null. */
-    private static JComboBox<?> comboOf(Component c) {
+    static JComboBox<?> comboOf(Component c) {
         JPopupMenu popup = (JPopupMenu) SwingUtilities.getAncestorOfClass(JPopupMenu.class, c);
         return popup != null && popup.getInvoker() instanceof JComboBox ? (JComboBox<?>) popup.getInvoker() : null;
     }
