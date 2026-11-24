@@ -270,6 +270,225 @@ public class RecorderCellEditTest {
         }
     }
 
+    /**
+     * Fix round 1, Important 1: with terminateEditOnFocusLost, the focus change of the press stops the edit. The
+     * FOCUS_LOST of the editor and the FOCUS_GAINED of the button come one after the other; the stop is in the
+     * FOCUS_GAINED handling. The SET_CELL golden shows the state before the button action.
+     */
+    @Test
+    public void editEndedByTheFocusChangeHasTheGoldenOfBeforeTheAction() throws Exception {
+        onEdt(new Runnable() {
+            public void run() {
+                table.putClientProperty("terminateEditOnFocusLost", Boolean.TRUE);
+                ok.addFocusListener(new java.awt.event.FocusAdapter() {
+                    @Override
+                    public void focusGained(FocusEvent e) {
+                        if (table.isEditing()) table.getCellEditor().stopCellEditing();   // as JTable.CellEditorRemover
+                    }
+                });
+            }
+        });
+        clickCell(0, QTY, 1);
+        startEdit(0, QTY);
+        type("5");
+        final Component ed = editor();
+        dispatch(mouse(ok, MouseEvent.MOUSE_PRESSED, new Point(5, 5), 1));
+        flush();
+        assertTrue("the press alone does not stop the edit", isEditing());
+        // The press asked for the focus: both focus events are in the queue, so the task of FOCUS_LOST runs after both.
+        onEdt(new Runnable() {
+            public void run() {
+                ed.dispatchEvent(new FocusEvent(ed, FocusEvent.FOCUS_LOST, false, ok));
+                ok.dispatchEvent(new FocusEvent(ok, FocusEvent.FOCUS_GAINED, false, ed));
+            }
+        });
+        dispatch(mouse(ok, MouseEvent.MOUSE_RELEASED, new Point(5, 5), 1));
+        dispatch(mouse(ok, MouseEvent.MOUSE_CLICKED, new Point(5, 5), 1));
+        flush();
+        assertFalse(isEditing());
+        List<Step> steps = steps();
+        assertTrue(describe(steps), steps.size() >= 2);
+        Step cell = steps.get(steps.size() - 2);
+        Step click = steps.get(steps.size() - 1);
+        assertSetCell(cell.action, 0, "Qty", "5");
+        assertEquals("t.ok", click.action.locator.name);
+        awaitSnapshot(cell, 10000);
+        Snapshot snap = recorder.snapshot(cell);
+        assertEquals("5", node(snap, "t.items").cells.get(0).get(QTY));
+        assertEquals("idle", node(snap, "t.label").text);
+    }
+
+    /** Fix round 1, Important 2: the editable rule of the JTable (as the replay uses it), not only of the model. */
+    @Test
+    public void tableThatOverridesIsCellEditableGivesSetCell() throws Exception {
+        final JTable custom = onEdt(new Callable<JTable>() {
+            public JTable call() {
+                final String[] data = {"a", "b"};
+                javax.swing.table.AbstractTableModel m = new javax.swing.table.AbstractTableModel() {
+                    public int getRowCount() { return data.length; }
+                    public int getColumnCount() { return 1; }
+                    public String getColumnName(int c) { return "Name"; }
+                    public Object getValueAt(int r, int c) { return data[r]; }
+                    @Override public void setValueAt(Object v, int r, int c) {
+                        data[r] = String.valueOf(v);
+                        fireTableCellUpdated(r, c);
+                    }
+                };   // isCellEditable of the model: false
+                JTable t = new JTable(m) {
+                    @Override public boolean isCellEditable(int r, int c) { return true; }
+                };
+                t.setName("t.custom");
+                frame.getContentPane().add(t, java.awt.BorderLayout.SOUTH);
+                frame.pack();
+                return t;
+            }
+        });
+        clickCellOf(custom, 1, 0, 1);
+        onEdt(new Runnable() {
+            public void run() {
+                custom.editCellAt(1, 0);
+            }
+        });
+        final Component ed = onEdt(new Callable<Component>() {
+            public Component call() {
+                return custom.getEditorComponent();
+            }
+        });
+        dispatch(new FocusEvent(ed, FocusEvent.FOCUS_GAINED));
+        dispatch(key(ed, KeyEvent.VK_Z, 'Z'));
+        onEdt(new Runnable() {
+            public void run() {
+                ((JTextComponent) ed).setText("Zoe");
+            }
+        });
+        dispatch(key(ed, KeyEvent.VK_ENTER, '\n'));
+        flush();
+        List<Step> steps = steps();
+        Action a = last(steps).action;
+        assertSetCell(a, 1, "Name", "Zoe");
+        assertEquals("t.custom", a.locator.name);
+    }
+
+    /** Fix round 1, F-19: a custom editor that wraps a password field in a panel. */
+    @Test
+    public void wrappedPasswordEditorIsNotRecorded() throws Exception {
+        final JPasswordField pf = new JPasswordField();
+        onEdt(new Runnable() {
+            public void run() {
+                table.getColumnModel().getColumn(NAME).setCellEditor(new WrappedPasswordEditor(pf));
+            }
+        });
+        final ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        final PrintStream old = System.out;
+        System.setOut(new PrintStream(new OutputStream() {
+            public void write(int b) {
+                old.write(b);
+                synchronized (buf) { buf.write(b); }
+            }
+        }, true));
+        try {
+            clickCell(1, NAME, 1);
+            onEdt(new Runnable() {
+                public void run() {
+                    table.editCellAt(1, NAME);
+                }
+            });
+            dispatch(new FocusEvent(pf, FocusEvent.FOCUS_GAINED));
+            dispatch(key(pf, KeyEvent.VK_S, 's'));
+            onEdt(new Runnable() {
+                public void run() {
+                    pf.setText("secret");
+                }
+            });
+            dispatch(key(pf, KeyEvent.VK_ENTER, '\n'));
+            flush();
+            assertFalse(isEditing());
+            assertEquals("secret", valueAt(1, NAME));
+        } finally {
+            System.setOut(old);
+        }
+        List<Step> steps = steps();
+        assertNoType(steps, Action.Type.SET_CELL);
+        assertNoType(steps, Action.Type.SET_TEXT);
+        for (Step s : steps) {
+            assertFalse(describe(steps), String.valueOf(s.action.value).contains("secret"));
+            assertFalse(describe(steps), String.valueOf(s.name).contains("secret"));
+        }
+        synchronized (statuses) {
+            for (String s : statuses) assertFalse(s, s.contains("secret"));
+            assertTrue(statuses.toString(), statuses.contains("password field: a table cell edit is not recorded."
+                    + " Add a SET_CELL step by hand, or set the value outside the scenario."));
+        }
+        String log;
+        synchronized (buf) { log = buf.toString("UTF-8"); }
+        assertFalse(log, log.contains("secret"));
+    }
+
+    /** Fix round 1: an edit that ends while the recorder is paused gives no SET_CELL after the resume. */
+    @Test
+    public void editEndedWhilePausedRecordsNothing() throws Exception {
+        clickCell(1, NAME, 1);
+        startEdit(1, NAME);
+        type("Ana");
+        recorder.pause();
+        flush();
+        enter();
+        recorder.start();
+        clickCell(2, NAME, 1);
+        clickCell(0, QTY, 1);
+        List<Step> steps = steps();
+        assertNoType(steps, Action.Type.SET_CELL);
+        // start() after pause() registers the listener one time only: one click gives one SELECT.
+        int selects = 0;
+        for (Step s : steps) if (s.action.type == Action.Type.SELECT && "2".equals(s.action.value)) selects++;
+        assertEquals(describe(steps), 1, selects);
+    }
+
+    /** Fix round 1: the application changes the pressed cell, with no edit: no SET_CELL. */
+    @Test
+    public void valueChangeWithoutAnEditRecordsNothing() throws Exception {
+        onEdt(new Runnable() {
+            public void run() {
+                table.getSelectionModel().addListSelectionListener(new javax.swing.event.ListSelectionListener() {
+                    public void valueChanged(javax.swing.event.ListSelectionEvent e) {
+                        int r = table.getSelectedRow();
+                        if (r >= 0 && !"x".equals(model.getValueAt(r, NAME))) model.setValueAt("x", r, NAME);
+                    }
+                });
+            }
+        });
+        clickCell(1, NAME, 1);
+        assertFalse(isEditing());
+        assertEquals("x", valueAt(1, NAME));
+        assertNoType(steps(), Action.Type.SET_CELL);
+    }
+
+    /** A custom cell editor: a panel that holds a password field. */
+    private static final class WrappedPasswordEditor extends javax.swing.AbstractCellEditor
+            implements javax.swing.table.TableCellEditor {
+        private final JPasswordField field;
+        private final JPanel panel = new JPanel(new java.awt.BorderLayout());
+
+        WrappedPasswordEditor(JPasswordField field) {
+            this.field = field;
+            panel.add(field);
+            field.addActionListener(new ActionListener() {
+                public void actionPerformed(ActionEvent e) {
+                    stopCellEditing();
+                }
+            });
+        }
+
+        public Object getCellEditorValue() {
+            return new String(field.getPassword());
+        }
+
+        public Component getTableCellEditorComponent(JTable t, Object value, boolean selected, int row, int column) {
+            field.setText("");
+            return panel;
+        }
+    }
+
     @Test
     public void cancelledEditRecordsNothing() throws Exception {
         clickCell(1, NAME, 1);
@@ -481,10 +700,18 @@ public class RecorderCellEditTest {
 
     /** Press, release and clicked on the cell, each through the AWT event listeners; then the EDT is flushed. */
     private void clickCell(int row, int column, int count) throws Exception {
-        Point p = center(cellRect(row, column));
-        dispatch(mouse(table, MouseEvent.MOUSE_PRESSED, p, count));
-        dispatch(mouse(table, MouseEvent.MOUSE_RELEASED, p, count));
-        dispatch(mouse(table, MouseEvent.MOUSE_CLICKED, p, count));
+        clickCellOf(table, row, column, count);
+    }
+
+    private static void clickCellOf(final JTable t, final int row, final int column, int count) throws Exception {
+        Point p = center(onEdt(new Callable<Rectangle>() {
+            public Rectangle call() {
+                return t.getCellRect(row, column, false);
+            }
+        }));
+        dispatch(mouse(t, MouseEvent.MOUSE_PRESSED, p, count));
+        dispatch(mouse(t, MouseEvent.MOUSE_RELEASED, p, count));
+        dispatch(mouse(t, MouseEvent.MOUSE_CLICKED, p, count));
         flush();
     }
 

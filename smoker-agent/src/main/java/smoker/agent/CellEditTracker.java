@@ -1,13 +1,12 @@
 package smoker.agent;
 
-import javax.swing.DefaultCellEditor;
 import javax.swing.JComboBox;
 import javax.swing.JPasswordField;
 import javax.swing.JTable;
 import javax.swing.SwingUtilities;
-import javax.swing.table.TableCellEditor;
 import java.awt.AWTEvent;
 import java.awt.Component;
+import java.awt.Container;
 import java.awt.Point;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
@@ -46,7 +45,16 @@ final class CellEditTracker {
     private int modelRow;
     private int modelColumn;
     private String before;
+    /** The watched cell was in a cell edit at one moment: a value change without an edit is no SET_CELL. */
+    private boolean seen;
     private boolean password;
+
+    /** Forgets the watched cell and the table (pause). */
+    void reset() {
+        table = null;
+        editor = null;
+        watching = false;
+    }
 
     /**
      * Called for each event before the recorder rules. Returns true if the event belongs to a cell edit: its source
@@ -78,7 +86,7 @@ final class CellEditTracker {
         JTable t = c instanceof JTable ? (JTable) c : (JTable) SwingUtilities.getAncestorOfClass(JTable.class, c);
         if (t == null || !t.isEditing()) return false;
         if (!watching) table = t;
-        if (t == table) editor = t.getEditorComponent();
+        if (t == table) saw();
         return true;
     }
 
@@ -96,9 +104,28 @@ final class CellEditTracker {
         int c = table.getEditingColumn();
         if (watching && (r != viewRow || c != table.convertColumnIndexToView(modelColumn))) ended = finish();
         if (!watching) watch(r, c);
-        editor = table.getEditorComponent();
-        if (editor instanceof JPasswordField) password = true;
+        saw();
         return ended;
+    }
+
+    /** The table is editing: remember the editor component, and whether the watched cell is in the edit. */
+    private void saw() {
+        editor = table.getEditorComponent();
+        if (!watching || table.getEditingRow() != viewRow
+                || table.getEditingColumn() != table.convertColumnIndexToView(modelColumn)) return;
+        seen = true;
+        if (hasPasswordField(editor)) password = true;
+    }
+
+    /** True if {@code c} is a password field or holds one, for example a custom editor panel (F-19). */
+    private static boolean hasPasswordField(Component c) {
+        if (c instanceof JPasswordField) return true;
+        if (c instanceof Container) {
+            for (Component child : ((Container) c).getComponents()) {
+                if (hasPasswordField(child)) return true;
+            }
+        }
+        return false;
     }
 
     private void watch(int r, int c) {
@@ -109,25 +136,21 @@ final class CellEditTracker {
         modelRow = table.convertRowIndexToModel(r);
         modelColumn = table.convertColumnIndexToModel(c);
         before = text(table.getModel().getValueAt(modelRow, modelColumn));
+        seen = false;
         password = false;
     }
 
     private Edit finish() {
         watching = false;
-        if (modelRow >= table.getModel().getRowCount() || modelColumn >= table.getModel().getColumnCount()) return null;
         // A value that changed without an edit (for example by the application) is not a SET_CELL.
-        if (!table.getModel().isCellEditable(modelRow, modelColumn)) return null;
+        if (!seen) return null;
+        if (modelRow >= table.getModel().getRowCount() || modelColumn >= table.getModel().getColumnCount()) return null;
+        int c = table.convertColumnIndexToView(modelColumn);
+        // The rule of the replay: JTable.isCellEditable with view indexes (an application can override it).
+        if (c < 0 || viewRow >= table.getRowCount() || !table.isCellEditable(viewRow, c)) return null;
         String now = text(table.getModel().getValueAt(modelRow, modelColumn));
         if (now.equals(before)) return null;
-        return new Edit(table, viewRow, column, now, password || passwordEditor());
-    }
-
-    /** True if the editor of the watched cell is a password field. No call to the editor: it has no side effect. */
-    private boolean passwordEditor() {
-        int c = table.convertColumnIndexToView(modelColumn);
-        if (c < 0) return false;
-        TableCellEditor ed = table.getCellEditor(viewRow, c);
-        return ed instanceof DefaultCellEditor && ((DefaultCellEditor) ed).getComponent() instanceof JPasswordField;
+        return new Edit(table, viewRow, column, now, password);
     }
 
     private static String text(Object value) {

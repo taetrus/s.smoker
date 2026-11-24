@@ -111,6 +111,8 @@ final class Recorder implements AWTEventListener {
     }
 
     void start() {
+        // AWT calls a listener once per registration: after pause and start, each event came twice.
+        Toolkit.getDefaultToolkit().removeAWTEventListener(this);
         Toolkit.getDefaultToolkit().addAWTEventListener(this,
                 AWTEvent.MOUSE_EVENT_MASK | AWTEvent.KEY_EVENT_MASK | AWTEvent.FOCUS_EVENT_MASK);
         recording = true;
@@ -119,6 +121,17 @@ final class Recorder implements AWTEventListener {
 
     void pause() {
         recording = false;
+        // The recorder sees no event while paused: an edit that ends now must give no SET_CELL after the resume.
+        if (SwingUtilities.isEventDispatchThread()) {
+            cells.reset();
+        } else {
+            SwingUtilities.invokeLater(new Runnable() {
+                @Override
+                public void run() {
+                    cells.reset();
+                }
+            });
+        }
         say("paused");
     }
 
@@ -324,6 +337,9 @@ final class Recorder implements AWTEventListener {
         // An event of a cell edit records no other step; the edit gives one SET_CELL at its end (spec 6.4).
         final boolean cellEdit = cells.event(event, src);
         final int stepsBefore = scenario.steps.size();
+        // A key or a mouse event in the edit is the input of SET_CELL. Another event (for example the focus change of
+        // a press on a button) can end the edit before the action of the next input: the snapshot comes at once.
+        final boolean editInput = cellEdit && (event instanceof KeyEvent || event instanceof MouseEvent);
         if (id == MouseEvent.MOUSE_PRESSED && editing != null && !SwingUtilities.isDescendingFrom(src, editing)) {
             // A target that takes no focus (menu item, toolbar button) gives the field no FOCUS_LOST.
             // Flush the typed text now, so that SET_TEXT comes before the click and has its own snapshot (F-21).
@@ -338,7 +354,7 @@ final class Recorder implements AWTEventListener {
             SwingUtilities.invokeLater(new Runnable() {
                 @Override
                 public void run() {
-                    endOfCellEdit(!cellEdit, stepsBefore);
+                    endOfCellEdit(!cellEdit, editInput, stepsBefore);
                 }
             });
         }
@@ -376,13 +392,15 @@ final class Recorder implements AWTEventListener {
      * edit at the release. Its step is already in the list: SET_CELL goes directly before it (spec 6.4). The state
      * before the action is gone, so SET_CELL gets no golden and the mark "golden removed" (run and approve).
      *
-     * @param byOtherInput the event that ended the edit is not part of the edit, for example the press on a button.
-     *                     The step of that input comes later: the state now is the state of SET_CELL (F-21).
+     * @param byOtherInput the event that ended the edit is not part of the edit, for example the press on a button
+     * @param editInput    the event is a key or mouse event of the edit; else the state now is the state of SET_CELL,
+     *                     before the action of the next input (F-21), and the snapshot comes at once
      * @param stepsBefore  the number of steps before that event
      */
-    private void endOfCellEdit(boolean byOtherInput, int stepsBefore) {
-        CellEditTracker.Edit e = cells.check();   // also while paused: an edit of before a pause gives no step later
-        if (e == null || !recording) return;
+    private void endOfCellEdit(boolean byOtherInput, boolean editInput, int stepsBefore) {
+        if (!recording) return;   // pause() clears the tracker
+        CellEditTracker.Edit e = cells.check();
+        if (e == null) return;
         if (e.password) {
             say("password field: a table cell edit is not recorded. Add a SET_CELL step by hand, or set the value outside the scenario.");
             return;
@@ -398,7 +416,7 @@ final class Recorder implements AWTEventListener {
             return;
         }
         add(cell);
-        if (!byOtherInput) return;
+        if (editInput) return;
         Step s = scenario.steps.get(scenario.steps.size() - 1);
         synchronized (pendingSnapshots) {
             pendingSnapshots.remove(s);
