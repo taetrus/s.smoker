@@ -72,6 +72,8 @@ after every change to `smoker-agent` or `smoker-core`.
   move and group) are code complete on branch `wp-06-recorder` (not merged yet). WP-06 is not complete: the usability test
   and the corrections (tasks 1 and 8) come in the field phase (decision 8). F-13 and F-21 stay open until then.
   R-20a passes on the demo (SelfTestIT, `recorder.json`).
+- Tests: 92 in `smoker-core`, 378 in `smoker-agent`, 87 in `smoker-cli`, 17 IT. They pass on macOS (default locale and
+  `-Plocale-tr`). Earlier results: Linux with Xvfb and the Windows CI (PR #18) passed with the earlier counts.
 
 ## State on 2026-11-23
 
@@ -88,8 +90,6 @@ after every change to `smoker-agent` or `smoker-core`.
 - WP-04 (log analysis) is complete; F-08, F-09, F-22 and F-24 are closed. Merged in PR #11; PR #13 keeps the console
   lines of each thread apart. Demo checks pass (SelfTestIT). The Windows check on the pilot (2026-11-22, after PR #13):
   5 of 5 runs pass, and 3 of 3 `jre8` runs give 28 hits. See `docs/wp-04-windows-report.md`.
-- Tests: 92 in `smoker-core`, 378 in `smoker-agent`, 87 in `smoker-cli`, 17 IT (state of branch `wp-06-recorder`). They pass on Linux with Xvfb (default
-  locale and `-Plocale-tr`) and in the Windows CI (PR #18: default, `-Plocale-tr`, tr_TR with JRE 8u341 as test JVM).
 - WP-09 follow-up, PR #17 (merged 2026-11-23): `Save` in the recorder writes `<scenario>.lint.json`, so the
   naming assistant operates without a run; `record` prints the lint summary. `JSpinner` and `JSlider` are interactive
   (lint entries). `record` creates the scenario folder. Windows CI passes. The Windows check on `p2.product`
@@ -122,7 +122,7 @@ after every change to `smoker-agent` or `smoker-core`.
   If a failure recurs, keep `smoker-it/target/failsafe-reports` and `smoker-it/target/it-work`.
 - Do not type into the demo windows while SelfTestIT runs on a desktop: they take the focus, and a key press changes a text field.
 - Test isolation: a test must not leave a window that reports "showing". `Window.getWindows()` keeps it for later test classes.
-- Next in plan order (decision 8): the code tasks of WP-06 (2 to 7), then the code tasks of WP-07 (1 to 3, 5 to 7).
+- Next in plan order (decision 8): the code tasks of WP-07 (1 to 3, 5 to 7).
   Then the field phase: Milestone 1, WP-06 tasks 1 and 8, WP-07 task 4.
 - Not verified: JRE 21 at run time on a target application, a product with the hardware simulator.
   JRE 17 (Temurin 17.0.5) operates on spike.master (WP-04 Windows check).
