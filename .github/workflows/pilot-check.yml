@@ -1,0 +1,80 @@
+# Manual checks on the pilot application p2.product (development aid, not a CI gate).
+# A push to a branch pilot-check/** starts the job. The runner must run in the desktop session (see windows.yml).
+# Do not type on the runner PC while the job runs.
+
+name: pilot-check
+
+on:
+  push:
+    branches: ['pilot-check/**']
+
+jobs:
+  stop:
+    name: shorter stop on p2.product (WP-05, F-10, R-38)
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 15
+    env:
+      JAVA8: 'C:\Program Files\Java\jdk1.8.0_341\bin\java.exe'
+      P2: 'D:\dev\p.osgi.ds\distribution\target\products\com.kk.pde.ds.product\win32\win32\x86_64'
+      OSGI: 'plugins\org.eclipse.osgi_3.23.0.v20250228-0640.jar'
+      PILOT: 'C:\smoke\pilot.json'
+      STOP_TIMEOUT_MS: '30000'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: mvn package
+        shell: powershell
+        run: mvn -B package -DskipTests
+
+      - name: run pilot.json and measure the stop
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $out = Join-Path $env:RUNNER_TEMP 'stop-check'
+          if (Test-Path $out) { Remove-Item -Recurse -Force $out }
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          $cli = Join-Path $env:GITHUB_WORKSPACE 'smoker-cli\target\smoker-cli.jar'
+          $agent = Join-Path $env:GITHUB_WORKSPACE 'smoker-agent\target\smoker-agent.jar'
+          # The CLI receives --app as one argument. Each inner quote is \" (Windows PowerShell 5.1).
+          $app = '\"' + $env:JAVA8 + '\" {agent} -jar ' + $env:OSGI + ' -configuration configuration -consoleLog'
+          Push-Location $env:P2
+          $sw = [System.Diagnostics.Stopwatch]::StartNew()
+          & java -jar $cli run --agent $agent --scenarios $env:PILOT --out (Join-Path $out 'run') --stopTimeoutMs $env:STOP_TIMEOUT_MS --app $app *>&1 |
+              Tee-Object -FilePath (Join-Path $out 'cli-output.txt')
+          $code = $LASTEXITCODE
+          $sw.Stop()
+          $cliEnd = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+          Pop-Location
+
+          $s = New-Object System.Collections.Generic.List[string]
+          $s.Add("commit=$env:GITHUB_SHA")
+          $s.Add("exitCode=$code")
+          $s.Add(("totalSeconds={0:N1}" -f $sw.Elapsed.TotalSeconds))
+          $rr = Get-ChildItem -Path $out -Recurse -Filter 'run-result.json' | Select-Object -First 1
+          if ($rr) {
+              $r = Get-Content -Raw -Path $rr.FullName | ConvertFrom-Json
+              $s.Add("status=$($r.status)")
+              $s.Add(("scenarioSeconds={0:N1}" -f (($r.finishedAt - $r.startedAt) / 1000.0)))
+              $s.Add(("stopSeconds(total-scenario)={0:N1}" -f ($sw.Elapsed.TotalSeconds - ($r.finishedAt - $r.startedAt) / 1000.0)))
+              $s.Add(("secondsFromFinishedAtToCliExit={0:N1}" -f (($cliEnd - $r.finishedAt) / 1000.0)))
+          } else {
+              $s.Add('run-result.json: not found')
+          }
+          $log = Get-ChildItem -Path $out -Recurse -Filter 'app-output.log' | Select-Object -First 1
+          if ($log) {
+              $s.Add('stop lines:')
+              Select-String -Path $log.FullName -SimpleMatch '[smoker] stop:' | ForEach-Object { $s.Add('    ' + $_.Line.Trim()) }
+          } else {
+              $s.Add('app-output.log: not found')
+          }
+          $s | Set-Content -Path (Join-Path $out 'summary.txt')
+          Write-Host '===== summary ====='
+          $s | ForEach-Object { Write-Host $_ }
+          exit 0
+
+      - name: upload the results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stop-check
+          path: ${{ runner.temp }}/stop-check
