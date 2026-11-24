@@ -17,6 +17,7 @@ import javax.swing.JMenu;
 import javax.swing.JMenuItem;
 import javax.swing.JPasswordField;
 import javax.swing.JPopupMenu;
+import javax.swing.JSpinner;
 import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JTree;
@@ -44,6 +45,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.WeakHashMap;
 import java.util.concurrent.Callable;
 import java.util.function.BooleanSupplier;
 import java.util.regex.Pattern;
@@ -84,6 +86,8 @@ final class Recorder implements AWTEventListener {
     private boolean passwordWarned;
     /** Table cell edits (spec 6.4). EDT only. */
     private final CellEditTracker cells = new CellEditTracker();
+    /** Spinners with a custom editor that got the status text already (spec 6.5). EDT only. */
+    private final Set<JSpinner> spinnersSaid = Collections.newSetFromMap(new WeakHashMap<JSpinner, Boolean>());
 
     /** @param golden the existing golden snapshots of {@code scenario}; empty for a new scenario */
     Recorder(AgentConfig cfg, Scenario scenario, Map<String, Snapshot> golden) {
@@ -433,9 +437,60 @@ final class Recorder implements AWTEventListener {
         if (editing == null) return;
         String now = editing.getText();
         if (!Locators.eq(now, textAtFocusGain)) {
-            add(Action.setText(Locators.resolve(editing), now));
+            JSpinner spinner = spinnerOf(editing);
+            if (spinner == null) {
+                add(Action.setText(Locators.resolve(editing), now));
+            } else if (spinner.getEditor() instanceof JSpinner.DefaultEditor) {
+                spinnerValue(spinner, now, false);    // the locator is the spinner, not the field (spec 6.5)
+            }
             textAtFocusGain = now;
         }
+    }
+
+    private static JSpinner spinnerOf(Component c) {
+        return (JSpinner) SwingUtilities.getAncestorOfClass(JSpinner.class, c);
+    }
+
+    /**
+     * Records the value of a spinner as SET_TEXT. With {@code merge} (arrow click), the recorder changes the last step
+     * when it is a SET_TEXT on the same spinner; else it adds a step.
+     */
+    private void spinnerValue(JSpinner spinner, String text, boolean merge) {
+        Locator l = Locators.resolve(spinner);
+        int n = scenario.steps.size();
+        Step last = n == 0 ? null : scenario.steps.get(n - 1);
+        if (merge && last != null && last.action.type == Action.Type.SET_TEXT && last.action.locator != null
+                && last.action.locator.toString().equals(l.toString())) {
+            if (Locators.eq(last.action.value, text)) return;
+            String nameBefore = last.action.toString();
+            last.action.value = text;
+            changed(last, nameBefore);
+            return;
+        }
+        add(Action.setText(l, text));
+    }
+
+    /**
+     * An arrow button of a spinner (spec 6.5): no CLICK. The editor field has the new text after Swing processed the
+     * event, so the recorder reads it in a later EDT task.
+     */
+    private void onSpinnerArrow(final JSpinner spinner) {
+        if (!(spinner.getEditor() instanceof JSpinner.DefaultEditor)) {
+            if (spinnersSaid.add(spinner)) say("spinner with a custom editor: the value is not recorded");
+            return;
+        }
+        final JTextComponent field = ((JSpinner.DefaultEditor) spinner.getEditor()).getTextField();
+        final String before = field.getText();
+        SwingUtilities.invokeLater(new Runnable() {
+            @Override
+            public void run() {
+                if (!recording) return;
+                String now = field.getText();
+                if (Locators.eq(now, before)) return;     // for example an arrow at the limit
+                if (field == editing) textAtFocusGain = now;     // no second step at the focus loss
+                spinnerValue(spinner, now, true);
+            }
+        });
     }
 
     private void onKey(KeyEvent e, Component src) {
@@ -503,6 +558,11 @@ final class Recorder implements AWTEventListener {
             return;
         }
         if (e.getButton() != MouseEvent.BUTTON1) return;
+        if (src instanceof AbstractButton && spinnerOf(src) != null) {
+            // The spinner changes its value on the press and, with auto-repeat, until the release (spec 6.5).
+            if (e.getID() == MouseEvent.MOUSE_PRESSED || e.getID() == MouseEvent.MOUSE_RELEASED) onSpinnerArrow(spinnerOf(src));
+            return;
+        }
         if (actsOnRelease(target)) {
             if (firesActionOnRelease(e, target)) add(Action.click(Locators.resolve(target)));
             return;
