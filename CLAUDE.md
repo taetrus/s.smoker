@@ -110,9 +110,9 @@ after every change to `smoker-agent` or `smoker-core`.
   If a failure recurs, keep `smoker-it/target/failsafe-reports` and `smoker-it/target/it-work`.
 - Do not type into the demo windows while SelfTestIT runs on a desktop: they take the focus, and a key press changes a text field.
 - Test isolation: a test must not leave a window that reports "showing". `Window.getWindows()` keeps it for later test classes.
-- Next in plan order: Milestone 1 (version 1.0: one team uses the tool in its merge request pipeline for two weeks).
-  Then WP-06.
-- Not verified: JRE 11 at run time on a target application, a product with the hardware simulator.
+- Next in plan order (decision 8): the code tasks of WP-06 (2 to 7), then the code tasks of WP-07 (1 to 3, 5 to 7).
+  Then the field phase: Milestone 1, WP-06 tasks 1 and 8, WP-07 task 4.
+- Not verified: JRE 21 at run time on a target application, a product with the hardware simulator.
   JRE 17 (Temurin 17.0.5) operates on spike.master (WP-04 Windows check).
 
 ## Decisions already made
@@ -122,6 +122,8 @@ after every change to `smoker-agent` or `smoker-core`.
 - Naming rule `<view>.<widget>` applies to all teams.
 - Lint results fail the pipeline from version 1.1, against a baseline file (only new results fail).
 - WP-09 (naming assistant) follows WP-01.
+- Development continues before Milestone 1 (decision 8, 2026-11-24). A work package without its field tasks is "code complete", not complete.
+- The JRE matrix is JRE 8 and JRE 21 (decision 9, 2026-11-24). No JRE 11 or JRE 17 jobs or runners.
 - Open: number of developers.
 
 ## Working rules
