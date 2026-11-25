@@ -87,6 +87,24 @@ final class QueueProbe {
                 + " ms, busy " + busy + "]";
     }
 
+    /** The stacks of the recorder snapshot threads that do not wait for a pending step. */
+    static String snapshotThreads() {
+        StringBuilder sb = new StringBuilder(" [snapshot threads:");
+        int idle = 0;
+        for (Map.Entry<Thread, StackTraceElement[]> e : Thread.getAllStackTraces().entrySet()) {
+            if (!"smoker-recorder-snapshots".equals(e.getKey().getName())) continue;
+            StackTraceElement[] st = e.getValue();
+            boolean waitsForStep = false;
+            for (int i = 0; i < st.length && i < 4; i++) {
+                if (st[i].getMethodName().equals("snapshotLoop") && i > 0 && st[i - 1].getMethodName().equals("wait")) waitsForStep = true;
+            }
+            if (waitsForStep) { idle++; continue; }
+            sb.append("\n    ").append(e.getKey().getState());
+            for (int i = 0; i < st.length && i < 12; i++) sb.append("\n      at ").append(st[i]);
+        }
+        return sb.append("\n    (").append(idle).append(" waiting for a step)]").toString();
+    }
+
     private static String key(AWTEvent e) {
         String k = e.getClass().getSimpleName() + "#" + e.getID() + "@" + e.getSource().getClass().getSimpleName();
         if (e instanceof InvocationEvent) k += "/" + runnableOf((InvocationEvent) e);
