@@ -613,7 +613,7 @@ The source code does not change.
 ### Lint
 
 ```bash
-java -jar smoker-cli.jar lint --run out/ [--emit-patch names.patch]
+java -jar smoker-cli.jar lint --run out/ [--emit-patch names.patch] [--baseline <file> | --write-baseline <file>]
 ```
 
 `lint` reads the `run-result.json` files and the `*.lint.json` files below the `--run` folder. It prints a table with
@@ -752,7 +752,7 @@ java -jar smoker-cli.jar report --merge out-jre8 out-jre21 --out merged --histor
 - A history file that does not exist starts a new history (the page says `history: new file`).
   A file that is not a version 1 history file is moved to `<file>.damaged`. An existing `.damaged` file is replaced.
   A new history starts, and the command prints `history: the file was damaged, a new history starts` on `System.err`.
-  The exit code stays 0.
+  The command prints the text `history: new file` on `System.err` too. The exit code stays 0.
 - The file format:
 
 ```json
