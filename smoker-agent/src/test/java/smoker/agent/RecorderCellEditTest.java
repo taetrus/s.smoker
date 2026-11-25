@@ -283,6 +283,9 @@ public class RecorderCellEditTest {
         onEdt(new Runnable() {
             public void run() {
                 table.putClientProperty("terminateEditOnFocusLost", Boolean.TRUE);
+                // The test sends the focus events itself. In a focused window (Windows CI) the press would move the
+                // real focus to the button and stop the edit before the test sends them.
+                ok.setRequestFocusEnabled(false);
                 ok.addFocusListener(new java.awt.event.FocusAdapter() {
                     @Override
                     public void focusGained(FocusEvent e) {
