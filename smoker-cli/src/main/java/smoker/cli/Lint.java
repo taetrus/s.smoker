@@ -94,6 +94,16 @@ final class Lint {
         return "none|" + e.window + "|" + e.runtimeClass + "|" + e.type + "|" + e.text;
     }
 
+    /**
+     * The identity of a result in a baseline (WP-07, R-41). It is narrower than {@link #joinKey}: it ignores the window
+     * and the proposed name, so a change of the proposal rules or of a title makes no old result new.
+     */
+    static String baselineKey(LintEntry e) {
+        if (e.field != null) return "field|" + e.runtimeClass + "|" + e.field;
+        if (e.text != null && !e.text.isEmpty()) return "text|" + e.runtimeClass + "|" + e.type + "|" + e.text;
+        return "none|" + e.runtimeClass + "|" + e.type;
+    }
+
     static String table(List<LintEntry> entries) {
         List<LintEntry> sorted = new ArrayList<LintEntry>(entries);
         Collections.sort(sorted, new Comparator<LintEntry>() {

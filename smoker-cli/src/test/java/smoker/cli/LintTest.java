@@ -228,4 +228,37 @@ public class LintTest {
         o.put("emit-patch", blocker.resolve("p.txt").toString());
         assertEquals(2, Main.lint(o));
     }
+
+    /** WP-07 (R-41): the three forms of the baseline key ignore the window and the proposal. */
+    @Test
+    public void baselineKeyForms() {
+        LintEntry f = fieldEntry("saveButton", "orders.btn.save");
+        assertEquals("field|nametest.OrdersPanel|saveButton", Lint.baselineKey(f));
+        f.text = "Other";
+        f.window = "other window";
+        f.proposedName = "x.y";
+        assertEquals("field|nametest.OrdersPanel|saveButton", Lint.baselineKey(f));
+        LintEntry t1 = textEntry("w1", "a.ok");
+        LintEntry t2 = textEntry("w2", "a.ok2");
+        assertEquals("text|nametest.SettingsDialogPanel|JButton|OK", Lint.baselineKey(t1));
+        assertEquals(Lint.baselineKey(t1), Lint.baselineKey(t2));
+        LintEntry n = entry("w", "p.A", null, null, "JTable", null, null, null, null);
+        assertEquals("none|p.A|JTable", Lint.baselineKey(n));
+        n.text = "";
+        assertEquals("none|p.A|JTable", Lint.baselineKey(n));
+    }
+
+    @Test
+    public void baselineOfSortsAndJoins() {
+        LintEntry b = fieldEntry("b", "x.b");
+        LintEntry a = fieldEntry("a", "x.a");
+        LintEntry a2 = fieldEntry("a", "x.other");
+        LintBaseline base = LintBaseline.of(Arrays.asList(b, a, a2));
+        assertEquals(1, base.version);
+        assertEquals(2, base.entries.size());
+        assertEquals("field|nametest.OrdersPanel|a", base.entries.get(0).key);
+        assertEquals("x.a", base.entries.get(0).proposedName);
+        assertEquals("nametest.OrdersPanel", base.entries.get(0).runtimeClass);
+        assertEquals(2, base.keys().size());
+    }
 }

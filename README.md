@@ -633,7 +633,7 @@ Example: field `jButton1` with the text `Save` gives `orders.btn.save`. HTML tag
 
 The last line is a summary: the number of unnamed interactive components, the number with a proposed name (by
 source: fields, text, labels), and the number with an automatic name. `lint` exits with 0. It exits with 2 if it finds no `run-result.json` and no
-`*.lint.json`, or if it cannot write the file.
+`*.lint.json`, or if it cannot write the file. With a baseline, the exit code differs (see "Lint baseline").
 `--emit-patch` writes one Java line for each proposed name, for example `saveButton.setName("orders.btn.save");`,
 with the class where the developer must add it. A component with a generated field also gets this line
 (`jButton1.setName("orders.btn.save");`). A component without a field gets a comment with its text or its label.
@@ -642,6 +642,34 @@ In one window, the second equal proposal gets the suffix `2`, the third `3` (`or
 
 Interactive components are buttons, menu items, text components, combo boxes, lists, tables, trees, tabbed panes,
 spinners and sliders. The text field inside a spinner is part of the spinner: it gives no entry of its own.
+
+#### Lint baseline
+
+```bash
+java -jar smoker-cli.jar lint --run out/ --write-baseline lint-baseline.json
+java -jar smoker-cli.jar lint --run out/ --baseline lint-baseline.json
+```
+
+The baseline file holds the lint results that the team accepts. Only a new result fails the pipeline.
+
+1. `--write-baseline` writes all current results, sorted by key, and exits with 0. Commit the file.
+2. `--baseline` prints the table and the summary of the results that are not in the file. It then prints
+   `lint: <n> result(s), <m> in the baseline, <k> new, <f> baseline entries not found`.
+3. `--baseline` exits with 1 when `k` is more than 0, else with 0. An entry that is not found does not fail the run:
+   the component got a name, or the run did not show that window.
+4. `--baseline` exits with 2 when the file does not exist or cannot be read. `--baseline` and `--write-baseline`
+   together exit with 2. There are two options on purpose: a lost baseline file must fail, not write a new baseline.
+5. `--emit-patch` works as before, on all results.
+
+The identity of a result is its baseline key. The window title and the proposed name are not part of it.
+A change of the proposal rules or of a title does not make an old result new.
+
+- A result with a field: `field|<class>|<field>`.
+- A result with a text and no field: `text|<class>|<type>|<text>`.
+- Other results: `none|<class>|<type>`.
+
+Results with the same key are one entry. A change of the text of a component without a field gives a new result.
+Only `key` is read back. The other entries help a person who reads the file or a diff. Tested on the demo (SelfTestIT).
 
 #### Lint without a run
 

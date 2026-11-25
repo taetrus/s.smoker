@@ -356,6 +356,30 @@ public class SelfTestIT {
         assertTrue(read(patch), read(patch).contains("saveButton.setName(\"notes.btn.save\");"));
     }
 
+    /** WP-07 (F-18, R-41): the baseline fails only for a result that it does not hold. */
+    @Test
+    public void lintBaselineFailsOnlyForANewResult() throws Exception {
+        Path dir = Files.createDirectories(work.resolve("lint-baseline"));
+        Path scenario = dir.resolve("notes.json");
+        Files.copy(demoDir.resolve("scenarios/notes.json"), scenario);
+        Cli run1 = run(scenario, dir.resolve("run1"), dir.resolve("demo.log"));
+        assertEquals(run1.output, 0, run1.exit);
+        Path baseline = dir.resolve("lint-baseline.json");
+        Cli write = cli("lint", "--run", dir.resolve("run1").toString(), "--write-baseline", baseline.toString());
+        assertEquals(write.output, 0, write.exit);
+        Cli same = cli("lint", "--run", dir.resolve("run1").toString(), "--baseline", baseline.toString());
+        assertEquals(same.output, 0, same.exit);
+        assertTrue(same.output, same.output.contains(" 0 new, 0 baseline entries not found"));
+        JsonObject tree = Json.readTree(baseline).getAsJsonObject();
+        JsonArray entries = tree.getAsJsonArray("entries");
+        assertTrue(tree.toString(), entries.size() > 1);
+        entries.remove(0);
+        Json.write(baseline, tree);
+        Cli fewer = cli("lint", "--run", dir.resolve("run1").toString(), "--baseline", baseline.toString());
+        assertEquals(fewer.output, 1, fewer.exit);
+        assertTrue(fewer.output, fewer.output.contains(" 1 new, 0 baseline entries not found"));
+    }
+
     @Test
     public void recorderTypesReplayOnTheDemo() throws Exception {
         Path dir = Files.createDirectories(work.resolve("recorder"));

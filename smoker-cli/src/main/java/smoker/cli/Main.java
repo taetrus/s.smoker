@@ -42,7 +42,7 @@ import java.util.concurrent.TimeUnit;
  * java -jar smoker-cli.jar record  --agent smoker-agent.jar --app "java -jar app.jar" --scenario scenarios/new.json [--log app.log]
  *     [--logPattern p] [--failLevel L] [--logCharset c] [--locale en-US] [--timeZone UTC] [--lookAndFeel system] [--windowSize 1280x800]
  * java -jar smoker-cli.jar approve --run out/greet --scenario scenarios/greet.json [--steps s001,s002]
- * java -jar smoker-cli.jar lint    --run out/ [--emit-patch names.patch]   (--run scenarios/ reads the *.lint.json files of record)
+ * java -jar smoker-cli.jar lint    --run out/ [--emit-patch names.patch] [--baseline b.json | --write-baseline b.json]   (--run scenarios/ reads the *.lint.json files of record)
  * java -jar smoker-cli.jar report  --merge out-jre8/ out-jre21/ --out merged/   (one page for the job-result.json files)
  * java -jar smoker-cli.jar check-release product/ [more paths]   (exit code 1: the product has the agent option in an .ini file)
  * </pre>
@@ -426,9 +426,59 @@ public final class Main {
             return 2;
         }
         List<smoker.core.model.LintEntry> entries = loaded.entries;
-        System.out.print(Lint.table(entries));
-        System.out.println();
-        System.out.println(Lint.summary(entries));
+        boolean compare = o.containsKey("baseline");
+        if (compare && o.containsKey("write-baseline")) {
+            System.err.println("lint: use --baseline or --write-baseline, not both");
+            return 2;
+        }
+        Set<String> baselineKeys = null;
+        if (compare) {
+            Path b = Paths.get(o.get("baseline"));
+            try {
+                LintBaseline base = Json.read(b, LintBaseline.class);
+                if (base == null) throw new IOException("empty file");
+                baselineKeys = base.keys();
+            } catch (Exception e) {
+                System.err.println("lint: cannot read the baseline " + b + ": " + e.getMessage());
+                return 2;
+            }
+        }
+        List<smoker.core.model.LintEntry> shown = entries;
+        int newCount = 0;
+        if (compare) {
+            shown = new ArrayList<smoker.core.model.LintEntry>();
+            Set<String> current = new java.util.HashSet<String>();
+            for (smoker.core.model.LintEntry e : entries) {
+                String key = Lint.baselineKey(e);
+                current.add(key);
+                if (!baselineKeys.contains(key)) shown.add(e);
+            }
+            int inBaseline = 0;
+            for (String k : current) if (baselineKeys.contains(k)) inBaseline++;
+            int notFound = 0;
+            for (String k : baselineKeys) if (!current.contains(k)) notFound++;
+            newCount = current.size() - inBaseline;
+            System.out.print(Lint.table(shown));
+            System.out.println();
+            System.out.println(Lint.summary(shown));
+            System.out.println("lint: " + current.size() + " result(s), " + inBaseline + " in the baseline, " + newCount
+                    + " new, " + notFound + " baseline entries not found");
+        } else {
+            System.out.print(Lint.table(entries));
+            System.out.println();
+            System.out.println(Lint.summary(entries));
+        }
+        if (o.containsKey("write-baseline")) {
+            Path b = Paths.get(o.get("write-baseline"));
+            try {
+                if (b.toAbsolutePath().getParent() != null) Files.createDirectories(b.toAbsolutePath().getParent());
+                Json.write(b, LintBaseline.of(entries));
+            } catch (IOException e) {
+                System.err.println("lint: cannot write " + b + ": " + e.getMessage());
+                return 2;
+            }
+            System.out.println("baseline written to " + b);
+        }
         if (o.containsKey("emit-patch")) {
             Path f = Paths.get(o.get("emit-patch"));
             try {
@@ -440,7 +490,7 @@ public final class Main {
             }
             System.out.println("patch written to " + f);
         }
-        return 0;
+        return newCount > 0 ? 1 : 0;
     }
 
     // ---- helpers -------------------------------------------------------------------------------
@@ -551,6 +601,7 @@ public final class Main {
                 + "          [--locale <tag>] [--timeZone <id>] [--lookAndFeel <class|system|crossplatform>] [--windowSize <w>x<h>]\n"
                 + "  approve --run <out/scenario-dir> --scenario <file> [--steps s001,s002]\n"
                 + "  lint    --run <out dir or scenario folder> [--emit-patch <file>]\n"
+                + "          [--baseline <file> | --write-baseline <file>]\n"
                 + "  report  --merge <dir> [<dir> ...] --out <dir> [--history <file>] [--run-id <text>] [--ref <text>]\n"
                 + "  check-release <path> [<path> ...]   (folder, .ini file or .zip file of a product; exit code 1 when an .ini file has the agent option)\n"
                 + "  <cmd> may contain the token {agent} where -javaagent:... must be placed (default: after the first word).");

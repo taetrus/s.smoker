@@ -457,4 +457,112 @@ public class MainTest {
         assertFalse(err(), err().contains("must not contain ';'"));
         assertEquals("%d;%msg", ConfigFile.read(out.resolve("agent-1.cfg")).get("logPattern"));
     }
+
+    // ---- WP-07: lint baseline (F-18, R-41) -------------------------------------------------------
+
+    private Path lintRun(String name, String... fields) throws Exception {
+        Path d = tmp.getRoot().toPath().resolve(name);
+        Files.createDirectories(d);
+        RunResult r = new RunResult();
+        for (String f : fields) {
+            LintEntry e = new LintEntry();
+            e.window = "Orders";
+            e.runtimeClass = "p.OrdersPanel";
+            e.field = f;
+            e.type = "JButton";
+            e.text = f;
+            e.proposedName = "orders." + f;
+            e.source = "field";
+            r.lint.add(e);
+        }
+        Json.write(d.resolve("run-result.json"), r);
+        return d;
+    }
+
+    private int lint(String... args) throws Exception {
+        return Main.lint(Main.parse(args));
+    }
+
+    private Path writeBaseline(Path run) throws Exception {
+        Path b = tmp.getRoot().toPath().resolve("b.json");
+        assertEquals(0, lint("--run", run.toString(), "--write-baseline", b.toString()));
+        return b;
+    }
+
+    @Test
+    public void writeBaselineThenCompareGives0() throws Exception {
+        Path run = lintRun("r", "aButton", "bButton");
+        Path b = writeBaseline(run);
+        assertTrue(new String(Files.readAllBytes(b), StandardCharsets.UTF_8).contains("\"version\": 1"));
+        out.reset();
+        assertEquals(0, lint("--run", run.toString(), "--baseline", b.toString()));
+        assertTrue(out(), out().contains("lint: 2 result(s), 2 in the baseline, 0 new, 0 baseline entries not found"));
+    }
+
+    @Test
+    public void newResultGives1() throws Exception {
+        Path b = writeBaseline(lintRun("r", "aButton", "bButton"));
+        Path run3 = lintRun("r3", "aButton", "bButton", "cButton");
+        out.reset();
+        assertEquals(1, lint("--run", run3.toString(), "--baseline", b.toString()));
+        assertTrue(out(), out().contains("lint: 3 result(s), 2 in the baseline, 1 new, 0 baseline entries not found"));
+        assertTrue(out(), out().contains("orders.cButton"));
+        assertFalse(out(), out().contains("orders.aButton"));
+    }
+
+    @Test
+    public void entryNotFoundDoesNotFail() throws Exception {
+        Path b = writeBaseline(lintRun("r", "aButton", "bButton"));
+        Path run1 = lintRun("r1", "aButton");
+        out.reset();
+        assertEquals(0, lint("--run", run1.toString(), "--baseline", b.toString()));
+        assertTrue(out(), out().contains("1 baseline entries not found"));
+    }
+
+    @Test
+    public void changedProposedNameIsNotNew() throws Exception {
+        Path b = writeBaseline(lintRun("r", "aButton"));
+        Path run = lintRun("r2", "aButton");
+        RunResult r = Json.read(run.resolve("run-result.json"), RunResult.class);
+        r.lint.get(0).proposedName = "changed.name";
+        r.lint.get(0).window = "Other title";
+        Json.write(run.resolve("run-result.json"), r);
+        out.reset();
+        assertEquals(0, lint("--run", run.toString(), "--baseline", b.toString()));
+        assertTrue(out(), out().contains("0 new"));
+    }
+
+    @Test
+    public void missingBaselineGives2() throws Exception {
+        Path run = lintRun("r", "aButton");
+        Path b = tmp.getRoot().toPath().resolve("none.json");
+        assertEquals(2, lint("--run", run.toString(), "--baseline", b.toString()));
+        assertTrue(err(), err().contains("lint: cannot read the baseline " + b));
+    }
+
+    @Test
+    public void damagedBaselineGives2() throws Exception {
+        Path run = lintRun("r", "aButton");
+        Path b = file("damaged.json", "{'version': 1, 'entries': [");
+        assertEquals(2, lint("--run", run.toString(), "--baseline", b.toString()));
+        assertTrue(err(), err().contains("lint: cannot read the baseline " + b));
+    }
+
+    @Test
+    public void bothOptionsGive2() throws Exception {
+        Path run = lintRun("r", "aButton");
+        assertEquals(2, lint("--run", run.toString(), "--baseline", "x.json", "--write-baseline", "y.json"));
+        assertTrue(err(), err().contains("lint: use --baseline or --write-baseline, not both"));
+    }
+
+    @Test
+    public void withoutTheOptionsAsToday() throws Exception {
+        Path run = lintRun("r", "aButton", "bButton");
+        assertEquals(0, lint("--run", run.toString()));
+        Path b = writeBaseline(lintRun("r0", "aButton"));
+        Path patch = tmp.getRoot().toPath().resolve("p.patch");
+        assertEquals(1, lint("--run", run.toString(), "--baseline", b.toString(), "--emit-patch", patch.toString()));
+        String p = new String(Files.readAllBytes(patch), StandardCharsets.UTF_8);
+        assertTrue(p, p.contains("aButton.setName") && p.contains("bButton.setName"));
+    }
 }
