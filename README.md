@@ -181,7 +181,7 @@ java -jar smoker-cli.jar run --agent smoker-agent.jar --app "java -jar myapp.jar
 
 | key | example | the agent does |
 |---|---|---|
-| `locale` | `en-US`, `en_US`, `tr-TR` | `Locale.setDefault`, and the system properties `user.language`, `user.country` (and `user.variant` when given) |
+| `locale` | `en-US`, `en_US`, `tr-TR`, `tr` | `Locale.setDefault`, and the system properties `user.language`, `user.country` and `user.variant`. A locale without a country (or variant) removes `user.country` (or `user.variant`) |
 | `timeZone` | `UTC`, `Europe/Istanbul` | `TimeZone.setDefault`, and the system property `user.timezone` |
 | `lookAndFeel` | `system`, `crossplatform`, `javax.swing.plaf.nimbus.NimbusLookAndFeel` | sets the system property `swing.defaultlaf` |
 | `windowSize` | `1280x800` | sets the size of the main window |
@@ -200,7 +200,9 @@ java -jar smoker-cli.jar run --agent smoker-agent.jar --app "java -jar myapp.jar
   example `locale is tr-TR, not the configured en-US`. The status does not change. `run` prints each warning as
   `warning: <text>` below the status. `report.html` shows each warning below the heading of the scenario.
 - The CLI checks `locale` and `windowSize` before the application starts: a wrong value gives
-  `run: <message>` or `record: <message>` and exit code 2. The CLI does not check `timeZone` and `lookAndFeel`: the
+  `run: <message>` or `record: <message>` and exit code 2. A `locale` value must be a full language tag with a
+  language of 2 or 3 letters: `en-USA`, `en--US`, `english` and `--locale` without a value give exit code 2.
+  The agent uses the same rule for the key `locale` of its configuration file. The CLI does not check `timeZone` and `lookAndFeel`: the
   JRE of the application can know other time zones and classes than the JRE of the CLI. The agent checks them.
 - Limit: JRE 8 and JRE 21 format some dates and numbers differently for the same locale. From Java 9 the JRE uses
   the CLDR locale data by default. The `locale` key does not remove this difference. There are two remedies:
@@ -657,7 +659,7 @@ The baseline file holds the lint results that the team accepts. Only a new resul
    `lint: <n> result(s), <m> in the baseline, <k> new, <f> baseline entries not found`.
 3. `--baseline` exits with 1 when `k` is more than 0, else with 0. An entry that is not found does not fail the run:
    the component got a name, or the run did not show that window.
-4. `--baseline` exits with 2 when the file does not exist or cannot be read. `--baseline` and `--write-baseline`
+4. `--baseline` exits with 2 when the file does not exist, cannot be read or is not a path. `--baseline` and `--write-baseline`
    together exit with 2. There are two options on purpose: a lost baseline file must fail, not write a new baseline.
 5. `--emit-patch` works as before, on all results.
 
@@ -696,7 +698,7 @@ Each save replaces the lint file: it holds the last record session only.
 
 `run` has the option `--label <text>`. The label names the job, for example `jre8` or `jre21`. It has 1 to 40
 characters: letters, digits, `.`, `_` and `-`. A wrong label gives exit code 2 before the application starts.
-`--label` is permitted with `--suite` too.
+`--label` is permitted with `--suite` too. `--label` without a value gives exit code 2.
 
 ```
 java -jar smoker-cli.jar run --agent smoker-agent.jar --app "java -jar myapp.jar" --scenarios scenarios/ --out out/ --label jre8
@@ -725,9 +727,11 @@ java -jar smoker-cli.jar report --merge out-jre8 out-jre21 --out merged
   When no relative path exists (another drive on Windows), the link is a `file:` URI.
   The page therefore works when the job folders stay beside the page.
 - A note, an error or a warning of a scenario shows below its row, with the column name before it.
+- The header of the page shows the time of the merge (UTC), and the run id and the ref when given.
 - Exit code 0: the page is written. The jobs give the verdict of the pipeline, not the merge.
   Exit code 2: a wrong argument, two jobs with one column name, a folder without a readable `job-result.json`,
-  or a page that cannot be written. The error text names the folder.
+  or a page that cannot be written. The error text names the folder. An argument that is not a path also gives
+  exit code 2. Write each job folder, not `out-*`: Windows cmd and PowerShell do not expand `*` (not tested).
 - A `job-result.json` that has no `scenarios` list, or a scenario without `key`, gives exit code 2 and the text
   `report: <folder>/job-result.json is not a job result`.
 
@@ -742,6 +746,7 @@ java -jar smoker-cli.jar report --merge out-jre8 out-jre21 --out merged --histor
 - `--history <file>`: the command reads the file, adds the current run and writes the file back. The page then
   shows the last 20 runs. Without this option the command reads and writes no history file.
 - `--run-id` and `--ref` are free texts. The command stores them in the history and shows them in the header of the page.
+  `--history`, `--run-id` or `--ref` without a value gives exit code 2.
   A run with a `--run-id` that the file already has replaces that run (a pipeline job that runs again).
   A run without `--run-id` is always added.
 - The file keeps the last 20 runs. The page has the column `Last 20 runs: <job>` for each job, with one letter
@@ -774,6 +779,8 @@ report:      report --merge out-jre8 out-jre21 --out merged --history history.js
 ```
 
 The merge job needs the artifacts of both jobs. It must keep `history.json` between pipelines (a cache or an artifact of the last run).
+The merge job must run also when a test job failed (GitLab: `when: always`), else a failed job gives no page.
+This example is not tested.
 
 ### Release guard
 
@@ -790,7 +797,9 @@ java -jar smoker-cli.jar check-release target/products [<path> ...]
   any case. The command prints `<file>:<line number>: <line>` for each hit (`<zip>!<entry>:<line number>: <line>` for an archive).
 - Exit code 1: there is a hit. Exit code 0: no hit; the command prints `check-release: <n> file(s) checked, no agent option`.
   Exit code 2: a path does not exist, a file cannot be read, or a path has no `.ini` file. A guard that checked
-  nothing for a path must not pass. Exit code 2 wins over exit code 1.
+  nothing for a path must not pass. Exit code 2 wins over exit code 1. An argument that is not a path (Windows: `*`,
+  `?`, `"`) and a `.zip` file with an entry name that the JRE cannot read (JRE 8: a name that is not UTF-8) also
+  give exit code 2: `check-release: cannot read <path>: <message>`.
 - The command reads the `.ini` files as ISO-8859-1.
 
 Example for a Maven or Tycho build, after the product is assembled (`exec-maven-plugin`, phase `verify`):
