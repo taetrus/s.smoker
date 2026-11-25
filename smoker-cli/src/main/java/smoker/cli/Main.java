@@ -43,7 +43,7 @@ import java.util.concurrent.TimeUnit;
  *     [--logPattern p] [--failLevel L] [--logCharset c] [--locale en-US] [--timeZone UTC] [--lookAndFeel system] [--windowSize 1280x800]
  * java -jar smoker-cli.jar approve --run out/greet --scenario scenarios/greet.json [--steps s001,s002]
  * java -jar smoker-cli.jar lint    --run out/ [--emit-patch names.patch] [--baseline b.json | --write-baseline b.json]   (--run scenarios/ reads the *.lint.json files of record)
- * java -jar smoker-cli.jar report  --merge out-jre8/ out-jre21/ --out merged/   (one page for the job-result.json files)
+ * java -jar smoker-cli.jar report  --merge out-jre8/ out-jre21/ --out merged/ [--history h.json] [--run-id id] [--ref ref]   (one page for the job-result.json files)
  * java -jar smoker-cli.jar check-release product/ [more paths]   (exit code 1: the product has the agent option in an .ini file)
  * </pre>
  * {@code --app} is the full command line; the token {@code {agent}} marks where the -javaagent option goes.
@@ -178,9 +178,9 @@ public final class Main {
         return failures == 0 ? 0 : 1;
     }
 
-    /** The error text for a wrong {@code --label}, else null. */
+    /** The error text for a wrong {@code --label}, else null. {@code "true"} is the value of parse() for an option without a value. */
     static String checkLabel(String label) {
-        if (label != null && label.matches("[A-Za-z0-9._-]{1,40}")) return null;
+        if (label != null && !"true".equals(label) && label.matches("[A-Za-z0-9._-]{1,40}")) return null;
         return "run: --label must have 1 to 40 characters of letters, digits, '.', '_' and '-'";
     }
 
@@ -439,9 +439,9 @@ public final class Main {
         }
         Set<String> baselineKeys = null;
         if (compare) {
-            Path b = Paths.get(o.get("baseline"));
+            String b = o.get("baseline");
             try {
-                LintBaseline base = Json.read(b, LintBaseline.class);
+                LintBaseline base = Json.read(Paths.get(b), LintBaseline.class); // Paths.get: Windows refuses * ? "
                 if (base == null || base.entries == null) throw new IOException("no entries list");
                 for (LintBaseline.Entry be : base.entries) {
                     if (be == null || be.key == null) throw new IOException("an entry has no key");

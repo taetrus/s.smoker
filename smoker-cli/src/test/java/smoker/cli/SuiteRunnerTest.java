@@ -201,6 +201,28 @@ public class SuiteRunnerTest {
         assertEquals("a", j.scenarios.get(0).key);
     }
 
+    /** One entry for each suite name, also after a second attempt in {@code <name>.shared} (final review m-10). */
+    @Test
+    public void jobResultHasOneEntryForEachNameAfterASecondAttempt() throws Exception {
+        file("a.json", "{\"schemaVersion\": 2, \"name\": \"a\", \"steps\": []}");
+        file("b.json", "{\"schemaVersion\": 2, \"name\": \"b\", \"steps\": []}");
+        Path suiteFile = file("suite.json", "{\"app\": " + q(FakeCommand.line("results") + " {agent}")
+                + ", \"scenarios\": [\"a.json\", \"b.json\"]}");
+        Path out = tmp.getRoot().toPath().resolve("out");
+        SuiteRunner runner = new SuiteRunner(SuiteFile.read(suiteFile), tmp.getRoot().toPath().resolve("agent.jar"),
+                out, false, null, null);
+        assertEquals(0, runner.run());
+        assertTrue(Files.exists(out.resolve("b.shared").resolve("run-result.json")));
+        smoker.core.model.JobResult j = smoker.core.io.Json.read(out.resolve("job-result.json"),
+                smoker.core.model.JobResult.class);
+        assertEquals(2, j.scenarios.size());
+        assertEquals("a", j.scenarios.get(0).key);
+        assertEquals("b", j.scenarios.get(1).key);
+        assertEquals("Scenario b", j.scenarios.get(1).name);
+        assertEquals(RunResult.Status.PASS, j.scenarios.get(1).status);
+        assertEquals("failed in a shared JVM, passed in a new JVM", j.scenarios.get(1).note);
+    }
+
     private Path suiteWithApp(String appArgs, String extra) throws Exception {
         file("a.json", "{\"schemaVersion\": 2, \"name\": \"a\", \"steps\": []}");
         return file("suite.json", "{\"app\": " + q(appArgs + " {agent}") + ", " + extra + " \"scenarios\": [\"a.json\"]}");
@@ -217,6 +239,12 @@ public class SuiteRunnerTest {
         String json = new String(Files.readAllBytes(out.resolve("suite-result.json")), StandardCharsets.UTF_8);
         assertTrue(json, json.contains("\"applicationStarts\": 3"));
         assertTrue(json, json.contains("(application start)"));
+        smoker.core.model.JobResult j = smoker.core.io.Json.read(out.resolve("job-result.json"),
+                smoker.core.model.JobResult.class);
+        assertEquals(2, j.scenarios.size());
+        assertEquals("a", j.scenarios.get(0).key);
+        assertEquals("(application start)", j.scenarios.get(1).key);
+        assertEquals(RunResult.Status.ERROR, j.scenarios.get(1).status);
         String report = new String(Files.readAllBytes(out.resolve("report.html")), StandardCharsets.UTF_8);
         assertTrue(report, report.contains("not run: the application did not start 3 times"));
         assertTrue(Files.exists(out.resolve("agent-3.cfg")));

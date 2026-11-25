@@ -224,6 +224,31 @@ public class ReleaseCheckTest {
         assertTrue(err(), err().contains("check-release: cannot read"));
     }
 
+    /**
+     * An entry name that is not UTF-8 and has no UTF-8 flag (a zip of an old tool). JRE 8 throws an
+     * IllegalArgumentException (MALFORMED), a later JRE a ZipException (final review I-2).
+     */
+    @Test
+    public void zipWithANonUtf8EntryNameGives2() throws Exception {
+        Path z = tmp.newFolder().toPath().resolve("product.zip");
+        try (ZipOutputStream zip = new ZipOutputStream(new FileOutputStream(z.toFile()), StandardCharsets.ISO_8859_1)) {
+            zip.putNextEntry(new ZipEntry("caf\u00e9/eclipse.ini")); // the byte 0xE9 alone is not UTF-8
+            zip.write(AGENT.getBytes(StandardCharsets.ISO_8859_1));
+            zip.closeEntry();
+        }
+        assertEquals(2, check(z.toString()));
+        assertTrue(err(), err().contains("check-release: cannot read " + z + ": "));
+    }
+
+    /** On Windows {@code *}, {@code ?} and {@code "} are not path characters; NUL is not one on any platform. */
+    @Test
+    public void argumentThatIsNotAPathGives2() throws Exception {
+        Path dir = tmp.newFolder().toPath();
+        ini(dir.resolve("eclipse.ini"), AGENT);
+        assertEquals(2, check("bad\u0000name", dir.toString()));
+        assertTrue(err(), err().contains("check-release: cannot read bad\u0000name: "));
+    }
+
     @Test
     public void crlfLineEndsGiveTheLineText() throws Exception {
         Path f = tmp.newFolder().toPath().resolve("eclipse.ini");

@@ -48,16 +48,18 @@ final class ReleaseCheck {
         Scan scan = new Scan();
         boolean failed = false;
         for (String p : paths) {
-            Path path = Paths.get(p);
-            if (!Files.exists(path)) {
-                err.println("check-release: " + p + " does not exist");
-                failed = true;
-                continue;
-            }
             int before = scan.files;
             try {
+                Path path = Paths.get(p);
+                if (!Files.exists(path)) {
+                    err.println("check-release: " + p + " does not exist");
+                    failed = true;
+                    continue;
+                }
                 scanPath(path, scan, out);
-            } catch (IOException e) {
+            } catch (IOException | RuntimeException e) {
+                // RuntimeException: a path character that the platform refuses (Windows: * ? "), a zip entry
+                // name that is not UTF-8 on JRE 8. Exit code 1 is for an agent option only.
                 err.println("check-release: cannot read " + p + ": " + e.getMessage());
                 failed = true;
                 continue;

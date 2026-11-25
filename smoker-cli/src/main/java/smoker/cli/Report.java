@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -52,15 +53,22 @@ final class Report {
         }
         if (merge.isEmpty()) return fail("report: --merge needs at least one folder");
         if (out == null) return fail("report: missing --out");
-        Path outDir = Paths.get(out).toAbsolutePath().normalize();
+        Path outDir = path("--out", out);
+        if (outDir == null) return 2;
+        Path historyFile = null;
+        if (history != null) {
+            historyFile = path("--history", history);
+            if (historyFile == null) return 2;
+        }
         List<MatrixReportWriter.Job> jobs = new ArrayList<MatrixReportWriter.Job>();
         Set<String> columns = new HashSet<String>();
         Map<String, JobResult> byColumn = new LinkedHashMap<String, JobResult>();
         for (String m : merge) {
-            Path dir = Paths.get(m).toAbsolutePath().normalize();
-            if (dir.equals(outDir)) return fail("report: --out must not be a job folder: " + m);
+            Path dir;
             JobResult r;
             try {
+                dir = Paths.get(m).toAbsolutePath().normalize(); // Windows: "out-*" is not a path
+                if (dir.equals(outDir)) return fail("report: --out must not be a job folder: " + m);
                 r = Json.read(dir.resolve(JobResult.FILE), JobResult.class);
             } catch (IOException | RuntimeException e) {
                 return fail("report: cannot read " + JobResult.FILE + " in " + m + ": " + e.getMessage());
@@ -77,7 +85,6 @@ final class Report {
         header.ref = ref;
         header.time = System.currentTimeMillis();
         RunHistory runs = null;
-        Path historyFile = history == null ? null : Paths.get(history).toAbsolutePath().normalize();
         try {
             if (historyFile != null) {
                 RunHistory.Loaded loaded = RunHistory.load(historyFile);
@@ -105,6 +112,16 @@ final class Report {
             }
         }
         return true;
+    }
+
+    /** The absolute path of an option value, or null after an error text: Windows refuses {@code * ? "} in a path. */
+    private static Path path(String option, String value) {
+        try {
+            return Paths.get(value).toAbsolutePath().normalize();
+        } catch (InvalidPathException e) {
+            System.err.println("report: " + option + " " + value + " is not a path: " + e.getMessage());
+            return null;
+        }
     }
 
     private static int fail(String text) {

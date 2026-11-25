@@ -193,6 +193,25 @@ public class ReportTest {
         assertEquals(2, merge(a, "--ref", "--history", "h.json"));
     }
 
+    /**
+     * On Windows {@code report --merge out-*} gives the argument {@code out-*}, and {@code *} is not a path character.
+     * NUL is not a path character on any platform (final review I-2).
+     */
+    @Test
+    public void argumentThatIsNotAPathGives2() throws Exception {
+        Path a = jobFolder("x1", "a");
+        String bad = "out-\u0000";
+        assertEquals(2, Report.run(new String[] {"--merge", a.toString(), bad, "--out", out().toString()}));
+        assertTrue(err(), err().contains("report: cannot read " + JobResult.FILE + " in " + bad + ": "));
+        errText.reset();
+        assertEquals(2, Report.run(new String[] {"--merge", a.toString(), "--out", bad}));
+        assertTrue(err(), err().contains("report: --out " + bad + " is not a path: "));
+        errText.reset();
+        assertEquals(2, merge(a, "--history", bad));
+        assertTrue(err(), err().contains("report: --history " + bad + " is not a path: "));
+        assertFalse(Files.exists(out().resolve("report.html")));
+    }
+
     @Test
     public void jobResultWithNullPartsGives2AndNamesTheFolder() throws Exception {
         String[] bad = {

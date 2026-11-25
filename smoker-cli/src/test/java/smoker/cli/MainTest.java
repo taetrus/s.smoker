@@ -167,7 +167,23 @@ public class MainTest {
         assertTrue(err(), err().contains("--label must have 1 to 40"));
     }
 
+    /** parse() gives "true" for --label without a value (final review m-3). */
+    @Test
+    public void labelWithoutValueGivesExitCode2() throws Exception {
+        assertEquals(2, Main.run(Main.parse(new String[] {"--agent", "a.jar", "--app", "x", "--scenarios", "s", "--label"})));
+        assertTrue(err(), err().contains("run: --label must have 1 to 40"));
+        assertEquals(2, Main.run(Main.parse(new String[] {"--suite", "none.json", "--agent", "a.jar", "--label", "--strict"})));
+        assertTrue(err(), err().contains("run: --label must have 1 to 40"));
+    }
+
     // ---- stable conditions (WP-07, R-34) ---------------------------------------------------------
+
+    /** parse() gives "true" for --locale without a value (final review I-1). */
+    @Test
+    public void localeWithoutValueGives2() throws Exception {
+        assertEquals(2, Main.run(Main.parse(new String[] {"--agent", "a.jar", "--app", "x", "--scenarios", "s", "--locale"})));
+        assertTrue(err(), err().contains("run: locale: 'true' is not a language tag (example: en-US)"));
+    }
 
     @Test
     public void agentConfigPassesTheConditions() {
@@ -539,6 +555,14 @@ public class MainTest {
         Path b = tmp.getRoot().toPath().resolve("none.json");
         assertEquals(2, lint("--run", run.toString(), "--baseline", b.toString()));
         assertTrue(err(), err().contains("lint: cannot read the baseline " + b));
+    }
+
+    /** Exit code 1 means "new result": a value that is not a path gives 2 (final review I-2). */
+    @Test
+    public void baselineThatIsNotAPathGives2() throws Exception {
+        Path run = lintRun("r", "aButton");
+        assertEquals(2, lint("--run", run.toString(), "--baseline", "b\u0000.json"));
+        assertTrue(err(), err().contains("lint: cannot read the baseline b\u0000.json: "));
     }
 
     @Test
