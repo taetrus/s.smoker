@@ -5,6 +5,8 @@ import smoker.core.io.ConfigFile;
 import smoker.core.io.Json;
 import smoker.core.io.ScenarioFiles;
 import smoker.core.model.Action;
+import smoker.core.model.ConditionValues;
+import smoker.core.model.JobResult;
 import smoker.core.model.LintFile;
 import smoker.core.model.NodeSnapshot;
 import smoker.core.model.RunResult;
@@ -33,13 +35,16 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * <pre>
- * java -jar smoker-cli.jar run     --agent smoker-agent.jar --app "java -jar app.jar" --scenarios scenarios/ --out out/ [--log app.log] [--screenshots off] [--strict]
+ * java -jar smoker-cli.jar run     --agent smoker-agent.jar --app "java -jar app.jar" --scenarios scenarios/ --out out/ [--log app.log] [--screenshots off] [--strict] [--label l]
  *     [--failRegex r] [--allowRegex r] [--logPattern p] [--failLevel L] [--logCharset c]
- * java -jar smoker-cli.jar run     --agent smoker-agent.jar --suite suite.json [--out out/] [--strict] [--timeout s]
+ *     [--locale en-US] [--timeZone UTC] [--lookAndFeel system] [--windowSize 1280x800]
+ * java -jar smoker-cli.jar run     --agent smoker-agent.jar --suite suite.json [--out out/] [--strict] [--timeout s] [--label l]
  * java -jar smoker-cli.jar record  --agent smoker-agent.jar --app "java -jar app.jar" --scenario scenarios/new.json [--log app.log]
- *     [--logPattern p] [--failLevel L] [--logCharset c]
+ *     [--logPattern p] [--failLevel L] [--logCharset c] [--locale en-US] [--timeZone UTC] [--lookAndFeel system] [--windowSize 1280x800]
  * java -jar smoker-cli.jar approve --run out/greet --scenario scenarios/greet.json [--steps s001,s002]
- * java -jar smoker-cli.jar lint    --run out/ [--emit-patch names.patch]   (--run scenarios/ reads the *.lint.json files of record)
+ * java -jar smoker-cli.jar lint    --run out/ [--emit-patch names.patch] [--baseline b.json | --write-baseline b.json]   (--run scenarios/ reads the *.lint.json files of record)
+ * java -jar smoker-cli.jar report  --merge out-jre8/ out-jre21/ --out merged/ [--history h.json] [--run-id id] [--ref ref]   (one page for the job-result.json files)
+ * java -jar smoker-cli.jar check-release product/ [more paths]   (exit code 1: the product has the agent option in an .ini file)
  * </pre>
  * {@code --app} is the full command line; the token {@code {agent}} marks where the -javaagent option goes.
  * Without the token it is inserted right after the first argument (the java executable).
@@ -49,6 +54,10 @@ public final class Main {
 
     public static void main(String[] argv) throws Exception {
         if (argv.length == 0) usage(1);
+        if ("report".equals(argv[0])) System.exit(Report.run(Arrays.copyOfRange(argv, 1, argv.length)));
+        if ("check-release".equals(argv[0])) {
+            System.exit(ReleaseCheck.run(Arrays.copyOfRange(argv, 1, argv.length), System.out, System.err));
+        }
         Map<String, String> o = parse(Arrays.copyOfRange(argv, 1, argv.length));
         String cmd = argv[0];
         int code;
@@ -71,7 +80,7 @@ public final class Main {
         return ms;
     }
 
-    private static final java.util.Collection<String> SUITE_OPTIONS = Arrays.asList("suite", "agent", "out", "strict", "timeout");
+    private static final java.util.Collection<String> SUITE_OPTIONS = Arrays.asList("suite", "agent", "out", "strict", "timeout", "label");
 
     /** {@code run --suite}: the suite file holds everything else (WP-05). */
     static int runSuite(Map<String, String> o) throws Exception {
@@ -80,6 +89,10 @@ public final class Main {
                 System.err.println("run: --" + k + " is not permitted with --suite; put it in the suite file");
                 return 2;
             }
+        }
+        if (o.containsKey("label") && checkLabel(o.get("label")) != null) {
+            System.err.println(checkLabel(o.get("label")));
+            return 2;
         }
         Path agent = Paths.get(req(o, "agent")).toAbsolutePath();
         Path out = Paths.get(o.containsKey("out") ? o.get("out") : "smoker-out").toAbsolutePath();
@@ -97,11 +110,21 @@ public final class Main {
             System.err.println(e.getMessage());
             return 2;
         }
-        return new SuiteRunner(suite, agent, out, o.containsKey("strict"), timeoutS).run();
+        return new SuiteRunner(suite, agent, out, o.containsKey("strict"), timeoutS, o.get("label")).run();
     }
 
     static int run(Map<String, String> o) throws Exception {
         if (o.containsKey("suite")) return runSuite(o);
+        String label = o.get("label");
+        if (o.containsKey("label") && checkLabel(label) != null) {
+            System.err.println(checkLabel(label));
+            return 2;
+        }
+        String conditions = checkConditions(o, "run");
+        if (conditions != null) {
+            System.err.println(conditions);
+            return 2;
+        }
         Path agent = Paths.get(req(o, "agent")).toAbsolutePath();
         Path out = Paths.get(o.containsKey("out") ? o.get("out") : "smoker-out").toAbsolutePath();
         List<Path> scenarios = scenarios(req(o, "scenarios"));
@@ -118,6 +141,7 @@ public final class Main {
         }
         Files.createDirectories(out);
         List<RunResult> results = new ArrayList<RunResult>();
+        List<String> keys = new ArrayList<String>();
         int failures = 0;
         for (int index = 0; index < scenarios.size(); index++) {
             Path sc = scenarios.get(index);
@@ -138,6 +162,8 @@ public final class Main {
             int exit = launch(req(o, "app"), agent, cfgFile, null, runDir.resolve("app-output.log"), budgetMs);
 
             RunResult r = resultOf(runDir, name, sc, exit, budgetMs, "app-output.log");
+            r.label = label;
+            keys.add(name);
             // make screenshot paths relative to the report
             for (RunResult.StepResult s : r.steps) if (s.screenshot != null) s.screenshot = name + "/" + s.screenshot;
             results.add(r);
@@ -147,13 +173,35 @@ public final class Main {
         }
         JUnitXmlWriter.write(out.resolve("junit.xml"), results);
         HtmlReportWriter.write(out.resolve("report.html"), results);
+        Json.write(out.resolve(JobResult.FILE), JobResult.of(label, keys, results));
         System.out.println("\n" + results.size() + " scenario(s), " + failures + " failed. Report: " + out.resolve("report.html"));
         return failures == 0 ? 0 : 1;
     }
 
-    /** Prints the verdict of one scenario: status, error and each step that did not pass. */
+    /** The error text for a wrong {@code --label}, else null. {@code "true"} is the value of parse() for an option without a value. */
+    static String checkLabel(String label) {
+        if (label != null && !"true".equals(label) && label.matches("[A-Za-z0-9._-]{1,40}")) return null;
+        return "run: --label must have 1 to 40 characters of letters, digits, '.', '_' and '-'";
+    }
+
+    /**
+     * The error text for a wrong {@code --locale} or {@code --windowSize}, else null (WP-07, R-34). The CLI does not
+     * check {@code timeZone} and {@code lookAndFeel}: the JRE of the application can know other IDs and classes.
+     */
+    static String checkConditions(Map<String, String> o, String command) {
+        try {
+            if (o.containsKey("locale")) ConditionValues.locale(o.get("locale"));
+            if (o.containsKey("windowSize")) ConditionValues.windowSize(o.get("windowSize"));
+            return null;
+        } catch (IllegalArgumentException e) {
+            return command + ": " + e.getMessage();
+        }
+    }
+
+    /** Prints the verdict of one scenario: status, error, the warnings and each step that did not pass. */
     static void printResult(RunResult r) {
         System.out.println("   " + r.status + (r.error != null ? " \u2014 " + r.error : ""));
+        if (r.warnings != null) for (String w : r.warnings) System.out.println("   warning: " + w);
         for (RunResult.StepResult s : r.steps) {
             if (s.status != RunResult.Status.PASS) {
                 System.out.println("   " + s.stepId + " " + s.status + (s.error != null ? ": " + s.error : ""));
@@ -176,7 +224,7 @@ public final class Main {
             for (int i = 0; i < files.length; i++) c.put("log." + (i + 1), files[i].trim());
         }
         for (String k : new String[] {"screenshots", "failRegex", "allowRegex", "logPattern", "failLevel", "logCharset",
-                "stopTimeoutMs"}) {
+                "stopTimeoutMs", "label", "locale", "timeZone", "lookAndFeel", "windowSize"}) {
             if (o.containsKey(k)) c.put(k, o.get(k));
         }
         return c;
@@ -219,6 +267,11 @@ public final class Main {
     // ---- record --------------------------------------------------------------------------------
 
     static int record(Map<String, String> o) throws Exception {
+        String conditions = checkConditions(o, "record");
+        if (conditions != null) {
+            System.err.println(conditions);
+            return 2;
+        }
         Path agent = Paths.get(req(o, "agent")).toAbsolutePath();
         Path scenario = Paths.get(req(o, "scenario")).toAbsolutePath();
         // The agent continues an existing scenario. Check it here: the agent can only log a wrong file.
@@ -373,9 +426,68 @@ public final class Main {
             return 2;
         }
         List<smoker.core.model.LintEntry> entries = loaded.entries;
-        System.out.print(Lint.table(entries));
-        System.out.println();
-        System.out.println(Lint.summary(entries));
+        boolean compare = o.containsKey("baseline");
+        if (compare && o.containsKey("write-baseline")) {
+            System.err.println("lint: use --baseline or --write-baseline, not both");
+            return 2;
+        }
+        for (String opt : new String[] {"baseline", "write-baseline"}) {
+            if (o.containsKey(opt) && "true".equals(o.get(opt))) {   // parse() gives "true" for an option without a value
+                System.err.println("lint: --" + opt + " needs a file. Use lint --run <dir> [--baseline <file> | --write-baseline <file>]");
+                return 2;
+            }
+        }
+        Set<String> baselineKeys = null;
+        if (compare) {
+            String b = o.get("baseline");
+            try {
+                LintBaseline base = Json.read(Paths.get(b), LintBaseline.class); // Paths.get: Windows refuses * ? "
+                if (base == null || base.entries == null) throw new IOException("no entries list");
+                for (LintBaseline.Entry be : base.entries) {
+                    if (be == null || be.key == null) throw new IOException("an entry has no key");
+                }
+                baselineKeys = base.keys();
+            } catch (Exception e) {
+                System.err.println("lint: cannot read the baseline " + b + ": " + e.getMessage());
+                return 2;
+            }
+        }
+        List<smoker.core.model.LintEntry> shown = entries;
+        int newCount = 0;
+        if (compare) {
+            shown = new ArrayList<smoker.core.model.LintEntry>();
+            Set<String> current = new java.util.HashSet<String>();
+            for (smoker.core.model.LintEntry e : entries) {
+                String key = Lint.baselineKey(e);
+                current.add(key);
+                if (!baselineKeys.contains(key)) shown.add(e);
+            }
+            int inBaseline = 0;
+            for (String k : current) if (baselineKeys.contains(k)) inBaseline++;
+            int notFound = 0;
+            for (String k : baselineKeys) if (!current.contains(k)) notFound++;
+            newCount = current.size() - inBaseline;
+            System.out.print(Lint.table(shown));
+            System.out.println();
+            System.out.println(Lint.summary(shown));
+            System.out.println("lint: " + current.size() + " result(s), " + inBaseline + " in the baseline, " + newCount
+                    + " new, " + notFound + " baseline entries not found");
+        } else {
+            System.out.print(Lint.table(entries));
+            System.out.println();
+            System.out.println(Lint.summary(entries));
+        }
+        if (o.containsKey("write-baseline")) {
+            Path b = Paths.get(o.get("write-baseline"));
+            try {
+                if (b.toAbsolutePath().getParent() != null) Files.createDirectories(b.toAbsolutePath().getParent());
+                Json.writeAtomic(b, LintBaseline.of(entries));
+            } catch (IOException e) {
+                System.err.println("lint: cannot write " + b + ": " + e.getMessage());
+                return 2;
+            }
+            System.out.println("baseline written to " + b);
+        }
         if (o.containsKey("emit-patch")) {
             Path f = Paths.get(o.get("emit-patch"));
             try {
@@ -387,7 +499,7 @@ public final class Main {
             }
             System.out.println("patch written to " + f);
         }
-        return 0;
+        return newCount > 0 ? 1 : 0;
     }
 
     // ---- helpers -------------------------------------------------------------------------------
@@ -488,14 +600,19 @@ public final class Main {
 
     static void usage(int code) {
         System.err.println("usage:\n"
-                + "  run     --agent smoker-agent.jar --app \"<cmd>\" --scenarios <dir|file> --out <dir> [--log <file>] [--screenshots off] [--strict] [--timeout <s>]\n"
+                + "  run     --agent smoker-agent.jar --app \"<cmd>\" --scenarios <dir|file> --out <dir> [--log <file>] [--screenshots off] [--strict] [--timeout <s>] [--label <text>]\n"
                 + "          [--failRegex <r>] [--allowRegex <r>] [--logPattern <p>] [--failLevel <L>] [--logCharset <c>] [--stopTimeoutMs <ms>]\n"
-                + "  run     --agent smoker-agent.jar --suite <suite.json> [--out <dir>] [--strict] [--timeout <s>]\n"
+                + "          [--locale <tag>] [--timeZone <id>] [--lookAndFeel <class|system|crossplatform>] [--windowSize <w>x<h>]\n"
+                + "  run     --agent smoker-agent.jar --suite <suite.json> [--out <dir>] [--strict] [--timeout <s>] [--label <text>]\n"
                 + "          (the suite file holds the application, the commands, the log files and the scenarios)\n"
                 + "  record  --agent smoker-agent.jar --app \"<cmd>\" --scenario <file> [--log <file>]\n"
                 + "          [--logPattern <p>] [--failLevel <L>] [--logCharset <c>]\n"
+                + "          [--locale <tag>] [--timeZone <id>] [--lookAndFeel <class|system|crossplatform>] [--windowSize <w>x<h>]\n"
                 + "  approve --run <out/scenario-dir> --scenario <file> [--steps s001,s002]\n"
                 + "  lint    --run <out dir or scenario folder> [--emit-patch <file>]\n"
+                + "          [--baseline <file> | --write-baseline <file>]\n"
+                + "  report  --merge <dir> [<dir> ...] --out <dir> [--history <file>] [--run-id <text>] [--ref <text>]\n"
+                + "  check-release <path> [<path> ...]   (folder, .ini file or .zip file of a product; exit code 1 when an .ini file has the agent option)\n"
                 + "  <cmd> may contain the token {agent} where -javaagent:... must be placed (default: after the first word).");
         System.exit(code);
     }

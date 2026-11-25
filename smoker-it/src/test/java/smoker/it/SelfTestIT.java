@@ -356,6 +356,30 @@ public class SelfTestIT {
         assertTrue(read(patch), read(patch).contains("saveButton.setName(\"notes.btn.save\");"));
     }
 
+    /** WP-07 (F-18, R-41): the baseline fails only for a result that it does not hold. */
+    @Test
+    public void lintBaselineFailsOnlyForANewResult() throws Exception {
+        Path dir = Files.createDirectories(work.resolve("lint-baseline"));
+        Path scenario = dir.resolve("notes.json");
+        Files.copy(demoDir.resolve("scenarios/notes.json"), scenario);
+        Cli run1 = run(scenario, dir.resolve("run1"), dir.resolve("demo.log"));
+        assertEquals(run1.output, 0, run1.exit);
+        Path baseline = dir.resolve("lint-baseline.json");
+        Cli write = cli("lint", "--run", dir.resolve("run1").toString(), "--write-baseline", baseline.toString());
+        assertEquals(write.output, 0, write.exit);
+        Cli same = cli("lint", "--run", dir.resolve("run1").toString(), "--baseline", baseline.toString());
+        assertEquals(same.output, 0, same.exit);
+        assertTrue(same.output, same.output.contains(" 0 new, 0 baseline entries not found"));
+        JsonObject tree = Json.readTree(baseline).getAsJsonObject();
+        JsonArray entries = tree.getAsJsonArray("entries");
+        assertTrue(tree.toString(), entries.size() > 1);
+        entries.remove(0);
+        Json.write(baseline, tree);
+        Cli fewer = cli("lint", "--run", dir.resolve("run1").toString(), "--baseline", baseline.toString());
+        assertEquals(fewer.output, 1, fewer.exit);
+        assertTrue(fewer.output, fewer.output.contains(" 1 new, 0 baseline entries not found"));
+    }
+
     @Test
     public void recorderTypesReplayOnTheDemo() throws Exception {
         Path dir = Files.createDirectories(work.resolve("recorder"));
@@ -415,6 +439,71 @@ public class SelfTestIT {
         Cli runBad = run(bad, dir.resolve("run-bad"), log, panel);
         RunResult.StepResult b = assertStepStatus(result(dir.resolve("run-bad/bad-cell")), "s001", RunResult.Status.ERROR);
         assertTrue(runBad.output + b.error, b.error.contains("the cell editor refused the value \"abc\""));
+    }
+
+    @Test
+    public void localeAndTimeZoneFromTheConfiguration() throws Exception {
+        Path dir = Files.createDirectories(work.resolve("locale"));
+        Path scenario = dir.resolve("locale.json");
+        Files.copy(demoDir.resolve("scenarios-locale/locale.json"), scenario);
+        Files.copy(ScenarioFiles.goldenPath(demoDir.resolve("scenarios-locale/locale.json")), ScenarioFiles.goldenPath(scenario));
+        assertEquals("1 January 1970 14:00  1,234,567", nodeText(ScenarioFiles.readGolden(scenario).get("s001"), "demo.localeText"));
+        Path log = dir.resolve("demo.log");
+        String panel = "-Ddemo.localePanel=true";
+        // The OS locale of the PC: the demo JVM gets tr_TR and Istanbul. The options of the test JVM come first; these come last.
+        String[] turkishPc = {panel, "-Duser.language=tr", "-Duser.country=TR", "-Duser.timezone=Europe/Istanbul"};
+        String[] enUtc = {"--locale", "en-US", "--timeZone", "UTC"};
+
+        // The keys give the same text on the default PC and on a Turkish PC.
+        Cli run1 = runWithOptions(null, enUtc, scenario, dir.resolve("run1"), log, panel);
+        assertEquals(run1.output, 0, run1.exit);
+        RunResult r1 = result(dir.resolve("run1/locale"));
+        assertEquals(run1.output, RunResult.Status.PASS, r1.status);
+        assertEquals("en-US", r1.locale);
+        assertEquals("UTC", r1.timeZone);
+        assertTrue(String.valueOf(r1.warnings), r1.warnings.isEmpty());
+        Cli run2 = runWithOptions(null, enUtc, scenario, dir.resolve("run2"), log, turkishPc);
+        assertEquals(run2.output, 0, run2.exit);
+        assertEquals(run2.output, RunResult.Status.PASS, result(dir.resolve("run2/locale")).status);
+
+        // Without the keys a Turkish PC gives another text: the keys are what makes the run independent of the PC.
+        Cli run3 = runWithOptions(null, new String[0], scenario, dir.resolve("run3"), log, turkishPc);
+        assertEquals(run3.output, 1, run3.exit);
+        RunResult.StepResult s001 = assertStepStatus(result(dir.resolve("run3/locale")), "s001", RunResult.Status.FAIL);
+        assertTrue(s001.differences.toString(), s001.differences.toString().contains("demo.localeText"));
+        // The keys reach the application: tr-TR and Istanbul give a difference on a PC with en-US.
+        Cli run4 = runWithOptions(null, new String[] {"--locale", "tr-TR", "--timeZone", "Europe/Istanbul"}, scenario,
+                dir.resolve("run4"), log, panel);
+        assertEquals(run4.output, 1, run4.exit);
+        RunResult.StepResult s4 = assertStepStatus(result(dir.resolve("run4/locale")), "s001", RunResult.Status.FAIL);
+        assertTrue(s4.differences.toString(), s4.differences.toString().contains("demo.localeText"));
+
+        // A wrong time zone reaches the agent: the scenario gives ERROR. A wrong window size stops the CLI.
+        Cli badZone = runWithOptions(null, new String[] {"--locale", "en-US", "--timeZone", "Mars/Phobos"}, scenario,
+                dir.resolve("run-zone"), log, panel);
+        assertEquals(badZone.output, 1, badZone.exit);
+        // The agent stops the application with exit code 2, so the scenario has no run-result.json.
+        String zoneJob = read(dir.resolve("run-zone/job-result.json"));
+        assertTrue(zoneJob, zoneJob.contains("\"status\": \"ERROR\"") && zoneJob.contains("app exit code 2"));
+        assertTrue(read(dir.resolve("run-zone/locale/app-output.log")), read(dir.resolve("run-zone/locale/app-output.log")).contains("[smoker] fatal:"));
+        Cli badSize = runWithOptions(null, new String[] {"--windowSize", "big"}, scenario, dir.resolve("run-size"), log, panel);
+        assertEquals(badSize.output, 2, badSize.exit);
+    }
+
+    /** WP-07, R-40a: the release guard finds the agent option of the smoke tester in an .ini file. */
+    @Test
+    public void checkReleaseFindsTheAgentOption() throws Exception {
+        Path dir = Files.createTempDirectory(work, "release");
+        Path product = Files.createDirectories(dir.resolve("product"));
+        Path ini = product.resolve("eclipse.ini");
+        Files.write(ini, Arrays.asList("-vmargs", "-Xmx1g", "-javaagent:" + agentJar + "=config=x.cfg"), StandardCharsets.ISO_8859_1);
+        Cli hit = cli("check-release", product.toString());
+        assertEquals(hit.output, 1, hit.exit);
+        assertTrue(hit.output, hit.output.contains("eclipse.ini:3: -javaagent:"));
+        Files.write(ini, Arrays.asList("-vmargs", "-Xmx1g"), StandardCharsets.ISO_8859_1);
+        Cli clean = cli("check-release", product.toString());
+        assertEquals(clean.output, 0, clean.exit);
+        assertTrue(clean.output, clean.output.contains("1 file(s) checked, no agent option"));
     }
 
     private static String nodeText(Snapshot s, String name) {
@@ -699,6 +788,45 @@ public class SelfTestIT {
         assertTrue(run.output, suiteResult(out).getAsJsonArray("commandErrors").toString().contains("before[1]"));
     }
 
+    /** WP-07 (R-41, R-42): two labeled jobs, merged three times into one page with a history of 3 runs. */
+    @Test
+    public void matrixReportJoinsTwoJobs() throws Exception {
+        Path dir = Files.createDirectories(work.resolve("matrix"));
+        Path scenario = dir.resolve("greet.json");
+        Files.copy(demoDir.resolve("scenarios/greet.json"), scenario);
+        Path log = dir.resolve("demo.log");
+        Cli first = run(scenario, dir.resolve("first"), log);
+        assertEquals(first.output, 0, first.exit);
+        Cli approve = cli("approve", "--run", dir.resolve("first/greet").toString(), "--scenario", scenario.toString());
+        assertEquals(approve.output, 0, approve.exit);
+
+        for (String label : Arrays.asList("a", "b")) {
+            Cli job = runLabeled(label, scenario, dir.resolve(label), log);
+            assertEquals(job.output, 0, job.exit);
+            JsonObject jobResult = Json.readTree(dir.resolve(label).resolve("job-result.json")).getAsJsonObject();
+            assertEquals(label, jobResult.get("label").getAsString());
+        }
+
+        Path merged = dir.resolve("merged");
+        Path history = dir.resolve("h.json");
+        for (String id : Arrays.asList("1", "2", "3")) {
+            Cli merge = cli("report", "--merge", dir.resolve("a").toString(), dir.resolve("b").toString(),
+                    "--out", merged.toString(), "--history", history.toString(), "--run-id", id, "--ref", "master");
+            assertEquals(merge.output, 0, merge.exit);
+        }
+        String html = read(merged.resolve("report.html"));
+        assertTrue(html, html.contains("<th>a</th>"));
+        assertTrue(html, html.contains("<th>b</th>"));
+        assertTrue(html, html.contains("href='../a/report.html#"));
+        assertTrue(html, html.contains("href='../b/report.html#"));
+        assertTrue(html, html.contains("Last 20 runs: a"));
+        assertEquals(3, Json.readTree(history).getAsJsonObject().getAsJsonArray("runs").size());
+        // Column a, first step s001: one letter for each of the 3 runs, all P.
+        java.util.regex.Matcher row = Pattern.compile("<td class='step'>s001[^<]*</td><td class='PASS'>.*?</td><td>((?:<span[^>]*>P</span>){3})</td>")
+                .matcher(html);
+        assertTrue(html, row.find());
+    }
+
     // ---- helpers for the suite checks ---------------------------------------------------------
 
     /** The application command line of a suite: the CLI puts the agent option after the first word. */
@@ -841,13 +969,27 @@ public class SelfTestIT {
     /** As {@link #run}; a non-null {@code stopTimeoutMs} goes to the CLI as {@code --stopTimeoutMs}. */
     private static Cli runWithStopTimeout(String stopTimeoutMs, Path scenarios, Path out, Path log, String... demoOptions)
             throws Exception {
+        return runWithOptions(stopTimeoutMs, new String[0], scenarios, out, log, demoOptions);
+    }
+
+    /** As {@link #runWithStopTimeout}; {@code cliOptions} go to the CLI after the standard options. */
+    private static Cli runWithOptions(String stopTimeoutMs, String[] cliOptions, Path scenarios, Path out, Path log,
+            String... demoOptions) throws Exception {
         StringBuilder extra = new StringBuilder();
         for (String o : demoOptions) extra.append(o).append(' ');
         String app = quote(java) + " " + localeArgs() + " " + extra + "-Ddemo.log=" + quote(log.toString()) + " -jar " + quote(demoJar.toString());
         List<String> args = new ArrayList<String>(Arrays.asList("run", "--agent", agentJar.toString(), "--app", app,
                 "--scenarios", scenarios.toString(), "--out", out.toString(), "--log", log.toString()));
         if (stopTimeoutMs != null) args.addAll(Arrays.asList("--stopTimeoutMs", stopTimeoutMs));
+        args.addAll(Arrays.asList(cliOptions));
         return cli(args.toArray(new String[0]));
+    }
+
+    /** As {@link #run}, with {@code --label}. */
+    private static Cli runLabeled(String label, Path scenarios, Path out, Path log) throws Exception {
+        String app = quote(java) + " " + localeArgs() + " -Ddemo.log=" + quote(log.toString()) + " -jar " + quote(demoJar.toString());
+        return cli("run", "--agent", agentJar.toString(), "--app", app, "--scenarios", scenarios.toString(),
+                "--out", out.toString(), "--log", log.toString(), "--label", label);
     }
 
     private static Cli cli(String... args) throws Exception {

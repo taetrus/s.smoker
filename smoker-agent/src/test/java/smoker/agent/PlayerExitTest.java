@@ -29,13 +29,14 @@ public class PlayerExitTest {
     @Rule
     public TemporaryFolder tmp = new TemporaryFolder();
 
+    private AgentConfig cfg;
     private Player player;
     private Observations obs;
     private Path file;
 
     @Before
     public void setUp() throws Exception {
-        AgentConfig cfg = new AgentConfig();
+        cfg = new AgentConfig();
         cfg.out = tmp.newFolder("out").toPath();
         cfg.exitWhenDone = false;
         Scenario sc = new Scenario();
@@ -53,6 +54,13 @@ public class PlayerExitTest {
 
     private RunResult read() throws Exception {
         return Json.read(file, RunResult.class);
+    }
+
+    @Test
+    public void beginWritesTheLabel() throws Exception {
+        cfg.label = "jre8";
+        player.begin(Player.First.STARTUP);
+        assertEquals("jre8", read().label);
     }
 
     @Test

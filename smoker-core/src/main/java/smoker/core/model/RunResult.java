@@ -60,6 +60,13 @@ public class RunResult {
     /** A remark of the tool about the run, for example that the reset gave a problem (WP-05). Null when none. */
     public String note;
 
+    /** Label of the job, from {@code run --label} (WP-07). Null when none. */
+    public String label;
+    /** Default locale, time zone, look and feel and size of the main window of the run (WP-07). Null in old files. */
+    public String locale, timeZone, lookAndFeel, windowSize;
+    /** Warnings of the tool about the run (WP-07). Empty in old files. */
+    public List<String> warnings = new ArrayList<String>();
+
     public boolean passed() {
         return status == Status.PASS;
     }

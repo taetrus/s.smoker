@@ -1,6 +1,7 @@
 package smoker.agent;
 
 import smoker.core.io.ConfigFile;
+import smoker.core.model.ConditionValues;
 
 import java.io.IOException;
 import java.nio.charset.Charset;
@@ -15,6 +16,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.TimeZone;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -38,6 +40,11 @@ import java.util.regex.Pattern;
  *   resetScenario=path.json    (optional)
  *   stopTimeoutMs=10000        (optional)
  *   aliveFile=path             (optional)
+ *   label=jre8                 (optional: label of the job, written to run-result.json)
+ *   locale=en-US               (optional: default locale of the JVM, set in premain; en_US is also accepted)
+ *   timeZone=UTC               (optional: default time zone of the JVM, set in premain)
+ *   lookAndFeel=system         (optional: class name, system or crossplatform; sets swing.defaultlaf)
+ *   windowSize=1280x800        (optional: size of the first main window when it shows)
  * </pre>
  */
 public final class AgentConfig {
@@ -46,7 +53,7 @@ public final class AgentConfig {
 
     private static final Set<String> KEYS = new HashSet<String>(Arrays.asList("mode", "out", "logPattern", "failLevel",
             "failRegex", "allowRegex", "logCharset", "screenshots", "edtHangMs", "exitWhenDone", "resetScenario",
-            "stopTimeoutMs", "aliveFile"));
+            "stopTimeoutMs", "aliveFile", "label", "locale", "timeZone", "lookAndFeel", "windowSize"));
     private static final Pattern NUMBERED = Pattern.compile("(scenario|log|resetCommand|resetTimeoutS)\\.([0-9]{1,6})");
     private static final long DEFAULT_RESET_TIMEOUT_S = 60;
 
@@ -68,6 +75,15 @@ public final class AgentConfig {
     public Path resetScenario;
     public long stopTimeoutMs = 10_000;
     public Path aliveFile;
+    /** Label of the job; goes to the field {@code label} of the result (WP-07). Null when absent. */
+    public String label;
+    /** Stable conditions of the run (WP-07, R-34). Null when absent. */
+    public Locale locale;
+    public TimeZone timeZone;
+    /** Class name of the look and feel; {@code system} and {@code crossplatform} are resolved. Null when absent. */
+    public String lookAndFeel;
+    /** Size of the main window; 0 when absent. Not a {@code java.awt.Dimension}: premain loads no AWT class. */
+    public int windowWidth, windowHeight;
 
     /** @param args the agent argument: {@code config=<path>}; everything after {@code config=} is the path */
     public static AgentConfig fromArgs(String args) {
@@ -131,6 +147,15 @@ public final class AgentConfig {
         if (kv.get("resetScenario") != null) c.resetScenario = Paths.get(kv.get("resetScenario"));
         if (kv.get("stopTimeoutMs") != null) c.stopTimeoutMs = Long.parseLong(kv.get("stopTimeoutMs"));
         if (kv.get("aliveFile") != null) c.aliveFile = Paths.get(kv.get("aliveFile"));
+        if (kv.get("label") != null) c.label = kv.get("label");
+        if (kv.get("locale") != null) c.locale = ConditionValues.locale(kv.get("locale"));
+        if (kv.get("timeZone") != null) c.timeZone = timeZone(kv.get("timeZone"));
+        if (kv.get("lookAndFeel") != null) c.lookAndFeel = lookAndFeel(kv.get("lookAndFeel"));
+        if (kv.get("windowSize") != null) {
+            int[] size = ConditionValues.windowSize(kv.get("windowSize"));
+            c.windowWidth = size[0];
+            c.windowHeight = size[1];
+        }
         return c;
     }
 
@@ -153,6 +178,30 @@ public final class AgentConfig {
 
     private static IllegalArgumentException unknown(String key, String source) {
         return new IllegalArgumentException("unknown key '" + key + "' in " + source);
+    }
+
+    private static TimeZone timeZone(String id) {
+        if (!Arrays.asList(TimeZone.getAvailableIDs()).contains(id)) {
+            throw new IllegalArgumentException("timeZone: '" + id + "' is not a time zone ID of this JRE (example: Europe/Istanbul)");
+        }
+        return TimeZone.getTimeZone(id);
+    }
+
+    /** The class name for a value of the key {@code lookAndFeel}. Makes no UIManager call: premain loads no Swing class. */
+    private static String lookAndFeel(String value) {
+        String v = value.trim();
+        if (v.isEmpty()) throw new IllegalArgumentException("lookAndFeel: the value is empty");
+        if ("system".equals(v)) return systemLookAndFeel(System.getProperty("os.name", ""));
+        if ("crossplatform".equals(v)) return "javax.swing.plaf.metal.MetalLookAndFeel";
+        return v;
+    }
+
+    /** The class name that {@code UIManager.getSystemLookAndFeelClassName()} gives on the platforms of the tool. */
+    static String systemLookAndFeel(String osName) {
+        String os = osName.toLowerCase(Locale.ROOT);
+        if (os.contains("win")) return "com.sun.java.swing.plaf.windows.WindowsLookAndFeel";
+        if (os.contains("mac")) return "com.apple.laf.AquaLookAndFeel";
+        return "javax.swing.plaf.metal.MetalLookAndFeel";
     }
 
     private static Charset charset(String name) {

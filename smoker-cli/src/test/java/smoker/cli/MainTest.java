@@ -21,6 +21,7 @@ import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -28,6 +29,7 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -128,6 +130,100 @@ public class MainTest {
         Map<String, String> m = new LinkedHashMap<String, String>();
         for (int i = 0; i < kv.length; i += 2) m.put(kv[i], kv[i + 1]);
         return m;
+    }
+
+    // ---- label ---------------------------------------------------------------------------------
+
+    @Test
+    public void checkLabel() {
+        assertNull(Main.checkLabel("jre8"));
+        assertNull(Main.checkLabel("a.b_c-1"));
+        String error = "run: --label must have 1 to 40 characters of letters, digits, '.', '_' and '-'";
+        assertEquals(error, Main.checkLabel(""));
+        assertEquals(error, Main.checkLabel("a b"));
+        assertEquals(error, Main.checkLabel("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+        assertEquals(error, Main.checkLabel("\u00e4"));
+    }
+
+    @Test
+    public void agentConfigHasTheLabel() {
+        Map<String, String> c = Main.agentConfig(options("label", "jre8"), Arrays.asList(tmp.getRoot().toPath()), null);
+        assertEquals("jre8", c.get("label"));
+        assertFalse(Main.agentConfig(options(), Arrays.asList(tmp.getRoot().toPath()), null).containsKey("label"));
+    }
+
+    @Test
+    public void labelIsPermittedWithSuite() throws Exception {
+        Map<String, String> o = options("suite", tmp.getRoot().toPath().resolve("none.json").toString(),
+                "agent", "agent.jar", "label", "jre8");
+        assertEquals(2, Main.run(o));
+        assertFalse(err(), err().contains("--label"));
+        assertTrue(err(), err().contains("none.json"));
+    }
+
+    @Test
+    public void wrongLabelGivesExitCode2() throws Exception {
+        assertEquals(2, Main.run(options("agent", "a.jar", "app", "x", "scenarios", "s", "label", "a b")));
+        assertTrue(err(), err().contains("--label must have 1 to 40"));
+    }
+
+    /** parse() gives "true" for --label without a value (final review m-3). */
+    @Test
+    public void labelWithoutValueGivesExitCode2() throws Exception {
+        assertEquals(2, Main.run(Main.parse(new String[] {"--agent", "a.jar", "--app", "x", "--scenarios", "s", "--label"})));
+        assertTrue(err(), err().contains("run: --label must have 1 to 40"));
+        assertEquals(2, Main.run(Main.parse(new String[] {"--suite", "none.json", "--agent", "a.jar", "--label", "--strict"})));
+        assertTrue(err(), err().contains("run: --label must have 1 to 40"));
+    }
+
+    // ---- stable conditions (WP-07, R-34) ---------------------------------------------------------
+
+    /** parse() gives "true" for --locale without a value (final review I-1). */
+    @Test
+    public void localeWithoutValueGives2() throws Exception {
+        assertEquals(2, Main.run(Main.parse(new String[] {"--agent", "a.jar", "--app", "x", "--scenarios", "s", "--locale"})));
+        assertTrue(err(), err().contains("run: locale: 'true' is not a language tag (example: en-US)"));
+    }
+
+    @Test
+    public void agentConfigPassesTheConditions() {
+        Map<String, String> c = Main.agentConfig(options("locale", "en-US", "timeZone", "UTC", "lookAndFeel", "system",
+                "windowSize", "1280x800"), Arrays.asList(tmp.getRoot().toPath()), null);
+        assertEquals("en-US", c.get("locale"));
+        assertEquals("UTC", c.get("timeZone"));
+        assertEquals("system", c.get("lookAndFeel"));
+        assertEquals("1280x800", c.get("windowSize"));
+        Map<String, String> none = Main.agentConfig(options(), Arrays.asList(tmp.getRoot().toPath()), null);
+        for (String k : new String[] {"locale", "timeZone", "lookAndFeel", "windowSize"}) assertFalse(k, none.containsKey(k));
+    }
+
+    @Test
+    public void wrongLocaleGives2() throws Exception {
+        String agent = tmp.getRoot().toPath().resolve("none.jar").toString();
+        assertEquals(2, Main.run(options("agent", agent, "app", "x", "scenarios", "s", "locale", "_US")));
+        assertTrue(err(), err().contains("run: locale: '_US' is not a language tag (example: en-US)"));
+        assertEquals(2, Main.record(options("agent", agent, "app", "x", "scenario",
+                tmp.getRoot().toPath().resolve("r.json").toString(), "locale", "_US")));
+        assertTrue(err(), err().contains("record: locale: '_US' is not a language tag (example: en-US)"));
+    }
+
+    @Test
+    public void wrongWindowSizeGives2() throws Exception {
+        String agent = tmp.getRoot().toPath().resolve("none.jar").toString();
+        assertEquals(2, Main.run(options("agent", agent, "app", "x", "scenarios", "s", "windowSize", "big")));
+        assertTrue(err(), err().contains("run: windowSize: 'big' is not <width>x<height> (example: 1280x800)"));
+        assertEquals(2, Main.record(options("agent", agent, "app", "x", "scenario",
+                tmp.getRoot().toPath().resolve("r.json").toString(), "windowSize", "0x5")));
+        assertTrue(err(), err().contains("record: windowSize: '0x5' is not <width>x<height> (example: 1280x800)"));
+    }
+
+    @Test
+    public void printResultPrintsTheWarnings() {
+        RunResult r = new RunResult();
+        r.status = RunResult.Status.PASS;
+        r.warnings.add("locale is tr-TR, not the configured en-US");
+        Main.printResult(r);
+        assertTrue(out(), out().contains("   warning: locale is tr-TR, not the configured en-US"));
     }
 
     // ---- validated -----------------------------------------------------------------------------
@@ -377,5 +473,149 @@ public class MainTest {
         }
         assertFalse(err(), err().contains("must not contain ';'"));
         assertEquals("%d;%msg", ConfigFile.read(out.resolve("agent-1.cfg")).get("logPattern"));
+    }
+
+    // ---- WP-07: lint baseline (F-18, R-41) -------------------------------------------------------
+
+    private Path lintRun(String name, String... fields) throws Exception {
+        Path d = tmp.getRoot().toPath().resolve(name);
+        Files.createDirectories(d);
+        RunResult r = new RunResult();
+        for (String f : fields) {
+            LintEntry e = new LintEntry();
+            e.window = "Orders";
+            e.runtimeClass = "p.OrdersPanel";
+            e.field = f;
+            e.type = "JButton";
+            e.text = f;
+            e.proposedName = "orders." + f;
+            e.source = "field";
+            r.lint.add(e);
+        }
+        Json.write(d.resolve("run-result.json"), r);
+        return d;
+    }
+
+    private int lint(String... args) throws Exception {
+        return Main.lint(Main.parse(args));
+    }
+
+    private Path writeBaseline(Path run) throws Exception {
+        Path b = tmp.getRoot().toPath().resolve("b.json");
+        assertEquals(0, lint("--run", run.toString(), "--write-baseline", b.toString()));
+        return b;
+    }
+
+    @Test
+    public void writeBaselineThenCompareGives0() throws Exception {
+        Path run = lintRun("r", "aButton", "bButton");
+        Path b = writeBaseline(run);
+        assertTrue(new String(Files.readAllBytes(b), StandardCharsets.UTF_8).contains("\"version\": 1"));
+        out.reset();
+        assertEquals(0, lint("--run", run.toString(), "--baseline", b.toString()));
+        assertTrue(out(), out().contains("lint: 2 result(s), 2 in the baseline, 0 new, 0 baseline entries not found"));
+    }
+
+    @Test
+    public void newResultGives1() throws Exception {
+        Path b = writeBaseline(lintRun("r", "aButton", "bButton"));
+        Path run3 = lintRun("r3", "aButton", "bButton", "cButton");
+        out.reset();
+        assertEquals(1, lint("--run", run3.toString(), "--baseline", b.toString()));
+        assertTrue(out(), out().contains("lint: 3 result(s), 2 in the baseline, 1 new, 0 baseline entries not found"));
+        assertTrue(out(), out().contains("orders.cButton"));
+        assertFalse(out(), out().contains("orders.aButton"));
+    }
+
+    @Test
+    public void entryNotFoundDoesNotFail() throws Exception {
+        Path b = writeBaseline(lintRun("r", "aButton", "bButton"));
+        Path run1 = lintRun("r1", "aButton");
+        out.reset();
+        assertEquals(0, lint("--run", run1.toString(), "--baseline", b.toString()));
+        assertTrue(out(), out().contains("1 baseline entries not found"));
+    }
+
+    @Test
+    public void changedProposedNameIsNotNew() throws Exception {
+        Path b = writeBaseline(lintRun("r", "aButton"));
+        Path run = lintRun("r2", "aButton");
+        RunResult r = Json.read(run.resolve("run-result.json"), RunResult.class);
+        r.lint.get(0).proposedName = "changed.name";
+        r.lint.get(0).window = "Other title";
+        Json.write(run.resolve("run-result.json"), r);
+        out.reset();
+        assertEquals(0, lint("--run", run.toString(), "--baseline", b.toString()));
+        assertTrue(out(), out().contains("0 new"));
+    }
+
+    @Test
+    public void missingBaselineGives2() throws Exception {
+        Path run = lintRun("r", "aButton");
+        Path b = tmp.getRoot().toPath().resolve("none.json");
+        assertEquals(2, lint("--run", run.toString(), "--baseline", b.toString()));
+        assertTrue(err(), err().contains("lint: cannot read the baseline " + b));
+    }
+
+    /** Exit code 1 means "new result": a value that is not a path gives 2 (final review I-2). */
+    @Test
+    public void baselineThatIsNotAPathGives2() throws Exception {
+        Path run = lintRun("r", "aButton");
+        assertEquals(2, lint("--run", run.toString(), "--baseline", "b\u0000.json"));
+        assertTrue(err(), err().contains("lint: cannot read the baseline b\u0000.json: "));
+    }
+
+    @Test
+    public void damagedBaselineGives2() throws Exception {
+        Path run = lintRun("r", "aButton");
+        Path b = file("damaged.json", "{'version': 1, 'entries': [");
+        assertEquals(2, lint("--run", run.toString(), "--baseline", b.toString()));
+        assertTrue(err(), err().contains("lint: cannot read the baseline " + b));
+    }
+
+    @Test
+    public void bothOptionsGive2() throws Exception {
+        Path run = lintRun("r", "aButton");
+        assertEquals(2, lint("--run", run.toString(), "--baseline", "x.json", "--write-baseline", "y.json"));
+        assertTrue(err(), err().contains("lint: use --baseline or --write-baseline, not both"));
+    }
+
+    @Test
+    public void withoutTheOptionsAsToday() throws Exception {
+        Path run = lintRun("r", "aButton", "bButton");
+        assertEquals(0, lint("--run", run.toString()));
+        Path b = writeBaseline(lintRun("r0", "aButton"));
+        Path patch = tmp.getRoot().toPath().resolve("p.patch");
+        assertEquals(1, lint("--run", run.toString(), "--baseline", b.toString(), "--emit-patch", patch.toString()));
+        String p = new String(Files.readAllBytes(patch), StandardCharsets.UTF_8);
+        assertTrue(p, p.contains("aButton.setName") && p.contains("bButton.setName"));
+    }
+
+    @Test
+    public void baselineWithoutEntriesGives2() throws Exception {
+        Path run = lintRun("r", "aButton");
+        Path b = file("noentries.json", "{'version': 1}");
+        assertEquals(2, lint("--run", run.toString(), "--baseline", b.toString()));
+        assertTrue(err(), err().contains("lint: cannot read the baseline " + b));
+    }
+
+    @Test
+    public void baselineEntryWithoutKeyGives2() throws Exception {
+        Path run = lintRun("r", "aButton");
+        Path b = file("nokey.json", "{'version': 1, 'entries': [{'window': 'w'}]}");
+        assertEquals(2, lint("--run", run.toString(), "--baseline", b.toString()));
+        assertTrue(err(), err().contains("lint: cannot read the baseline " + b));
+        Path n = file("nullentry.json", "{'version': 1, 'entries': [null]}");
+        assertEquals(2, lint("--run", run.toString(), "--baseline", n.toString()));
+    }
+
+    @Test
+    public void baselineOptionWithoutAFileGives2() throws Exception {
+        Path run = lintRun("r", "aButton");
+        assertEquals(2, lint("--run", run.toString(), "--baseline"));
+        assertTrue(err(), err().contains("--baseline needs a file"));
+        assertEquals(2, lint("--run", run.toString(), "--write-baseline"));
+        assertTrue(err(), err().contains("--write-baseline needs a file"));
+        assertFalse(Files.exists(Paths.get("true")));
     }
 }

@@ -29,12 +29,15 @@ public final class SmokerAgent {
             System.exit(2); // as the fatal path of start: the run cannot start
             return;
         }
+        Conditions.applyEarly(cfg); // before the application main: it sees the values from its first line (R-34)
         start(cfg);
     }
 
     /** Dynamic attach entry (Java 9+ needs {@code -Djdk.attach.allowAttachSelf} on the attaching side). */
     public static void agentmain(String args, Instrumentation inst) {
-        start(parseConfig(args)); // the attach call fails, the application continues
+        AgentConfig cfg = parseConfig(args); // the attach call fails, the application continues
+        Conditions.applyEarly(cfg);
+        start(cfg);
     }
 
     /** Parses the agent arguments. A bad argument gives one line {@code [smoker] fatal: <message>} on System.err. */
@@ -101,6 +104,7 @@ public final class SmokerAgent {
         // show the toolbar once the app's first frame is up, so it floats above it
         long deadline = System.currentTimeMillis() + sc.startupTimeoutMs;
         while (System.currentTimeMillis() < deadline && !Player.mainWindowShown(1000)) Thread.sleep(200);
+        Conditions.applyWindowSize(cfg); // a recording and its replays have the same window size (R-34)
         final Recorder rec = new Recorder(cfg, sc, golden);
         SwingUtilities.invokeLater(new Runnable() {
             @Override

@@ -63,10 +63,34 @@ Tree, Table and Spinner): run1 NO_GOLDEN for s001 to s009, `approve`, run2 PASS 
 The golden has `demo.picked` `opened Main.java` (s002) and `menu docs` (s004), `demo.total` `total 10` (s005) and `total 0` (s008),
 and `selectedIndex` 2 for `demo.tree` (s001). A copy with the value `9` in s005 gives FAIL with a `demo.total` difference.
 `scenarios-failing-recorder/bad-cell.json` gives ERROR `the cell editor refused the value "abc"`.
+It checks the WP-07 criterion (R-41, R-42) with `matrixReportJoinsTwoJobs`: two `run --label` jobs (`a`, `b`) of `greet.json` give PASS and each has
+`job-result.json` with its label. Three `report --merge a b --history h.json --run-id 1..3` runs give one `report.html` with the columns `a` and `b`,
+links to `../a/report.html#...` and `../b/report.html#...`, the header `Last 20 runs: a`, three runs in `h.json` and the letters `PPP` for step s001.
+It checks R-34 with `-Ddemo.localePanel=true` (`scenarios-locale/locale.json`) in `localeAndTimeZoneFromTheConfiguration`: with `--locale en-US --timeZone UTC`
+run1 PASS (result fields `en-US` and `UTC`, no warning) and run2 PASS on a JVM with `tr_TR` and `Europe/Istanbul`. Without the keys, a `tr_TR` JVM gives FAIL
+(difference on `demo.localeText`). `--locale tr-TR --timeZone Europe/Istanbul` on a PC with `en-US` gives FAIL. The time zone `Mars/Phobos` gives exit code 1
+with job status ERROR (`app exit code 2`) and `[smoker] fatal:` in `app-output.log`. `--windowSize big` gives exit code 2.
+It checks R-40a with `checkReleaseFindsTheAgentOption`: an `eclipse.ini` with `-javaagent:<agent jar>=config=x.cfg` gives exit code 1 and
+`eclipse.ini:3: -javaagent:`; the same file without the line gives exit code 0 and `1 file(s) checked, no agent option`.
+It checks R-41 (lint baseline) with `lintBaselineFailsOnlyForANewResult` on `notes.json`: `lint --write-baseline` gives exit code 0; `lint --baseline`
+with the same results gives exit code 0 and `0 new, 0 baseline entries not found`; with one entry removed it gives exit code 1 and `1 new`.
 Run `mvn -B verify` and `mvn -B verify -Plocale-tr`
 after every change to `smoker-agent` or `smoker-core`.
 
-## State on 2026-11-25
+## State on 2026-11-25 (WP-07)
+
+- WP-07 tasks 1 to 3 and 5 to 7 are code complete on branch `wp-07-ci-report` (F-18, R-34, R-40a, R-41, R-42):
+  `run --label` and `job-result.json`; `report --merge` with `--history`, `--run-id` and `--ref` (last 20 runs, `unstable`);
+  the keys and options `locale`, `timeZone`, `lookAndFeel` and `windowSize` with the result fields and `warnings`;
+  `check-release`; `lint --baseline` and `lint --write-baseline`. The README sections "Stable conditions", "Matrix report",
+  "Release guard" and "Lint baseline" describe them. `docs/architecture.md` section 3b has the class map.
+- WP-07 is not complete. Task 4 (the GitLab jobs) and R-02a come in the field phase (decision 8). F-18 stays open.
+- Windows CI on PR #27 (commit dcc9076): `default`, `locale-tr` and `locale-tr-jre8` pass.
+- Not tested: the Maven/Tycho example and the pipeline examples in the README; `-Djava.locale.providers=COMPAT` on JRE 21;
+  `Report.link` with another drive or a UNC path on Windows.
+- Tests (`mvn -B verify` on macOS, default locale): 124 in `smoker-core`, 401 in `smoker-agent`, 152 in `smoker-cli`, 21 IT (after the fix wave of the final review). The same counts pass with `-Plocale-tr`.
+
+## State on 2026-11-25 (before WP-07)
 
 - WP-06 tasks 2 to 7 (recorder: tree `SELECT`, double-click and right-click, `SET_CELL`, spinner `SET_TEXT`, golden preview,
   move and group) are code complete; merged in PR #25 (2026-11-25). WP-06 is not complete: the usability test
@@ -124,8 +148,7 @@ after every change to `smoker-agent` or `smoker-core`.
 - Test isolation: a test must not leave a window that reports "showing". `Window.getWindows()` keeps it for later test classes.
   A test that makes a `Recorder` calls `recorder.close()` in `@After`. An open recorder keeps a snapshot thread that
   pings the EDT, and these pings delay the quiet wait of later tests (JRE 8 job on Windows, PR #25).
-- Next in plan order (decision 8): the code tasks of WP-07 (1 to 3, 5 to 7).
-  Then the field phase: Milestone 1, WP-06 tasks 1 and 8, WP-07 task 4.
+- Next in plan order (decision 8): the field phase: Milestone 1, WP-06 tasks 1 and 8, WP-07 task 4. The code tasks of WP-06 and WP-07 are done.
 - Not verified: JRE 21 at run time on a target application, a product with the hardware simulator.
   JRE 17 (Temurin 17.0.5) operates on spike.master (WP-04 Windows check).
 

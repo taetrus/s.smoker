@@ -214,13 +214,19 @@ Completion criterion: R-20a passes. A developer who did not see the tool before 
 
 **WP-07 CI matrix and report (5 pd)**
 
-1. Add the parameter `--label` to the CLI. Write the label into `run-result.json`.
-2. Add the command `report --merge <dirs>`. It joins the results of all jobs into one HTML file.
-3. Keep the step results of the last 20 runs in `history.json`. Show them in the report.
+1. DONE: Add the parameter `--label` to the CLI. Write the label into `run-result.json`.
+2. DONE: Add the command `report --merge <dirs>`. It joins the results of all jobs into one HTML file.
+3. DONE: Keep the step results of the last 20 runs in `history.json`. Show them in the report.
 4. Add the two matrix jobs (Windows, JRE 8 and 21) to `.gitlab-ci.yml`. Remove the job `smoke:linux` (field phase, decisions 8 and 9).
-5. Add the locale, time zone, look and feel and window size parameters (R-34).
-6. Add a Maven Enforcer rule or a script that finds `-javaagent:smoker` in a release build and fails the build.
-7. Add the command `lint --baseline <file>`. It writes the current lint results to a baseline file. The pipeline fails only for a result that is not in the baseline file.
+5. DONE: Add the locale, time zone, look and feel and window size parameters (R-34).
+6. DONE: Add a Maven Enforcer rule or a script that finds `-javaagent:smoker` in a release build and fails the build.
+7. DONE: Add the command `lint --baseline <file>`. It writes the current lint results to a baseline file. The pipeline fails only for a result that is not in the baseline file.
+
+State (2026-11-25): tasks 1 to 3 and 5 to 7 are code complete on branch `wp-07-ci-report`. `SelfTestIT` checks R-41, R-42, R-34 and R-40a on the demo
+(`matrixReportJoinsTwoJobs`, `localeAndTimeZoneFromTheConfiguration`, `checkReleaseFindsTheAgentOption`, `lintBaselineFailsOnlyForANewResult`).
+Task 4 (the GitLab jobs) and R-02a stay in the field phase (decision 8). The Windows CI passes on PR #27 (`default`, `locale-tr`, `locale-tr-jre8`).
+F-18 stays open until the field phase (R-02a) and WP-08.
+WP-07 is "code complete", not complete.
 
 Completion criterion: R-02a, R-34, R-41, R-42 and R-40a pass.
 

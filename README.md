@@ -36,6 +36,11 @@ two popup menus and a spinner (`demo.count`) for the recorder scenarios (WP-06).
 `smoker-demo/scenarios-recorder/recorder.json` (9 steps in three groups) and `smoker-demo/scenarios-failing-recorder/bad-cell.json`
 need this option. The integration test checks R-20a with them: NO_GOLDEN, then PASS, a changed value gives FAIL,
 and a value that the cell editor refuses gives ERROR.
+`-Ddemo.localePanel=true` shows a label `demo.localeText` on the west side (WP-07, R-34). It shows a fixed instant and
+the number 1234567 in the default locale and time zone. For `en-US` and `UTC` the text is `1 January 1970 14:00  1,234,567`.
+The panel is off by default. `smoker-demo/scenarios-locale/locale.json` and its golden need this option and the run options
+`--locale en-US --timeZone UTC`. The integration test checks that the run passes on a PC with the locale `tr_TR` and
+the time zone `Europe/Istanbul`, and that the same run without the two options fails.
 The integration test checks these results:
 a JUL error with a 40-line stack trace gives one hit in s001 (`log.json`);
 `Error count 0 of 3` and `Exception handler ready` give no hit;
@@ -64,6 +69,9 @@ java -jar smoker-cli.jar approve --run out/orders-create --scenario scenarios/or
 
 # 5. many scenarios in one application start, with a simulator and a reset (see "Suite file")
 java -jar smoker-cli.jar run --agent smoker-agent.jar --suite suite.json --out out/
+
+# 6. the same conditions on each PC: locale, time zone, look and feel, window size (see "Stable conditions")
+java -jar smoker-cli.jar run --agent smoker-agent.jar --app "java -jar myapp.jar" --scenarios scenarios/ --out out/ --locale en-US --timeZone UTC --windowSize 1280x800
 ```
 
 `--app` is the full command line. The agent option is inserted after the first word, or where you put the
@@ -105,8 +113,10 @@ The CLI deletes an old `run-result.json` before it starts the application. After
 - The file comes from the exit hook: the CLI adds `; exit code <n>` to the error.
 - There is no file: ERROR `no run-result.json produced; app exit code <n>`, or HANG after a kill.
 
-`run` passes `--log`, `--screenshots`, `--failRegex`, `--allowRegex`, `--logPattern`, `--failLevel`, `--logCharset`
-and `--stopTimeoutMs` to the agent. `record` passes `--log`, `--logPattern`, `--failLevel` and `--logCharset`. `--log a.log,b.log` becomes `log.1` and `log.2`.
+`run` passes `--log`, `--screenshots`, `--failRegex`, `--allowRegex`, `--logPattern`, `--failLevel`, `--logCharset`,
+`--stopTimeoutMs`, `--label`, `--locale`, `--timeZone`, `--lookAndFeel` and `--windowSize` to the agent. `record` passes
+`--log`, `--logPattern`, `--failLevel`, `--logCharset`, `--locale`, `--timeZone`, `--lookAndFeel` and `--windowSize`.
+`--log a.log,b.log` becomes `log.1` and `log.2`.
 `run` writes the agent configuration file `<out>/agent-<k>.cfg` for scenario *k*. `record` writes a temporary file.
 
 `approve` without a `run-result.json` in the `--run` folder prints `approve: no run-result.json in <dir>` and exits with 2.
@@ -148,9 +158,57 @@ Format rules:
 | `resetScenario` | scenario that the agent replays between two scenarios, without a snapshot (see "Suite file") | — |
 | `stopTimeoutMs` | time to wait after each stage of the stop of the application, in ms (see "Stop of the application") | 10000 |
 | `aliveFile` | file that the CLI touches each second; the agent stops the application when the file is older than 10 s (see "Suite file") | — |
+| `label` | label of the job; the agent writes it to the field `label` of `run-result.json` (see "Matrix report") | — |
+| `locale` | default locale of the application: a language tag, `en-US` or `en_US` (see "Stable conditions") | the locale of the PC |
+| `timeZone` | default time zone of the application: a time zone ID, `UTC` or `Europe/Istanbul` | the time zone of the PC |
+| `lookAndFeel` | look and feel: a class name, `system` or `crossplatform` | the default of the JRE |
+| `windowSize` | size of the main window in pixels: `<width>x<height>`, `1280x800` | the size that the application sets |
 
-An unknown `failLevel`, an unknown `logCharset`, an unsupported part of `logPattern` or a wrong key stops the
-application at start with exit code 2. System.err then has one line `[smoker] fatal: <message>`.
+An unknown `failLevel`, an unknown `logCharset`, an unsupported part of `logPattern`, a wrong value of `locale`,
+`timeZone`, `lookAndFeel` or `windowSize`, or a wrong key stops the application at start with exit code 2.
+System.err then has one line `[smoker] fatal: <message>`. `run` then gives ERROR for the scenario.
+
+### Stable conditions
+
+The keys `locale`, `timeZone`, `lookAndFeel` and `windowSize` make a run independent of the settings of the PC.
+They apply in play mode and in record mode: a recording and its replays have the same conditions.
+`run` and `record` have the options `--locale`, `--timeZone`, `--lookAndFeel` and `--windowSize`. The suite file
+has the same keys in `agentConfig`.
+
+```
+java -jar smoker-cli.jar run --agent smoker-agent.jar --app "java -jar myapp.jar" --scenarios scenarios/ --out out/ --locale en-US --timeZone UTC --lookAndFeel crossplatform --windowSize 1280x800
+```
+
+| key | example | the agent does |
+|---|---|---|
+| `locale` | `en-US`, `en_US`, `tr-TR`, `tr` | `Locale.setDefault`, and the system properties `user.language`, `user.country` and `user.variant`. A locale without a country (or variant) removes `user.country` (or `user.variant`) |
+| `timeZone` | `UTC`, `Europe/Istanbul` | `TimeZone.setDefault`, and the system property `user.timezone` |
+| `lookAndFeel` | `system`, `crossplatform`, `javax.swing.plaf.nimbus.NimbusLookAndFeel` | sets the system property `swing.defaultlaf` |
+| `windowSize` | `1280x800` | sets the size of the main window |
+
+- The agent sets `locale`, `timeZone` and `lookAndFeel` before the `main` method of the application starts.
+  The agent log has one line for each key, for example `[smoker] locale=en-US`.
+- `system` becomes the system look and feel of the operating system (Windows, Aqua on macOS, else Metal).
+  `crossplatform` becomes `javax.swing.plaf.metal.MetalLookAndFeel`.
+- `windowSize`: when the main window shows, the agent sets the first main window to the normal state if it is
+  maximized, and sets its size. The location does not change. The agent does this one time for each application
+  start, before the first step (play) or before the recorder starts (record).
+- The application can replace a value: Equinox sets the locale from `-nl`, an application sets its own look and
+  feel, a window has a minimum size. The agent does not force a value. At the start of each scenario the agent
+  writes the actual values to the fields `locale`, `timeZone`, `lookAndFeel` and `windowSize` of `run-result.json`.
+  For each configured key with a different actual value, the result gets a warning in the field `warnings`, for
+  example `locale is tr-TR, not the configured en-US`. The status does not change. `run` prints each warning as
+  `warning: <text>` below the status. `report.html` shows each warning below the heading of the scenario.
+- The CLI checks `locale` and `windowSize` before the application starts: a wrong value gives
+  `run: <message>` or `record: <message>` and exit code 2. A `locale` value must be a full language tag with a
+  language of 2 or 3 letters: `en-USA`, `en--US`, `english` and `--locale` without a value give exit code 2.
+  The agent uses the same rule for the key `locale` of its configuration file. The CLI does not check `timeZone` and `lookAndFeel`: the
+  JRE of the application can know other time zones and classes than the JRE of the CLI. The agent checks them.
+- Limit: JRE 8 and JRE 21 format some dates and numbers differently for the same locale. From Java 9 the JRE uses
+  the CLDR locale data by default. The `locale` key does not remove this difference. There are two remedies:
+  1. Add an ignore rule for the component that shows the date or the number (see "Scenario file").
+  2. Add `-Djava.locale.providers=COMPAT` to the test start of the product (JRE 21 then uses the older locale data; not tested).
+  The agent does not set this property: the JRE can read it before the agent starts.
 
 ### Stop of the application
 
@@ -194,7 +252,7 @@ before the scenarios, a reset between them, a clean-up after them. The demo has 
 |---|---|---|
 | `app` | command line of the application, as `--app`, with the token `{agent}` | required |
 | `workDir` | working directory of the application and of all commands | the current directory of the CLI |
-| `agentConfig` | agent keys: `log` (a string or an array of strings), `logPattern`, `failLevel`, `failRegex`, `allowRegex`, `logCharset`, `screenshots`, `edtHangMs`, `stopTimeoutMs` | none |
+| `agentConfig` | agent keys: `log` (a string or an array of strings), `logPattern`, `failLevel`, `failRegex`, `allowRegex`, `logCharset`, `screenshots`, `edtHangMs`, `stopTimeoutMs`, `locale`, `timeZone`, `lookAndFeel`, `windowSize` | none |
 | `before` | commands that run before the first application start, in sequence | none |
 | `reset` | commands that run between two scenarios and before each later application start | none |
 | `resetScenario` | scenario that the agent replays between two scenarios, without a snapshot | none |
@@ -218,12 +276,13 @@ Rules:
   The CLI resolves the first word of a command against `workDir` only when it is a regular file. Write the file
   extension: `sim\stop-sim.bat`, not `sim\stop-sim`.
 - `app` and each `command` must not be empty and must not contain a line break. `stopTimeoutMs` and `edtHangMs` are
-  whole numbers, 0 or more. `screenshots` is `"evidence"` or `"off"`.
+  whole numbers, 0 or more. `screenshots` is `"evidence"` or `"off"`. `locale` is a language tag and
+  `windowSize` is `<width>x<height>` (see "Stable conditions"); a wrong value gives `suite: <message>`.
 - The names of the scenarios are compared without regard to case: `Login.json` and `login.json` are the same name.
 - The file names of the scenarios, without the extension, must be different. Each name is the name of a result folder.
 - The CLI checks the suite file, each scenario file and each golden file before it runs the first command.
   An unknown field, an unknown `agentConfig` key or a wrong file gives a message and exit code 2.
-- `run --suite` permits only `--agent`, `--out`, `--strict` and `--timeout`. Each other option gives
+- `run --suite` permits only `--agent`, `--out`, `--strict`, `--timeout` and `--label`. Each other option gives
   `run: --<option> is not permitted with --suite; put it in the suite file` and exit code 2.
 - The CLI puts the agent option at the token `{agent}` in `app`, or after the first word. A fixed `-javaagent` line
   in `eclipse.ini` does not operate with `run`: each application start has its own configuration file.
@@ -556,7 +615,7 @@ The source code does not change.
 ### Lint
 
 ```bash
-java -jar smoker-cli.jar lint --run out/ [--emit-patch names.patch]
+java -jar smoker-cli.jar lint --run out/ [--emit-patch names.patch] [--baseline <file> | --write-baseline <file>]
 ```
 
 `lint` reads the `run-result.json` files and the `*.lint.json` files below the `--run` folder. It prints a table with
@@ -576,7 +635,7 @@ Example: field `jButton1` with the text `Save` gives `orders.btn.save`. HTML tag
 
 The last line is a summary: the number of unnamed interactive components, the number with a proposed name (by
 source: fields, text, labels), and the number with an automatic name. `lint` exits with 0. It exits with 2 if it finds no `run-result.json` and no
-`*.lint.json`, or if it cannot write the file.
+`*.lint.json`, or if it cannot write the file. With a baseline, the exit code differs (see "Lint baseline").
 `--emit-patch` writes one Java line for each proposed name, for example `saveButton.setName("orders.btn.save");`,
 with the class where the developer must add it. A component with a generated field also gets this line
 (`jButton1.setName("orders.btn.save");`). A component without a field gets a comment with its text or its label.
@@ -585,6 +644,34 @@ In one window, the second equal proposal gets the suffix `2`, the third `3` (`or
 
 Interactive components are buttons, menu items, text components, combo boxes, lists, tables, trees, tabbed panes,
 spinners and sliders. The text field inside a spinner is part of the spinner: it gives no entry of its own.
+
+#### Lint baseline
+
+```bash
+java -jar smoker-cli.jar lint --run out/ --write-baseline lint-baseline.json
+java -jar smoker-cli.jar lint --run out/ --baseline lint-baseline.json
+```
+
+The baseline file holds the lint results that the team accepts. Only a new result fails the pipeline.
+
+1. `--write-baseline` writes all current results, sorted by key, and exits with 0. Commit the file.
+2. `--baseline` prints the table and the summary of the results that are not in the file. It then prints
+   `lint: <n> result(s), <m> in the baseline, <k> new, <f> baseline entries not found`.
+3. `--baseline` exits with 1 when `k` is more than 0, else with 0. An entry that is not found does not fail the run:
+   the component got a name, or the run did not show that window.
+4. `--baseline` exits with 2 when the file does not exist, cannot be read or is not a path. `--baseline` and `--write-baseline`
+   together exit with 2. There are two options on purpose: a lost baseline file must fail, not write a new baseline.
+5. `--emit-patch` works as before, on all results.
+
+The identity of a result is its baseline key. The window title and the proposed name are not part of it.
+A change of the proposal rules or of a title does not make an old result new.
+
+- A result with a field: `field|<class>|<field>`.
+- A result with a text and no field: `text|<class>|<type>|<text>`.
+- Other results: `none|<class>|<type>`.
+
+Results with the same key are one entry. A change of the text of a component without a field gives a new result.
+Only `key` is read back. The other entries help a person who reads the file or a diff. Tested on the demo (SelfTestIT).
 
 #### Lint without a run
 
@@ -606,6 +693,145 @@ To find the components that need a name, without a scenario:
 
 The lint only sees the components that showed. A tab that you did not open is not in the lint.
 Each save replaces the lint file: it holds the last record session only.
+
+### Matrix report
+
+`run` has the option `--label <text>`. The label names the job, for example `jre8` or `jre21`. It has 1 to 40
+characters: letters, digits, `.`, `_` and `-`. A wrong label gives exit code 2 before the application starts.
+`--label` is permitted with `--suite` too. `--label` without a value gives exit code 2.
+
+```
+java -jar smoker-cli.jar run --agent smoker-agent.jar --app "java -jar myapp.jar" --scenarios scenarios/ --out out/ --label jre8
+```
+
+- The CLI writes the label to the agent configuration file (key `label`). The agent writes it to the field `label`
+  of `run-result.json`. A result that the CLI makes itself has the label too. Without `--label` the field is absent.
+- `run` writes `<out>/job-result.json` when it writes `report.html`. The file has the label, the times, the Java
+  version, the operating system and, for each scenario, the key, the name, the status and the steps.
+  The `key` of a scenario is its file name without the extension (in suite mode: the name in the suite).
+  The matrix report reads this file.
+
+`report --merge` joins the `job-result.json` files of several jobs into one page:
+
+```
+java -jar smoker-cli.jar report --merge out-jre8 out-jre21 --out merged
+```
+
+- `--merge` takes one or more job folders: the `--out` folders of the jobs. `--out` is the folder of the page.
+  The command writes `<out>/report.html`. `--out` must not be a job folder.
+- The column name of a job is its label. A job without a label gets the name of its folder.
+- The page has the Java version, the operating system, the locale and the number of passed scenarios of each job.
+  Below, it has one row for each scenario and one row for each step. The scenarios have the order of the first job.
+  Scenarios and steps that only later jobs have come after them. A cell is `-` when the job did not run it.
+- A status cell links to the scenario or the step in the `report.html` of the job. The link is relative to `--out`.
+  When no relative path exists (another drive on Windows), the link is a `file:` URI.
+  The page therefore works when the job folders stay beside the page.
+- A note, an error or a warning of a scenario shows below its row, with the column name before it.
+- The header of the page shows the time of the merge (UTC), and the run id and the ref when given.
+- Exit code 0: the page is written. The jobs give the verdict of the pipeline, not the merge.
+  Exit code 2: a wrong argument, two jobs with one column name, a folder without a readable `job-result.json`,
+  or a page that cannot be written. The error text names the folder. An argument that is not a path also gives
+  exit code 2. Write each job folder, not `out-*`: Windows cmd and PowerShell do not expand `*` (not tested).
+- A `job-result.json` that has no `scenarios` list, or a scenario without `key`, gives exit code 2 and the text
+  `report: <folder>/job-result.json is not a job result`.
+
+#### History
+
+`report --merge` has three more options:
+
+```
+java -jar smoker-cli.jar report --merge out-jre8 out-jre21 --out merged --history history.json --run-id $CI_PIPELINE_ID --ref $CI_COMMIT_REF_NAME
+```
+
+- `--history <file>`: the command reads the file, adds the current run and writes the file back. The page then
+  shows the last 20 runs. Without this option the command reads and writes no history file.
+- `--run-id` and `--ref` are free texts. The command stores them in the history and shows them in the header of the page.
+  `--history`, `--run-id` or `--ref` without a value gives exit code 2.
+  A run with a `--run-id` that the file already has replaces that run (a pipeline job that runs again).
+  A run without `--run-id` is always added.
+- The file keeps the last 20 runs. The page has the column `Last 20 runs: <job>` for each job, with one letter
+  for each stored run, the oldest first and the current run last:
+  `P` PASS, `F` FAIL, `H` HANG, `E` ERROR, `N` NO_GOLDEN, `-` not run.
+  The title of a letter has the time, the id and the ref of the run.
+- A step gets the text `unstable` when the stored runs of one job have a PASS and also a FAIL, HANG or ERROR.
+- A history file that does not exist starts a new history (the page says `history: new file`).
+  A file that is not a version 1 history file is moved to `<file>.damaged`. An existing `.damaged` file is replaced.
+  A new history starts, and the command prints `history: the file was damaged, a new history starts` on `System.err`.
+  The command prints the text `history: new file` on `System.err` too. The exit code stays 0.
+- The file format:
+
+```json
+{
+  "version": 1,
+  "runs": [
+    { "time": 1764050090000, "id": "4711", "ref": "master",
+      "jobs": { "jre8": { "orders": { "status": "PASS", "steps": { "s001": "PASS", "s002": "PASS" } } } } }
+  ]
+}
+```
+
+Example with two pipeline jobs and a merge job (in `.gitlab-ci.yml` style):
+
+```
+test-jre8:   run ... --out out-jre8  --label jre8      # artifact: out-jre8
+test-jre21:  run ... --out out-jre21 --label jre21     # artifact: out-jre21
+report:      report --merge out-jre8 out-jre21 --out merged --history history.json --run-id $CI_PIPELINE_ID --ref $CI_COMMIT_REF_NAME
+```
+
+The merge job needs the artifacts of both jobs. It must keep `history.json` between pipelines (a cache or an artifact of the last run).
+The merge job must run also when a test job failed (GitLab: `when: always`), else a failed job gives no page.
+This example is not tested.
+
+### Release guard
+
+A product that ships must not start with the agent of the smoke tester. `check-release` finds the `-javaagent`
+option in the `.ini` files of a product:
+
+```
+java -jar smoker-cli.jar check-release target/products [<path> ...]
+```
+
+- A path is a folder, an `.ini` file or a `.zip` file. The command reads each `.ini` file below a folder and each
+  `.ini` entry of each `.zip` file below a folder. It does not read an archive in an archive.
+- A hit is a line that starts with `-javaagent:` (leading blanks are allowed) and has the text `smoker` after it, in
+  any case. The command prints `<file>:<line number>: <line>` for each hit (`<zip>!<entry>:<line number>: <line>` for an archive).
+- Exit code 1: there is a hit. Exit code 0: no hit; the command prints `check-release: <n> file(s) checked, no agent option`.
+  Exit code 2: a path does not exist, a file cannot be read, or a path has no `.ini` file. A guard that checked
+  nothing for a path must not pass. Exit code 2 wins over exit code 1. An argument that is not a path (Windows: `*`,
+  `?`, `"`) and a `.zip` file with an entry name that the JRE cannot read (JRE 8: a name that is not UTF-8) also
+  give exit code 2: `check-release: cannot read <path>: <message>`.
+- The command reads the `.ini` files as ISO-8859-1.
+
+Example for a Maven or Tycho build, after the product is assembled (`exec-maven-plugin`, phase `verify`):
+
+```xml
+<plugin>
+  <groupId>org.codehaus.mojo</groupId>
+  <artifactId>exec-maven-plugin</artifactId>
+  <executions>
+    <execution>
+      <phase>verify</phase>
+      <goals><goal>exec</goal></goals>
+      <configuration>
+        <executable>java</executable>
+        <arguments>
+          <argument>-jar</argument><argument>tools/smoker-cli.jar</argument>
+          <argument>check-release</argument><argument>${project.build.directory}/products</argument>
+        </arguments>
+      </configuration>
+    </execution>
+  </executions>
+</plugin>
+```
+
+Example for a pipeline job (in `.gitlab-ci.yml` style):
+
+```
+release-guard:
+  script: java -jar smoker-cli.jar check-release target/products
+```
+
+The Maven example and the pipeline example are not tested.
 
 ### Statuses
 

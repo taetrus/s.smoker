@@ -31,16 +31,17 @@ public final class HtmlReportWriter {
             w.write("<h1>s.smoker report</h1>");
             w.write("<table><tr><th>Scenario</th><th>Status</th><th>Steps</th><th>Java</th><th>OS</th><th>Duration</th></tr>");
             for (RunResult r : runs) {
-                w.write("<tr class='" + r.status + "'><td><a href='#" + id(r.scenarioName) + "'>" + e(r.scenarioName) + "</a></td><td>" + r.status
+                w.write("<tr class='" + r.status + "'><td><a href='#" + scenarioAnchor(r.scenarioName) + "'>" + e(r.scenarioName) + "</a></td><td>" + r.status
                         + "</td><td>" + r.steps.size() + "</td><td>" + e(r.javaVersion) + "</td><td>" + e(r.os) + "</td><td>"
                         + (r.finishedAt - r.startedAt) + " ms</td></tr>");
                 if (r.note != null) w.write("<tr class='" + r.status + "'><td colspan='6'><p class='note'>" + e(r.note) + "</p></td></tr>");
             }
             w.write("</table>");
             for (RunResult r : runs) {
-                w.write("<h2 id='" + id(r.scenarioName) + "'>" + e(r.scenarioName) + " — " + r.status
+                w.write("<h2 id='" + scenarioAnchor(r.scenarioName) + "'>" + e(r.scenarioName) + " — " + r.status
                         + " <small>(compare: " + e(r.compare == null ? "all" : r.compare) + ")</small></h2>");
                 if (r.note != null) w.write("<p class='note'>" + e(r.note) + "</p>");
+                if (r.warnings != null) for (String warning : r.warnings) w.write("<p class='note'>" + e(warning) + "</p>");
                 if (r.error != null) w.write("<pre class='ERROR'>" + e(r.error) + "</pre>");
                 if (!r.unnamedComponents.isEmpty()) {
                     w.write("<details><summary>Locator lint: " + r.unnamedComponents.size()
@@ -73,7 +74,7 @@ public final class HtmlReportWriter {
                 w.write("<table><tr><th style='width:160px'>Step</th><th style='width:90px'>Status</th><th>Details</th><th>Screenshot</th></tr>");
                 for (RunResult.StepResult s : r.steps) {
                     if (s.group != null) w.write("<tr class='group'><td colspan='4'>" + e(s.group) + "</td></tr>");
-                    w.write("<tr class='" + s.status + "'><td>" + e(s.stepId) + "<br><small>" + e(s.stepName) + "</small></td><td>" + s.status
+                    w.write("<tr id='" + stepAnchor(r.scenarioName, s.stepId) + "' class='" + s.status + "'><td>" + e(s.stepId) + "<br><small>" + e(s.stepName) + "</small></td><td>" + s.status
                             + "<br><small>" + s.durationMs + " ms</small></td><td>");
                     if (!s.differences.isEmpty()) {
                         w.write("<pre>");
@@ -97,6 +98,16 @@ public final class HtmlReportWriter {
         } finally {
             w.close();
         }
+    }
+
+    /** The HTML id of the heading of a scenario. The matrix report links to it. */
+    public static String scenarioAnchor(String scenarioName) {
+        return id(scenarioName);
+    }
+
+    /** The HTML id of the row of a step. The matrix report links to it. */
+    public static String stepAnchor(String scenarioName, String stepId) {
+        return scenarioAnchor(scenarioName) + "-" + id(stepId);
     }
 
     private static String id(String s) {

@@ -53,13 +53,20 @@ Three decisions carry the design:
 | | `smoker.core.io` / `.report` | `Json` (Gson, pretty, stable), `JUnitXmlWriter`, `HtmlReportWriter` |
 | smoker-agent | `smoker.agent` | `SmokerAgent` (premain), `AgentConfig`, `Observations`, `LogTailer`, `LogPattern`, `LogLevel`, `LogEvent`, `EventJoiner`, `FailRule`, `ConsoleTee`, `EdtWatchdog`, `Quiescence`, `Locators`, `SnapshotTaker`, `ActionExecutor`, `Places`, `Player`, `Recorder`, `CellEditTracker`, `RecorderToolbar`, `Screenshots` |
 | | `smoker.agent` | `WindowKeys` — applies the `WindowKey` rules to window titles |
+| | `smoker.agent` | `Conditions` — stable conditions (WP-07, R-34): `applyEarly` sets locale, time zone and `swing.defaultlaf` in premain without a Swing or AWT class; `applyWindowSize` sets the size of the main window one time for each JVM; `describe` writes the actual values and the warnings to the result; without an answer of the EDT it gives no look and feel or window size warning |
+| | `smoker.core.model` | `ConditionValues` — checks the values of `locale` and `windowSize`, for the agent and the CLI |
 | | `smoker.agent` | `LogPattern` — converts the Logback `logPattern` into one regex (time, level, logger, thread, message).<br>`LogLevel` — the log levels in Logback order, for `failLevel`.<br>`LogEvent` — one log event: the lines of one entry, joined.<br>`EventJoiner` — joins the lines of one log source into events. A stack trace gives one hit.<br>`FailRule` — decides once for each closed event whether it is a hit (level, `failRegex`, allow rules).<br>`ConsoleTee` — wraps `System.out` and `System.err`. It passes the bytes unchanged. It keeps one line and one joiner for each writing thread, and gives each decoded line to the joiner of its thread. |
+| | `smoker.core.model` | `JobResult` — `job-result.json` of one `run`: label, times, Java version, operating system and, for each scenario, key, status and steps; `RunHistory` — `history.json`: the last 20 runs, one status for each job, scenario and step; `unstable` when a step has a PASS and a failure in the stored runs |
+| | `smoker.core.report` | `MatrixReportWriter` — writes the page of `report --merge`: one column for each job, one row for each scenario and step, the history letters, links to the `report.html` of the jobs |
 | | `smoker.core.io` | `ConfigFile` — reads and writes the agent configuration file (`key=value`, numbered keys) |
 | | `smoker.core.proc` | `Processes` — runs commands and background processes; `stopTree` stops the descendants on Java 9+ (reflection on `ProcessHandle`) |
 | smoker-agent | `smoker.agent` | `Session` — runs the scenarios of one launch list in one JVM: result file per scenario, `reset` step between two scenarios, stop after FAIL/HANG/ERROR |
 | | `smoker.agent` | `AppStopper` — the stop in three stages (`WINDOW_CLOSING`, OSGi system bundle, `System.exit` with the `smoker-halt` thread as safety) |
 | | `smoker.agent` | `DialogCloser` — closes the dialogs that do not belong to the tool, for the reset step |
-| smoker-cli | `smoker.cli` | `Main` — `run` / `run --suite` / `record` / `approve` |
+| smoker-cli | `smoker.cli` | `Main` — `run` / `run --suite` / `record` / `approve` / `lint` / `report --merge` / `check-release` |
+| | `smoker.cli` | `Report` — `report --merge`: reads the `job-result.json` files, loads and stores the history, writes the matrix page. Exit code 0 or 2 |
+| | `smoker.cli` | `ReleaseCheck` — `check-release`: finds `-javaagent:...smoker...` in `.ini` files of a folder or a `.zip` file (ISO-8859-1). Exit code 1 for a hit, 2 for an unreadable path |
+| | `smoker.cli` | `LintBaseline` — the baseline file of `lint --baseline` and `lint --write-baseline`: entries with a `key`, written atomically |
 | | `smoker.cli` | `SuiteFile` — reads and checks the suite file (fields, commands, scenarios, golden files) |
 | | `smoker.cli` | `SuitePlan` — pure logic: launch lists, verdicts, the retry rule and its notes, the count of failed starts |
 | | `smoker.cli` | `SuiteRunner` — `before` / `reset` / `after` commands, application starts, the watch of the result files, time limits, `cli-alive`, the one-time cleanup, `suite-result.json` |
@@ -117,6 +124,21 @@ start (`<out>/agent-<k>.cfg`) with the launch list (`scenario.1`, `scenario.2`, 
   with force when the limit passes.
 - **Cleanup.** The `after` commands and the stop of the background processes run one time (`cleanup`), also after an
   exception and on Ctrl+C. For a hard stop of the CLI, the agent reads `aliveFile` before each scenario and each reset step.
+
+## 3b. Stable conditions, job results and report (WP-07)
+
+- **Conditions (R-34).** The keys `locale`, `timeZone`, `lookAndFeel` and `windowSize` are in `AgentConfig`, the suite
+  file (`agentConfig`) and the CLI options. `premain` calls `Conditions.applyEarly`. It uses no Swing or AWT class:
+  it sets `Locale`, `TimeZone`, `user.*` and `swing.defaultlaf` only, so the application reads them at its first use.
+  The window size needs a window: `Conditions.applyWindowSize` runs on the EDT, one time for each JVM, before the first
+  step. The agent does not force a value that the application replaces. `describe` writes the actual values to
+  `run-result.json` and a warning for each difference (field `warnings`). The CLI checks `locale` and `windowSize` with `ConditionValues`.
+- **Files.** `run` writes `<out>/job-result.json` (`JobResult`) with the `report.html`. `report --merge` reads these files
+  of several jobs and writes `<out>/report.html`. With `--history <file>` it also reads and writes the history file (`RunHistory`,
+  version 1, last 20 runs). A file that is not a version 1 history is moved to `<file>.damaged`.
+  `lint --write-baseline <file>` writes the baseline file (`LintBaseline`); `lint --baseline <file>` reads it.
+- **Release guard (R-40a).** `check-release` is a CLI command, not a Maven plugin. A product build calls it.
+- Details: README sections "Stable conditions", "Matrix report", "Release guard" and "Lint baseline".
 
 ## 4. Observing logs inside OSGi (R-10, R-15)
 
@@ -185,7 +207,7 @@ list row) for the recorder and for replay. `CellEditTracker` watches the cell ed
 |---|---|---|
 | 1 | Robot fallback for native `FileDialog`/OS prompts (`type: "ROBOT_CLICK"` with screen-relative coords) | R-31 |
 | 1 | `approve --diff` interactive promotion in the HTML report (checkbox per difference → patch file) | R-33 |
-| 1 | Matrix labels (`--label jre8-win`) merged into one report; run history JSON for flakiness | R-41, R-42 |
+| 1 | Matrix labels (`--label jre8-win`) merged into one report; run history JSON for flakiness (done in WP-07, code complete) | R-41, R-42 |
 | 2 | Logback fragment bridge | R-15 |
 | 2 | Hints API jar: `Smoker.markDynamic(component)`, `Smoker.busy()/idle()` for long async work | R-05 |
 | 2 | Screenshot oracle with tolerance (opt-in per step) | R-24 |
