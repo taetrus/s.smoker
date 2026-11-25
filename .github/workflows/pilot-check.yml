@@ -1,6 +1,7 @@
 # Manual checks on the pilot application p2.product (development aid, not a CI gate).
 # A push to a branch pilot-check/** starts the job. The runner must run in the desktop session (see windows.yml).
 # Do not type on the runner PC while the job runs.
+# The earlier job (shorter stop, WP-05) is in the history of this file (commit of PR #23).
 
 name: pilot-check
 
@@ -9,16 +10,15 @@ on:
     branches: ['pilot-check/**']
 
 jobs:
-  stop:
-    name: shorter stop on p2.product (WP-05, F-10, R-38)
+  wp07:
+    name: WP-07 on p2.product (R-34, R-40a, R-41, R-42)
     runs-on: [self-hosted, Windows]
-    timeout-minutes: 15
+    timeout-minutes: 30
     env:
       JAVA8: 'C:\Program Files\Java\jdk1.8.0_341\bin\java.exe'
       P2: 'D:\dev\p.osgi.ds\distribution\target\products\com.kk.pde.ds.product\win32\win32\x86_64'
       OSGI: 'plugins\org.eclipse.osgi_3.23.0.v20250228-0640.jar'
       PILOT: 'C:\smoke\pilot.json'
-      STOP_TIMEOUT_MS: '30000'
     steps:
       - uses: actions/checkout@v4
 
@@ -26,47 +26,104 @@ jobs:
         shell: powershell
         run: mvn -B package -DskipTests
 
-      - name: run pilot.json and measure the stop
+      - name: WP-07 checks
         shell: powershell
         run: |
           $ErrorActionPreference = 'Continue'
-          $out = Join-Path $env:RUNNER_TEMP 'stop-check'
+          $out = Join-Path $env:RUNNER_TEMP 'wp07-check'
           if (Test-Path $out) { Remove-Item -Recurse -Force $out }
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           $cli = Join-Path $env:GITHUB_WORKSPACE 'smoker-cli\target\smoker-cli.jar'
           $agent = Join-Path $env:GITHUB_WORKSPACE 'smoker-agent\target\smoker-agent.jar'
-          # The CLI receives --app as one argument. Each inner quote is \" (Windows PowerShell 5.1).
-          $app = '\"' + $env:JAVA8 + '\" {agent} -jar ' + $env:OSGI + ' -configuration configuration -consoleLog'
-          Push-Location $env:P2
-          $sw = [System.Diagnostics.Stopwatch]::StartNew()
-          & java -jar $cli run --agent $agent --scenarios $env:PILOT --out (Join-Path $out 'run') --stopTimeoutMs $env:STOP_TIMEOUT_MS --app $app *>&1 |
-              Tee-Object -FilePath (Join-Path $out 'cli-output.txt')
-          $code = $LASTEXITCODE
-          $sw.Stop()
-          $cliEnd = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
-          Pop-Location
-
           $s = New-Object System.Collections.Generic.List[string]
           $s.Add("commit=$env:GITHUB_SHA")
-          $s.Add("exitCode=$code")
-          $s.Add(("totalSeconds={0:N1}" -f $sw.Elapsed.TotalSeconds))
-          $rr = Get-ChildItem -Path $out -Recurse -Filter 'run-result.json' | Select-Object -First 1
-          if ($rr) {
-              $r = Get-Content -Raw -Path $rr.FullName | ConvertFrom-Json
-              $s.Add("status=$($r.status)")
-              $s.Add(("scenarioSeconds={0:N1}" -f (($r.finishedAt - $r.startedAt) / 1000.0)))
-              $s.Add(("stopSeconds(total-scenario)={0:N1}" -f ($sw.Elapsed.TotalSeconds - ($r.finishedAt - $r.startedAt) / 1000.0)))
-              $s.Add(("secondsFromFinishedAtToCliExit={0:N1}" -f (($cliEnd - $r.finishedAt) / 1000.0)))
-          } else {
-              $s.Add('run-result.json: not found')
+          $s.Add("out=$out")
+          $s.Add(("cliJava=" + ((& java -version 2>&1 | Select-Object -First 1) -join '')))
+          $s.Add("culture=$((Get-Culture).Name) uiCulture=$((Get-UICulture).Name) timeZone=$((Get-TimeZone).Id)")
+
+          function Cli([string]$name, [string[]]$cliArgs) {
+              $txt = Join-Path $out ($name + '.txt')
+              & java -jar $cli @cliArgs *>&1 | ForEach-Object { "$_" } | Set-Content -Path $txt
+              $code = $LASTEXITCODE
+              $s.Add("[$name] exitCode=$code")
+              Get-Content $txt | Select-Object -Last 6 | ForEach-Object { $s.Add("    | $_") }
+              return $code
           }
-          $log = Get-ChildItem -Path $out -Recurse -Filter 'app-output.log' | Select-Object -First 1
-          if ($log) {
-              $s.Add('stop lines:')
-              Select-String -Path $log.FullName -SimpleMatch '[smoker] stop:' | ForEach-Object { $s.Add('    ' + $_.Line.Trim()) }
-          } else {
-              $s.Add('app-output.log: not found')
+
+          function Pilot([string]$label, [string]$java, [string]$extraApp, [string[]]$extra) {
+              $app = '\"' + $java + '\" {agent} -jar ' + $env:OSGI + ' -configuration configuration -consoleLog' + $extraApp
+              Push-Location $env:P2
+              $a = @('run', '--label', $label, '--agent', $agent, '--scenarios', $env:PILOT,
+                     '--out', (Join-Path $out $label), '--app', $app) + $extra
+              $null = Cli $label $a
+              Pop-Location
+              $rr = Get-ChildItem -Path (Join-Path $out $label) -Recurse -Filter 'run-result.json' | Select-Object -First 1
+              if ($rr) {
+                  $r = Get-Content -Raw -Path $rr.FullName | ConvertFrom-Json
+                  $s.Add("    status=$($r.status) label=$($r.label) javaVersion=$($r.javaVersion)")
+                  $s.Add("    locale=$($r.locale) timeZone=$($r.timeZone) lookAndFeel=$($r.lookAndFeel) windowSize=$($r.windowSize)")
+                  $s.Add("    warnings=[$(@($r.warnings) -join ' | ')]")
+                  foreach ($st in @($r.steps)) { $s.Add("    step $($st.stepId) $($st.status) $(@($st.differences) -join ' ; ')") }
+              } else { $s.Add('    run-result.json: not found') }
+              $jr = Join-Path (Join-Path $out $label) 'job-result.json'
+              $s.Add("    job-result.json exists=$(Test-Path $jr)")
           }
+
+          # 1. Pilot runs on JRE 8.
+          Pilot 'base' $env:JAVA8 '' @()
+          Pilot 'cond' $env:JAVA8 '' @('--locale', 'en-US', '--timeZone', 'UTC', '--lookAndFeel', 'system', '--windowSize', '1024x700')
+          # Equinox sets the default locale from -nl in its main method, after premain (review focus 3).
+          Pilot 'nl' $env:JAVA8 ' -nl tr_TR' @('--locale', 'en-US')
+          Pilot 'cross' $env:JAVA8 '' @('--lookAndFeel', 'crossplatform')
+
+          # 2. Pilot run on a JRE 21, when the PC has one.
+          $j21 = Get-ChildItem -Path 'C:\Program Files\Java', 'C:\Program Files\Eclipse Adoptium', 'C:\Program Files\Microsoft' -Directory -ErrorAction SilentlyContinue |
+              Where-Object { $_.Name -match '21' } | ForEach-Object { Join-Path $_.FullName 'bin\java.exe' } | Where-Object { Test-Path $_ } | Select-Object -First 1
+          $jobs = @('base', 'cond', 'nl', 'cross')
+          if ($j21) { $s.Add("jre21=$j21"); Pilot 'jre21' $j21 '' @(); $jobs += 'jre21' } else { $s.Add('jre21: not found') }
+
+          # 3. report --merge: the merged page on the same drive, on another drive, and through a UNC path.
+          $dirs = $jobs | ForEach-Object { Join-Path $out $_ }
+          $hist = Join-Path $out 'history.json'
+          $null = Cli 'merge-same' (@('report', '--merge') + $dirs + @('--out', (Join-Path $out 'merged'), '--history', $hist, '--run-id', 'r1', '--ref', 'pilot-check'))
+          $null = Cli 'merge-again' (@('report', '--merge') + $dirs + @('--out', (Join-Path $out 'merged'), '--history', $hist, '--run-id', 'r2', '--ref', 'pilot-check'))
+          $drive = $out.Substring(0, 2)
+          $other = if ($drive -ieq 'C:') { 'D:\smoke\out\wp07-merge-other' } else { 'C:\smoke\out\wp07-merge-other' }
+          if (Test-Path $other) { Remove-Item -Recurse -Force $other }
+          $null = Cli 'merge-other-drive' (@('report', '--merge') + $dirs + @('--out', $other))
+          $s.Add("otherDrive=$other")
+          $unc = '\\localhost\' + $drive.Substring(0, 1) + '$' + $out.Substring(2)
+          $s.Add("unc=$unc exists=$(Test-Path $unc)")
+          $null = Cli 'merge-unc' (@('report', '--merge') + ($jobs | ForEach-Object { Join-Path $unc $_ }) + @('--out', (Join-Path $out 'merged-unc')))
+          foreach ($page in @((Join-Path $out 'merged\report.html'), (Join-Path $other 'report.html'), (Join-Path $out 'merged-unc\report.html'))) {
+              if (Test-Path $page) {
+                  $hrefs = Select-String -Path $page -Pattern "href='([^']*)'" -AllMatches | ForEach-Object { $_.Matches } | ForEach-Object { $_.Groups[1].Value } |
+                      Where-Object { $_ -notmatch '^#' } | Select-Object -First 3
+                  $s.Add("links of $page :")
+                  $hrefs | ForEach-Object { $s.Add("    $_") }
+              } else { $s.Add("page missing: $page") }
+          }
+          if (Test-Path $other) { Copy-Item -Recurse -Force $other (Join-Path $out 'merge-other-drive-copy') }
+
+          # 4. check-release on Windows paths.
+          $rel = Join-Path $out 'release'
+          New-Item -ItemType Directory -Force -Path (Join-Path $rel 'clean'), (Join-Path $rel 'hit'), (Join-Path $rel 'zipsrc\app') | Out-Null
+          Set-Content -Path (Join-Path $rel 'clean\eclipse.ini') -Value @('-startup', 'plugins\x.jar', '-vmargs', '-Xmx1g')
+          Set-Content -Path (Join-Path $rel 'hit\eclipse.ini') -Value @('-startup', '-vmargs', ('-javaagent:' + $agent + '=config=C:\smoke\x.cfg'))
+          Set-Content -Path (Join-Path $rel 'zipsrc\app\eclipse.ini') -Value @('-vmargs', '-javaagent:D:\tools\SMOKER-agent.jar')
+          Compress-Archive -Path (Join-Path $rel 'zipsrc\app') -DestinationPath (Join-Path $rel 'product.zip') -Force
+          $null = Cli 'release-product' @('check-release', $env:P2)
+          $null = Cli 'release-clean' @('check-release', (Join-Path $rel 'clean'))
+          $null = Cli 'release-hit' @('check-release', (Join-Path $rel 'hit'))
+          $null = Cli 'release-zip' @('check-release', (Join-Path $rel 'product.zip'))
+          $null = Cli 'release-glob' @('check-release', (Join-Path $rel '*.zip'))
+          $null = Cli 'release-quote' @('check-release', ($rel + '\a"b'))
+
+          # 5. Lint baseline on the base run.
+          $bl = Join-Path $out 'lint-baseline.json'
+          $null = Cli 'lint-write' @('lint', '--run', (Join-Path $out 'base'), '--write-baseline', $bl)
+          $null = Cli 'lint-compare' @('lint', '--run', (Join-Path $out 'base'), '--baseline', $bl)
+
           $s | Set-Content -Path (Join-Path $out 'summary.txt')
           Write-Host '===== summary ====='
           $s | ForEach-Object { Write-Host $_ }
@@ -76,5 +133,5 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: stop-check
-          path: ${{ runner.temp }}/stop-check
+          name: wp07-check
+          path: ${{ runner.temp }}/wp07-check
