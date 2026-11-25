@@ -374,6 +374,12 @@ final class SnapshotTaker {
             n.itemCount = cb.getItemCount();
             n.selectedIndex = cb.getSelectedIndex();
             n.text = cb.getSelectedItem() == null ? null : String.valueOf(cb.getSelectedItem());
+        } else if (c instanceof javax.swing.JSpinner) {
+            // The text of the editor field (spec 6.5); a custom editor gives no text. The field itself is skipped.
+            javax.swing.JComponent ed = ((javax.swing.JSpinner) c).getEditor();
+            if (ed instanceof javax.swing.JSpinner.DefaultEditor) {
+                n.text = ((javax.swing.JSpinner.DefaultEditor) ed).getTextField().getText();
+            }
         } else if (c instanceof JList) {
             JList<?> l = (JList<?>) c;
             n.itemCount = l.getModel().getSize();
@@ -391,6 +397,8 @@ final class SnapshotTaker {
             n.text = tp.getSelectedIndex() >= 0 ? tp.getTitleAt(tp.getSelectedIndex()) : null;
         } else if (c instanceof JTree) {
             n.rowCount = ((JTree) c).getRowCount();
+            int sel = ((JTree) c).getMinSelectionRow();
+            n.selectedIndex = sel >= 0 ? Integer.valueOf(sel) : null;
             n.items = treeRows((JTree) c, maxRows);
         }
         return n;

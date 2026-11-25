@@ -5,19 +5,26 @@ import smoker.core.model.Locator;
 
 import javax.swing.AbstractButton;
 import javax.swing.JComboBox;
+import javax.swing.JFormattedTextField;
+import javax.swing.JSpinner;
 import javax.swing.JList;
 import javax.swing.JMenu;
 import javax.swing.JTabbedPane;
 import javax.swing.JTable;
+import javax.swing.JTree;
+import javax.swing.tree.TreePath;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.text.JTextComponent;
 import java.awt.Component;
 import java.awt.KeyboardFocusManager;
+import java.awt.Rectangle;
 import java.awt.Window;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
 import java.awt.event.WindowEvent;
+import java.text.ParseException;
+import java.util.Locale;
 
 /**
  * Semantic replay (R-31): invokes the component API on the EDT instead of moving the OS mouse,
@@ -32,9 +39,10 @@ final class ActionExecutor {
     /** Must be called on the EDT. */
     static void execute(Action a) throws Exception {
         switch (a.type) {
-            case CLICK: click(require(a.locator)); break;
+            case CLICK: click(require(a.locator), a); break;
             case SET_TEXT: setText(require(a.locator), a.value == null ? "" : a.value); break;
-            case SELECT: select(require(a.locator), a.value); break;
+            case SELECT: select(require(a.locator), a); break;
+            case SET_CELL: setCell(require(a.locator), a); break;
             case KEY: key(a); break;
             case WAIT: Thread.sleep(Long.parseLong(a.value)); break;
             case CLOSE_WINDOW: closeWindow(a.locator); break;
@@ -49,7 +57,16 @@ final class ActionExecutor {
         return c;
     }
 
-    private static void click(Component c) {
+    /** True on Windows: a popup menu opens at the release. Elsewhere it opens at the press. */
+    static boolean popupOnRelease() {
+        return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith("windows");
+    }
+
+    private static void click(Component c, Action a) {
+        if (a.clickCount() != 1 || a.mouseButton() != 1 || a.hasPlace()) {
+            placeClick(c, a);
+            return;
+        }
         if (c instanceof JMenu) {
             ((JMenu) c).doClick();
             return;
@@ -69,6 +86,24 @@ final class ActionExecutor {
         c.dispatchEvent(new MouseEvent(c, MouseEvent.MOUSE_CLICKED, t, 0, x, y, 1, false, MouseEvent.BUTTON1));
     }
 
+    /** Press, release and click at the centre of the place, once for each click of the count (spec 6.2, 6.3). */
+    private static void placeClick(Component c, Action a) {
+        Rectangle r = Places.reveal(c, a);
+        int x = r.x + r.width / 2, y = r.y + r.height / 2;
+        int button = a.mouseButton() == 3 ? MouseEvent.BUTTON3 : MouseEvent.BUTTON1;
+        int down = button == MouseEvent.BUTTON3 ? MouseEvent.BUTTON3_DOWN_MASK : MouseEvent.BUTTON1_DOWN_MASK;
+        boolean popup = button == MouseEvent.BUTTON3;
+        c.requestFocusInWindow();
+        int n = a.clickCount();
+        for (int i = 1; i <= n; i++) {
+            boolean last = i == n;
+            long t = System.currentTimeMillis();
+            c.dispatchEvent(new MouseEvent(c, MouseEvent.MOUSE_PRESSED, t, down, x, y, i, popup && last && !popupOnRelease(), button));
+            c.dispatchEvent(new MouseEvent(c, MouseEvent.MOUSE_RELEASED, t, 0, x, y, i, popup && last && popupOnRelease(), button));
+            c.dispatchEvent(new MouseEvent(c, MouseEvent.MOUSE_CLICKED, t, 0, x, y, i, false, button));
+        }
+    }
+
     /** After a JMenuItem.doClick() the menu hierarchy is normally closed by Swing; make sure. */
     private static void closeOpenMenus() {
         javax.swing.MenuSelectionManager.defaultManager().clearSelectedPath();
@@ -84,10 +119,93 @@ final class ActionExecutor {
             ((JComboBox<?>) c).getEditor().setItem(text);
             return;
         }
+        if (c instanceof JSpinner) {
+            setSpinner((JSpinner) c, text);
+            return;
+        }
         throw new IllegalStateException("SET_TEXT not supported on " + c.getClass().getSimpleName());
     }
 
-    private static void select(Component c, String value) {
+    /** Sets the text of the editor field, then commits it (spec 6.5). A refused text leaves the old text. */
+    private static void setSpinner(JSpinner s, String text) {
+        if (!(s.getEditor() instanceof JSpinner.DefaultEditor)) {
+            throw new IllegalStateException("SET_TEXT needs the default editor of a JSpinner, not "
+                    + s.getEditor().getClass().getSimpleName());
+        }
+        JFormattedTextField f = ((JSpinner.DefaultEditor) s.getEditor()).getTextField();
+        String old = f.getText();
+        f.setText(text);
+        try {
+            s.commitEdit();
+        } catch (ParseException e) {
+            f.setText(old);
+            throw new IllegalStateException("the spinner refused the value \"" + text + "\"");
+        }
+    }
+
+    /** Selects and edits the cell, sets the value in the editor component and stops the edit (spec 6.4). */
+    private static void setCell(Component c, Action a) {
+        if (!(c instanceof JTable)) throw new IllegalStateException("SET_CELL not supported on " + c.getClass().getSimpleName());
+        JTable t = (JTable) c;
+        String value = a.value == null ? "" : a.value;
+        int col = Places.columnOf(t, a.column);
+        if (a.row == null || a.row < 0 || a.row >= t.getRowCount()) throw new IllegalStateException("row not found: " + a.row);
+        Places.reveal(t, a);
+        if (!t.isCellEditable(a.row, col)) {
+            throw new IllegalStateException("cell not editable: row " + a.row + ", column " + a.column);
+        }
+        t.changeSelection(a.row, col, false, false);   // a real edit selects the cell (Ruling 7)
+        if (!t.editCellAt(a.row, col)) {
+            throw new IllegalStateException("cell not editable: row " + a.row + ", column " + a.column);
+        }
+        Component ed = t.getEditorComponent();
+        boolean accepted = false;
+        try {
+            if (ed instanceof JTextComponent) {
+                ((JTextComponent) ed).setText(value);
+                accepted = true;
+            } else if (ed instanceof AbstractButton) {
+                ((AbstractButton) ed).setSelected(Boolean.parseBoolean(value));
+                accepted = true;
+            } else if (ed instanceof JComboBox) {
+                accepted = chooseItem((JComboBox<?>) ed, value);
+            } else {
+                throw new IllegalStateException("SET_CELL not supported on editor "
+                        + (ed == null ? "null" : ed.getClass().getSimpleName()));
+            }
+            // a combo box editor may end the edit itself when it takes an item
+            if (accepted && t.getCellEditor() != null) accepted = t.getCellEditor().stopCellEditing();
+        } finally {
+            if (!accepted && t.getCellEditor() != null) t.getCellEditor().cancelCellEditing();
+        }
+        if (!accepted) throw new IllegalStateException("the cell editor refused the value \"" + value + "\"");
+    }
+
+    /** An editable combo box takes the text; another one takes the item whose text equals it. */
+    private static boolean chooseItem(JComboBox<?> cb, String value) {
+        if (cb.isEditable()) {
+            cb.getEditor().setItem(value);
+            return true;
+        }
+        for (int i = 0; i < cb.getItemCount(); i++) {
+            if (value.equals(String.valueOf(cb.getItemAt(i)))) {
+                cb.setSelectedIndex(i);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static void select(Component c, Action a) {
+        String value = a.value;
+        if (c instanceof JTree) {
+            if (a.path == null) throw new IllegalStateException("JTree SELECT needs a path");
+            JTree t = (JTree) c;
+            TreePath p = Places.findPath(t, a.path);
+            t.setSelectionPath(p);
+            t.scrollPathToVisible(p);
+            return;
+        }
         Integer idx = asInt(value);
         if (c instanceof JComboBox) {
             JComboBox<?> cb = (JComboBox<?>) c;

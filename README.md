@@ -31,6 +31,11 @@ The demo application has two system properties for the log analysis (WP-04).
 The panel is off by default, so the goldens of the other scenarios do not change.
 `-Ddemo.equinoxError=true` prints an Equinox start error to `System.out` before the UI is built.
 `smoker-demo/scenarios-log/` holds `log.json` and `exit.json`. Both need `-Ddemo.logPanel=true`.
+`-Ddemo.recorderPanel=true` shows a panel on the east side with a tree (`demo.tree`), an editable table (`demo.items`),
+two popup menus and a spinner (`demo.count`) for the recorder scenarios (WP-06). The panel is off by default.
+`smoker-demo/scenarios-recorder/recorder.json` (9 steps in three groups) and `smoker-demo/scenarios-failing-recorder/bad-cell.json`
+need this option. The integration test checks R-20a with them: NO_GOLDEN, then PASS, a changed value gives FAIL,
+and a value that the cell editor refuses gives ERROR.
 The integration test checks these results:
 a JUL error with a 40-line stack trace gives one hit in s001 (`log.json`);
 `Error count 0 of 3` and `Exception handler ready` give no hit;
@@ -354,7 +359,44 @@ second hit on `stderr`.
 ```
 
 Actions: `CLICK`, `SET_TEXT`, `SELECT` (combo/list/tab by text or index, table by row), `KEY` (VK name, `modifiers` =
-`InputEvent.*_DOWN_MASK`), `WAIT` (ms), `CLOSE_WINDOW`, `WAIT_FOR` (see "Wait for a condition").
+`InputEvent.*_DOWN_MASK`), `WAIT` (ms), `CLOSE_WINDOW`, `WAIT_FOR` (see "Wait for a condition"), `SET_CELL` (see below).
+
+Optional action fields (all are absent in an old scenario):
+
+| Field | Type | Used by | Meaning |
+|---|---|---|---|
+| `count` | integer | `CLICK` | Click count. Absent means 1. The recorder writes only 2. |
+| `button` | integer | `CLICK` | Mouse button: 1 or 3. Absent means 1. The recorder writes only 3. |
+| `row` | integer | `CLICK`, `SET_CELL` | View row index of a `JTable` or a `JList`. |
+| `column` | string | `CLICK`, `SET_CELL` | Column of a `JTable`. |
+| `path` | array of strings | `SELECT`, `CLICK` | Node of a `JTree`: the labels from the root to the node. |
+
+`SET_CELL` sets one cell of a `JTable`. It has `locator`, `row`, `column` and `value`.
+`SET_TEXT` accepts a `JSpinner`. `SELECT` accepts a `JTree` with `path`.
+
+```json
+{ "type": "SELECT",   "locator": {"name": "files.tree"},   "path": ["Root", "src", "Main.java"] }
+{ "type": "CLICK",    "locator": {"name": "orders.table"}, "row": 2, "column": "Status", "count": 2 }
+{ "type": "CLICK",    "locator": {"name": "files.tree"},   "path": ["Root", "src"], "button": 3 }
+{ "type": "SET_CELL", "locator": {"name": "orders.table"}, "row": 2, "column": "Qty", "value": "5" }
+{ "type": "SET_TEXT", "locator": {"name": "orders.count"}, "value": "7" }
+```
+
+Tree path: each label is the text that the tree shows for the node (the same text as in the snapshot). The path
+starts with the root label, also when the root is hidden. Replay starts at the model root. The root label must equal
+the first label. For each next label, replay takes the first child with that label. A node that is not found gives
+ERROR `tree node not found: Root/src/X`.
+
+Tree limit: a tree that loads its children in a background thread is not supported. Replay looks for the node at once
+and gives ERROR `tree node not found` when the children are not in the model yet.
+
+Table column: the recorder writes the header text when it is not empty and no other column has the same text.
+Otherwise it writes the view index as a decimal string. Replay takes the first view column whose header text equals
+`column`. If there is none and `column` is an integer, replay takes the view column with that index. Otherwise the
+step gives ERROR `column not found: <column>`.
+
+Step `group` (string, optional): a step with `group` starts a group. The steps after it belong to the group until the
+next step with `group`. The report shows a header row for each group. Replay ignores the field.
 
 `schemaVersion` is 2. The scenario file has no golden snapshots. s.smoker refuses a file without `schemaVersion`,
 with `schemaVersion` 1, or with an `expected` block in a step: that is the old format. To convert an old file,
@@ -384,6 +426,11 @@ The first `pattern` (Java regex, matches the whole title) gives the `key`. The k
 
 Tables, lists and trees: the snapshot holds the text of the first `maxRows` rows (default 20). A table gives `cells`.
 A list or a tree gives `items`. A tree row has two spaces of indent per level. The diff reports `.items[i]` and `.cells[row][col]`.
+A tree also gives `selectedIndex`: the smallest selected row, only when a row is selected. A tree without a selected row
+does not change. An existing golden with a tree that has a selected row fails one time with `CHANGED ... .selectedIndex: expected=null`.
+Run `approve` to repair it.
+A spinner node gives `text`: the text of its editor field. A spinner with a custom editor gives no text. An existing golden
+with a spinner fails one time with `CHANGED ... .text: expected=null`. Run `approve` to repair it.
 
 Password fields (`JPasswordField`): the snapshot gives the text `***` when the field has a value, and `""` when it is empty.
 The recorder does not record typing in a password field. If a scenario must fill one, add the `SET_TEXT` step by hand.
@@ -399,7 +446,45 @@ Do not put a real password in a scenario file.
 - A modal dialog of the application can block the toolbar. Close the dialog, then click `Save`.
 - The status line shows `password field: typing is not recorded` at the first key that changes a password field:
   a character, Backspace or Delete. It shows the warning once each time the field gets the focus.
+- The right pane of the toolbar shows the changes of the selected step: the difference between its golden and the golden
+  of the nearest earlier step. It shows `no changes`, `first golden: no earlier step to compare`, or the reason why the
+  step has no golden (`snapshot pending...`, `no snapshot: WAIT_FOR follows`, `no golden: run and approve`).
+- `Group...` sets the group of the selected step. An empty name removes the group. The list shows the group as a
+  header line above the step. A header is not a row: you cannot select it.
+- `Up` and `Down` move the selected step one row. The step keeps its id, its name and its group. A golden holds the
+  state after all steps before it, so the goldens of the two steps that changed places are wrong. The recorder removes
+  both and marks them `(no golden: run and approve)`. `Save` writes the golden file without them. The next run gives
+  `NO_GOLDEN` for them, and `approve` repairs them.
+- `Delete` keeps the goldens of the later steps.
+- A recorded `SET_CELL` has no golden. The input that ends the cell edit acts before the recorder can take the
+  snapshot: a check box toggles, Enter moves the selection, a button acts. The step shows
+  `(no golden: run and approve)`. The next run gives `NO_GOLDEN` for it, and `approve` repairs it.
+- A cell edit that a button action ends (for example a click on `Save` while the cell is open) gives `SET_CELL`
+  directly before the `CLICK`.
+- Enter or Tab that ends a cell edit and moves the selection of the table gives a `KEY` step after `SET_CELL`
+  (`ENTER` or `TAB`, on the table when it has a name). The replay then moves the selection too. This `KEY` step gets
+  its golden at record time. Escape cancels the edit and gives no step.
+- The step ids can be out of order after a move or after such an insert. The ids stay as they are.
 - The toolbar writes its status line, the Record toggle and the step list to the record log.
+
+### Recorder notes
+
+- Give each item of a context menu a name (`setName`). The replay does not find an item without a name in a
+  heavyweight popup (a popup that does not fit in the window: Swing shows it in a window of its own).
+- The recorder does not record the keys inside a cell edit. The edit gives one `SET_CELL` when it ends. Enter or Tab
+  that moves the selection is the exception (see above).
+- Enter or Tab that ends a cell edit with no change of the value gives no step, also when it moves the selection.
+  Add a `SELECT` step for the new row if a later step needs it.
+- A password field as cell editor gives no step. The status line shows `password field: a table cell edit is not
+  recorded. Add a SET_CELL step by hand, or set the value outside the scenario.`
+- A spinner with a custom editor (not a `JSpinner.DefaultEditor`) gives no step for an arrow click or a typed value.
+  The status line shows `spinner with a custom editor: the value is not recorded` once for each spinner.
+- The recorder records a right-click at the press, on each platform.
+- The recorder does not record an expand or a collapse of a tree node through its handle. The snapshot shows the
+  rows of the tree, so the golden of the next step has the change.
+- A cell edit that stays open while you act outside the table is part of the goldens of these actions. Its `SET_CELL`
+  comes where the edit ends. While the editor of one table stays open, the recorder does not record an edit in a
+  second table.
 
 ### Remote desktop
 

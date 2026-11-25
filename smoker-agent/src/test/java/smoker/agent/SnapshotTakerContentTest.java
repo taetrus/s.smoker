@@ -13,6 +13,8 @@ import javax.swing.JLabel;
 import javax.swing.JLayeredPane;
 import javax.swing.JList;
 import javax.swing.JPasswordField;
+import javax.swing.JSpinner;
+import javax.swing.SpinnerNumberModel;
 import javax.swing.JTable;
 import javax.swing.JToolTip;
 import javax.swing.JTree;
@@ -83,6 +85,28 @@ public class SnapshotTakerContentTest {
     }
 
     @Test
+    public void spinnerGivesTheTextOfItsEditorField() throws Exception {
+        NodeSnapshot n = take(20, "s", new Callable<java.awt.Component>() {
+            public java.awt.Component call() {
+                return new JSpinner(new SpinnerNumberModel(3, 0, 10, 1));
+            }
+        });
+        assertEquals("3", n.text);
+    }
+
+    @Test
+    public void spinnerWithACustomEditorGivesNoText() throws Exception {
+        NodeSnapshot custom = take(20, "s", new Callable<java.awt.Component>() {
+            public java.awt.Component call() {
+                JSpinner sp = new JSpinner(new SpinnerNumberModel(3, 0, 10, 1));
+                sp.setEditor(new JLabel("x"));
+                return sp;
+            }
+        });
+        assertNull(custom.text);
+    }
+
+    @Test
     public void listGivesItems() throws Exception {
         NodeSnapshot n = take(20, "l", new Callable<java.awt.Component>() {
             public java.awt.Component call() {
@@ -118,6 +142,32 @@ public class SnapshotTakerContentTest {
         });
         assertEquals(Arrays.asList("r", "  c"), n.items);
         assertEquals(Integer.valueOf(2), n.rowCount);
+    }
+
+    @Test
+    public void treeGivesTheSelectedRow() throws Exception {
+        NodeSnapshot n = take(20, "tr", new Callable<java.awt.Component>() {
+            public java.awt.Component call() {
+                DefaultMutableTreeNode root = new DefaultMutableTreeNode("r");
+                root.add(new DefaultMutableTreeNode("a"));
+                root.add(new DefaultMutableTreeNode("b"));
+                JTree t = new JTree(new DefaultTreeModel(root));
+                t.expandRow(0);
+                t.setSelectionRow(2);
+                return t;
+            }
+        });
+        assertEquals(Integer.valueOf(2), n.selectedIndex);
+    }
+
+    @Test
+    public void treeWithoutASelectionGivesNoSelectedIndex() throws Exception {
+        NodeSnapshot n = take(20, "tr", new Callable<java.awt.Component>() {
+            public java.awt.Component call() {
+                return new JTree(new DefaultTreeModel(new DefaultMutableTreeNode("r")));
+            }
+        });
+        assertNull(n.selectedIndex);
     }
 
     @Test

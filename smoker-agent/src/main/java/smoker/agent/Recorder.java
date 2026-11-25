@@ -17,12 +17,16 @@ import javax.swing.JMenu;
 import javax.swing.JMenuItem;
 import javax.swing.JPasswordField;
 import javax.swing.JPopupMenu;
+import javax.swing.JSpinner;
 import javax.swing.JTabbedPane;
 import javax.swing.JTable;
+import javax.swing.JTree;
 import javax.swing.SwingUtilities;
 import javax.swing.text.JTextComponent;
+import javax.swing.tree.TreePath;
 import java.awt.AWTEvent;
 import java.awt.Component;
+import java.awt.Point;
 import java.awt.Toolkit;
 import java.awt.Window;
 import java.awt.event.AWTEventListener;
@@ -33,12 +37,15 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.WeakHashMap;
 import java.util.concurrent.Callable;
 import java.util.function.BooleanSupplier;
 import java.util.regex.Pattern;
@@ -51,6 +58,7 @@ import java.util.regex.Pattern;
 final class Recorder implements AWTEventListener {
 
     interface Listener {
+        /** A new step. It is the last step, or a SET_CELL directly before the last step (spec 6.4). */
         void stepAdded(Step s);
         void stepUpdated(Step s);
         void status(String text);
@@ -63,7 +71,14 @@ final class Recorder implements AWTEventListener {
     private final LinkedHashMap<String, Snapshot> snapshots = new LinkedHashMap<String, Snapshot>();
     /** Steps without a snapshot yet. Only the EDT removes a step from it (F-21), together with its snapshot. */
     private final List<Step> pendingSnapshots = new LinkedList<Step>();
+    /** Change counter per step id, guarded by {@code pendingSnapshots}: {@link #changed} counts up (spec 6, Events). */
+    private final Map<String, Integer> changeCount = new LinkedHashMap<String, Integer>();
+    /** Ids of the steps whose golden a move removed. Guarded by {@code snapshots}. */
+    private final Set<String> goldenRemoved = new HashSet<String>();
     private volatile boolean recording;
+    /** Set by {@link #close}: the snapshot thread ends. */
+    private volatile boolean closed;
+    private final Thread snapshotThread;
     private Listener listener;
     private int counter;
 
@@ -72,6 +87,10 @@ final class Recorder implements AWTEventListener {
     private String textAtFocusGain;
     /** The password warning was given since the last password field got the focus (F-19). */
     private boolean passwordWarned;
+    /** Table cell edits (spec 6.4). EDT only. */
+    private final CellEditTracker cells = new CellEditTracker();
+    /** Spinners with a custom editor that got the status text already (spec 6.5). EDT only. */
+    private final Set<JSpinner> spinnersSaid = Collections.newSetFromMap(new WeakHashMap<JSpinner, Boolean>());
 
     /** @param golden the existing golden snapshots of {@code scenario}; empty for a new scenario */
     Recorder(AgentConfig cfg, Scenario scenario, Map<String, Snapshot> golden) {
@@ -80,14 +99,24 @@ final class Recorder implements AWTEventListener {
         this.snapshots.putAll(golden);
         this.taker = new SnapshotTaker(scenario.maxRows, "named".equals(scenario.compare));
         for (Step s : scenario.steps) counter = Math.max(counter, numberOf(s.id));
-        Thread t = new Thread(new Runnable() {
+        snapshotThread = new Thread(new Runnable() {
             @Override
             public void run() {
                 snapshotLoop();
             }
         }, "smoker-recorder-snapshots");
-        t.setDaemon(true);
-        t.start();
+        snapshotThread.setDaemon(true);
+        snapshotThread.start();
+    }
+
+    /**
+     * Stops the snapshot thread. A pending step gets no snapshot after this call. A record session has one recorder
+     * for the life of the JVM; a test that makes many recorders must close each one, because each snapshot thread
+     * pings the EDT while it waits, and the pings of other threads delay the quiet wait.
+     */
+    void close() {
+        closed = true;
+        snapshotThread.interrupt();
     }
 
     void setListener(Listener l) {
@@ -98,10 +127,27 @@ final class Recorder implements AWTEventListener {
         return scenario;
     }
 
+    /**
+     * Starts or resumes the recording. On the EDT, before the first event: the tracker drops an edit that ended during
+     * the pause (the recorder saw no event of it) and keeps an open edit watched.
+     */
     void start() {
-        Toolkit.getDefaultToolkit().addAWTEventListener(this,
-                AWTEvent.MOUSE_EVENT_MASK | AWTEvent.KEY_EVENT_MASK | AWTEvent.FOCUS_EVENT_MASK);
-        recording = true;
+        try {
+            Quiescence.onEdt(new Callable<Void>() {
+                @Override
+                public Void call() {
+                    cells.check();
+                    // AWT calls a listener once per registration: after pause and start, each event came twice.
+                    Toolkit.getDefaultToolkit().removeAWTEventListener(Recorder.this);
+                    Toolkit.getDefaultToolkit().addAWTEventListener(Recorder.this,
+                            AWTEvent.MOUSE_EVENT_MASK | AWTEvent.KEY_EVENT_MASK | AWTEvent.FOCUS_EVENT_MASK);
+                    recording = true;
+                    return null;
+                }
+            });
+        } catch (Exception e) {
+            throw new IllegalStateException("cannot start the recorder", e);
+        }
         say("recording");
     }
 
@@ -173,10 +219,130 @@ final class Recorder implements AWTEventListener {
         return f;
     }
 
+    /** True after a move removed the golden of {@code s}, until {@link #changed} clears the mark (spec 7.3). */
+    boolean goldenRemoved(Step s) {
+        synchronized (snapshots) {
+            return goldenRemoved.contains(s.id);
+        }
+    }
+
+    /** The snapshot of the nearest earlier step that has one, or null. Must run on the EDT. */
+    Snapshot previousSnapshot(Step s) {
+        int i = scenario.steps.indexOf(s);
+        for (int k = i - 1; k >= 0; k--) {
+            Snapshot snap = snapshot(scenario.steps.get(k));
+            if (snap != null) return snap;
+        }
+        return null;
+    }
+
+    /**
+     * The action of {@code s} changed in place (spec 6, Events). The step gets a new name only when its name was the
+     * default name before the change. Its golden goes and the step is pending again, unless a WAIT_FOR step follows
+     * (the player takes no snapshot there). A quiet wait that started before this call does not take the snapshot.
+     * Call it for the last step only (Tasks 5 and 7): a step in the middle would get a snapshot of a later state.
+     * Must run on the EDT.
+     *
+     * @param nameBefore {@code s.action.toString()} as it was before the caller changed the action
+     */
+    void changed(Step s, String nameBefore) {
+        if (s.name == null || s.name.equals(nameBefore)) s.name = s.action.toString();
+        synchronized (snapshots) {
+            snapshots.remove(s.id);
+            goldenRemoved.remove(s.id);
+        }
+        int i = scenario.steps.indexOf(s);
+        boolean beforeWait = i >= 0 && i + 1 < scenario.steps.size() && isWaitFor(scenario.steps.get(i + 1));
+        synchronized (pendingSnapshots) {
+            Integer n = changeCount.get(s.id);
+            changeCount.put(s.id, n == null ? 1 : n + 1);
+            if (!beforeWait && !pendingSnapshots.contains(s)) pendingSnapshots.add(s);
+            pendingSnapshots.notifyAll();
+        }
+        if (listener != null) listener.stepUpdated(s);
+    }
+
+    /**
+     * Swaps {@code s} with its neighbour (spec 7.3). The golden of both steps is wrong now: it goes, also a pending
+     * snapshot. The mark "golden removed" means that a step needs a golden and has none because of the move. Both
+     * swapped steps get it, and so does the step before them when it has no golden and is not pending. A checked step
+     * that is directly before a WAIT_FOR step loses its golden and gets no mark: the player takes no snapshot there.
+     * No effect at the list border. Must run on the EDT.
+     *
+     * @param delta -1 (up) or +1 (down)
+     */
+    void move(Step s, int delta) {
+        int i = scenario.steps.indexOf(s);
+        int j = i + delta;
+        if (i < 0 || j < 0 || j >= scenario.steps.size()) return;
+        Step other = scenario.steps.get(j);
+        scenario.steps.set(i, other);
+        scenario.steps.set(j, s);
+        int low = Math.min(i, j);
+        List<Step> checked = new ArrayList<Step>();
+        if (low > 0) checked.add(scenario.steps.get(low - 1));
+        checked.add(scenario.steps.get(low));
+        checked.add(scenario.steps.get(low + 1));
+        for (Step c : checked) {
+            int k = scenario.steps.indexOf(c);
+            boolean beforeWait = k + 1 < scenario.steps.size() && isWaitFor(scenario.steps.get(k + 1));
+            boolean swapped = c == s || c == other;
+            if (beforeWait) {
+                dropGolden(c, false);
+            } else if (swapped) {
+                dropGolden(c, true);
+            } else if (!hasSnapshot(c) && !isPending(c)) {
+                synchronized (snapshots) {
+                    goldenRemoved.add(c.id);
+                }
+            }
+        }
+        if (listener != null) for (Step c : checked) listener.stepUpdated(c);
+    }
+
+    private boolean isPending(Step s) {
+        synchronized (pendingSnapshots) {
+            return pendingSnapshots.contains(s);
+        }
+    }
+
+    /** Removes the golden and the pending state of {@code s}; the mark "golden removed" is set or cleared. */
+    private void dropGolden(Step s, boolean mark) {
+        synchronized (pendingSnapshots) {
+            pendingSnapshots.remove(s);
+        }
+        synchronized (snapshots) {
+            snapshots.remove(s.id);
+            if (mark) goldenRemoved.add(s.id);
+            else goldenRemoved.remove(s.id);
+        }
+    }
+
+    private static boolean isWaitFor(Step s) {
+        return s.action != null && s.action.type == Action.Type.WAIT_FOR;
+    }
+
+    /** Sets the group label of {@code s}; blank text or null removes it. Must run on the EDT. */
+    void setGroup(Step s, String group) {
+        String g = group == null ? "" : group.trim();
+        s.group = g.isEmpty() ? null : g;
+        if (listener != null) listener.stepUpdated(s);
+    }
+
+    /** Test hook: adds a step as the recorder does for a recorded action. Must run on the EDT. */
+    Step addForTest(Action a) {
+        add(a);
+        return scenario.steps.get(scenario.steps.size() - 1);
+    }
+
     void remove(Step s) {
         scenario.steps.remove(s);
         synchronized (snapshots) {
             snapshots.remove(s.id);
+            goldenRemoved.remove(s.id);
+        }
+        synchronized (pendingSnapshots) {
+            changeCount.remove(s.id);
         }
     }
 
@@ -189,6 +355,10 @@ final class Recorder implements AWTEventListener {
         if (isSmokerUi(src)) return;
 
         int id = event.getID();
+        // An event of a cell edit records no other step; the edit gives one SET_CELL at its end (spec 6.4).
+        final boolean cellEdit = cells.event(event, src);
+        final int stepsBefore = scenario.steps.size();
+        final EndKey endKey = cellEdit ? EndKey.of(event, src) : null;
         if (id == MouseEvent.MOUSE_PRESSED && editing != null && !SwingUtilities.isDescendingFrom(src, editing)) {
             // A target that takes no focus (menu item, toolbar button) gives the field no FOCUS_LOST.
             // Flush the typed text now, so that SET_TEXT comes before the click and has its own snapshot (F-21).
@@ -198,6 +368,16 @@ final class Recorder implements AWTEventListener {
             // First input of the next step: the component has not processed it yet (F-21).
             takePendingSnapshots(id == FocusEvent.FOCUS_GAINED);
         }
+        if (cells.active()) {
+            // The table processes the event after this listener: read the end of the edit in a later EDT task.
+            SwingUtilities.invokeLater(new Runnable() {
+                @Override
+                public void run() {
+                    endOfCellEdit(!cellEdit, stepsBefore, endKey);
+                }
+            });
+        }
+        if (cellEdit) return;
         if (event instanceof FocusEvent) {
             onFocus((FocusEvent) event, src);
         } else if (event instanceof KeyEvent) {
@@ -223,14 +403,139 @@ final class Recorder implements AWTEventListener {
         }
     }
 
+    /**
+     * Adds SET_CELL when a cell edit ended with a new value (spec 6.4). A password field as editor gives the
+     * warning and no step (F-19).
+     *
+     * <p>SET_CELL never gets a golden at record time (Ruling 7). The input that ends the edit acts before this task
+     * runs: a check box toggles, Enter moves the selection, a button acts. So SET_CELL gets the mark "golden removed"
+     * (run and approve), and the replay gives its golden.
+     * <p>The input of a step can end the edit in its own action, for example a button whose action listener stops the
+     * edit at the release. Its step is already in the list: SET_CELL goes directly before it (spec 6.4).
+     * <p>Enter or Tab of the edit that moved the selection of the table comes after SET_CELL as a KEY step with the
+     * normal snapshot, so that the replay moves the selection too.
+     *
+     * @param byOtherInput the event that ended the edit is not part of the edit, for example the press on a button
+     * @param stepsBefore  the number of steps before that event
+     * @param endKey       the Enter or Tab key of the edit, or null
+     */
+    private void endOfCellEdit(boolean byOtherInput, int stepsBefore, EndKey endKey) {
+        if (!recording) return;   // start() drops an edit that ended during the pause
+        CellEditTracker.Edit e = cells.check();
+        if (e == null) return;
+        if (e.password) {
+            say("password field: a table cell edit is not recorded. Add a SET_CELL step by hand, or set the value outside the scenario.");
+            return;
+        }
+        Step s = newStep(Action.setCell(Locators.resolve(e.table), e.row, e.column, e.value));
+        int at = byOtherInput && stepsBefore < scenario.steps.size() ? stepsBefore : scenario.steps.size();
+        scenario.steps.add(at, s);
+        synchronized (snapshots) {
+            goldenRemoved.add(s.id);
+        }
+        if (listener != null) listener.stepAdded(s);
+        if (endKey != null && endKey.table == e.table && endKey.moved()) add(endKey.key);
+    }
+
+    /** An Enter or Tab key of a cell edit, and the lead cell of its table before the table processed the key. */
+    private static final class EndKey {
+        final Action key;
+        final JTable table;
+        final int row;
+        final int column;
+
+        private EndKey(Action key, JTable table) {
+            this.key = key;
+            this.table = table;
+            this.row = table.getSelectionModel().getLeadSelectionIndex();
+            this.column = table.getColumnModel().getSelectionModel().getLeadSelectionIndex();
+        }
+
+        /** The KEY step for a KEY_PRESSED of Enter or Tab in a table, else null. Must run on the EDT. */
+        static EndKey of(AWTEvent event, Component src) {
+            if (event.getID() != KeyEvent.KEY_PRESSED) return null;
+            KeyEvent k = (KeyEvent) event;
+            if (k.getKeyCode() != KeyEvent.VK_ENTER && k.getKeyCode() != KeyEvent.VK_TAB) return null;
+            JTable t = src instanceof JTable ? (JTable) src : (JTable) SwingUtilities.getAncestorOfClass(JTable.class, src);
+            if (t == null) return null;
+            Action a = Action.key(vkName(k.getKeyCode()), k.getModifiersEx());
+            a.locator = Locators.nameOf(t) != null ? Locators.resolve(t) : null;   // the rule of onKey
+            return new EndKey(a, t);
+        }
+
+        /** True if the key moved the lead cell, as JTable does for Enter and Tab with the focus on the table. */
+        boolean moved() {
+            return table.getSelectionModel().getLeadSelectionIndex() != row
+                    || table.getColumnModel().getSelectionModel().getLeadSelectionIndex() != column;
+        }
+    }
+
     /** Emits SET_TEXT if the focused text component changed since focus gain. */
     private void flushText() {
         if (editing == null) return;
         String now = editing.getText();
         if (!Locators.eq(now, textAtFocusGain)) {
-            add(Action.setText(Locators.resolve(editing), now));
+            JSpinner spinner = spinnerOf(editing);
+            if (spinner == null) {
+                add(Action.setText(Locators.resolve(editing), now));
+            } else if (spinner.getEditor() instanceof JSpinner.DefaultEditor) {
+                spinnerValue(spinner, now, false);    // the locator is the spinner, not the field (spec 6.5)
+            } else {
+                customSpinner(spinner);
+            }
             textAtFocusGain = now;
         }
+    }
+
+    private static JSpinner spinnerOf(Component c) {
+        return (JSpinner) SwingUtilities.getAncestorOfClass(JSpinner.class, c);
+    }
+
+    /**
+     * Records the value of a spinner as SET_TEXT. With {@code merge} (arrow click), the recorder changes the last step
+     * when it is a SET_TEXT on the same spinner; else it adds a step.
+     */
+    private void spinnerValue(JSpinner spinner, String text, boolean merge) {
+        Locator l = Locators.resolve(spinner);
+        int n = scenario.steps.size();
+        Step last = n == 0 ? null : scenario.steps.get(n - 1);
+        if (merge && last != null && last.action.type == Action.Type.SET_TEXT && last.action.locator != null
+                && last.action.locator.toString().equals(l.toString())) {
+            if (Locators.eq(last.action.value, text)) return;
+            String nameBefore = last.action.toString();
+            last.action.value = text;
+            changed(last, nameBefore);
+            return;
+        }
+        add(Action.setText(l, text));
+    }
+
+    /**
+     * An arrow button of a spinner (spec 6.5): no CLICK. The editor field has the new text after Swing processed the
+     * event, so the recorder reads it in a later EDT task.
+     */
+    private void onSpinnerArrow(final JSpinner spinner) {
+        if (!(spinner.getEditor() instanceof JSpinner.DefaultEditor)) {
+            customSpinner(spinner);
+            return;
+        }
+        final JTextComponent field = ((JSpinner.DefaultEditor) spinner.getEditor()).getTextField();
+        final String before = field.getText();
+        SwingUtilities.invokeLater(new Runnable() {
+            @Override
+            public void run() {
+                if (!recording) return;
+                String now = field.getText();
+                if (Locators.eq(now, before)) return;     // for example an arrow at the limit
+                if (field == editing) textAtFocusGain = now;     // no second step at the focus loss
+                spinnerValue(spinner, now, true);
+            }
+        });
+    }
+
+    /** A spinner with a custom editor: the replay cannot set its value (spec 6.5). The status text comes once. */
+    private void customSpinner(JSpinner spinner) {
+        if (spinnersSaid.add(spinner)) say("spinner with a custom editor: the value is not recorded");
     }
 
     private void onKey(KeyEvent e, Component src) {
@@ -286,21 +591,70 @@ final class Recorder implements AWTEventListener {
     }
 
     private void onMouse(MouseEvent e, Component src) {
-        if (e.getButton() != MouseEvent.BUTTON1) return;
         final Component target = interactiveAncestor(src);
+        if (e.getButton() == MouseEvent.BUTTON3) {
+            // Spec 6.3: the press records the right-click on each platform; isPopupTrigger is not read.
+            if (e.getID() != MouseEvent.MOUSE_PRESSED) return;
+            Component on = target != null ? target : src;
+            Action a = Action.click(Locators.resolve(on));
+            a.button = 3;
+            Places.fill(a, on, SwingUtilities.convertPoint(src, e.getPoint(), on));
+            add(a);
+            return;
+        }
+        if (e.getButton() != MouseEvent.BUTTON1) return;
+        if (src instanceof AbstractButton && spinnerOf(src) != null) {
+            // The spinner changes its value in the button action at the release; auto-repeat changes it while the
+            // button stays pressed (spec 6.5). The recorder reads the value after the press and after the release.
+            if (e.getID() == MouseEvent.MOUSE_PRESSED || e.getID() == MouseEvent.MOUSE_RELEASED) onSpinnerArrow(spinnerOf(src));
+            return;
+        }
         if (actsOnRelease(target)) {
             if (firesActionOnRelease(e, target)) add(Action.click(Locators.resolve(target)));
             return;
         }
         if (e.getID() != MouseEvent.MOUSE_CLICKED) return;
+        boolean second = e.getClickCount() == 2;
         if (target == null) {
-            add(Action.click(Locators.resolve(src)));
+            Locator l = Locators.resolve(src);
+            if (second) doubleClick(l);
+            else add(Action.click(l));
             return;
         }
         if (target instanceof JTextComponent) return;          // typing is captured as SET_TEXT
         if (target instanceof AbstractButton) {
             add(Action.click(Locators.resolve(target)));
             return;
+        }
+        Point p = SwingUtilities.convertPoint(src, e.getPoint(), target);
+        if ((target instanceof JTable || target instanceof JList || target instanceof JTree) && comboOf(target) == null) {
+            if (second) {
+                // Spec 6.2: the second click adds a CLICK with the place; the first click gave the SELECT.
+                final Action a = Action.click(Locators.resolve(target));
+                a.count = 2;
+                if (!Places.fill(a, target, p)) return;
+                SwingUtilities.invokeLater(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (target instanceof JTable && ((JTable) target).isEditing()) return;   // SET_CELL replaces it (6.4)
+                        add(a);
+                    }
+                });
+                return;
+            }
+            if (target instanceof JTree) {
+                // Spec 6.1: a click on a row records SELECT with the lead selection path, read after Swing processed the click.
+                final JTree tree = (JTree) target;
+                if (tree.getPathForLocation(p.x, p.y) == null) return;   // for example the expand handle
+                SwingUtilities.invokeLater(new Runnable() {
+                    @Override
+                    public void run() {
+                        TreePath lead = tree.getLeadSelectionPath();
+                        if (lead != null) add(Action.select(Locators.resolve(tree), Places.labels(tree, lead)));
+                    }
+                });
+                return;
+            }
         }
         // Selections: read the new state after Swing has processed the click.
         SwingUtilities.invokeLater(new Runnable() {
@@ -309,9 +663,8 @@ final class Recorder implements AWTEventListener {
                 Action a = new Action();
                 a.type = Action.Type.SELECT;
                 if (target instanceof JList) {
-                    JPopupMenu popup = (JPopupMenu) SwingUtilities.getAncestorOfClass(JPopupMenu.class, target);
-                    if (popup != null && popup.getInvoker() instanceof JComboBox) {
-                        JComboBox<?> cb = (JComboBox<?>) popup.getInvoker();
+                    JComboBox<?> cb = comboOf(target);
+                    if (cb != null) {
                         a.locator = Locators.resolve(cb);
                         a.value = String.valueOf(cb.getSelectedItem());
                     } else {
@@ -332,6 +685,38 @@ final class Recorder implements AWTEventListener {
                 if (a.value == null || !"-1".equals(a.value)) add(a);
             }
         });
+    }
+
+    /** The combo box whose popup holds {@code c}, or null. */
+    static JComboBox<?> comboOf(Component c) {
+        JPopupMenu popup = (JPopupMenu) SwingUtilities.getAncestorOfClass(JPopupMenu.class, c);
+        return popup != null && popup.getInvoker() instanceof JComboBox ? (JComboBox<?>) popup.getInvoker() : null;
+    }
+
+    /**
+     * The second click on a component with no interactive ancestor (spec 6.2). If the last step is the plain click of
+     * the first click, it becomes a double-click and is pending again: its snapshot showed the state between the two
+     * clicks. Else a new step comes; no earlier step changes.
+     */
+    private void doubleClick(Locator l) {
+        Step last = scenario.steps.isEmpty() ? null : scenario.steps.get(scenario.steps.size() - 1);
+        if (last != null && last.action != null && last.action.type == Action.Type.CLICK && last.action.count == null
+                && last.action.button == null && !last.action.hasPlace() && sameLocator(last.action.locator, l)) {
+            String before = last.action.toString();
+            last.action.count = 2;
+            changed(last, before);
+            return;
+        }
+        Action a = Action.click(l);
+        a.count = 2;
+        add(a);
+    }
+
+    private static boolean sameLocator(Locator a, Locator b) {
+        if (a == null || b == null) return a == b;
+        return Locators.eq(a.name, b.name) && Locators.eq(a.windowTitle, b.windowTitle)
+                && Locators.eq(a.className, b.className) && Locators.eq(a.text, b.text)
+                && Locators.eq(a.index, b.index) && Locators.eq(a.x, b.x) && Locators.eq(a.y, b.y);
     }
 
     /**
@@ -370,13 +755,17 @@ final class Recorder implements AWTEventListener {
     // ---- steps -------------------------------------------------------------------------------
 
     private void add(Action a) {
-        Step s = new Step(String.format(Locale.ROOT, "s%03d", ++counter), a.toString(), a);
+        Step s = newStep(a);
         scenario.steps.add(s);
         if (listener != null) listener.stepAdded(s);
         synchronized (pendingSnapshots) {
             pendingSnapshots.add(s);
             pendingSnapshots.notifyAll();
         }
+    }
+
+    private Step newStep(Action a) {
+        return new Step(String.format(Locale.ROOT, "s%03d", ++counter), a.toString(), a);
     }
 
     /**
@@ -464,20 +853,28 @@ final class Recorder implements AWTEventListener {
     private void snapshotLoop() {
         while (true) {
             final Step s;
+            final int changesBefore;
             synchronized (pendingSnapshots) {
                 while (pendingSnapshots.isEmpty()) {
+                    if (closed) return;
                     try { pendingSnapshots.wait(); } catch (InterruptedException e) { return; }
                 }
+                if (closed) return;
                 s = pendingSnapshots.get(0);
+                changesBefore = changeCountOf(s);
             }
             try {
                 if (s.action != null && s.action.type == Action.Type.WAIT_FOR) awaitCondition(s);
                 Quiescence.await(scenario.quietMs, scenario.stepTimeoutMs);
+                if (closed) return;
                 Quiescence.onEdt(new Callable<Void>() {
                     @Override
                     public Void call() {
                         synchronized (pendingSnapshots) {
-                            if (!pendingSnapshots.remove(s)) return null;
+                            if (!pendingSnapshots.contains(s)) return null;
+                            // changed() came during the quiet wait: wait again (the step stays pending)
+                            if (changeCountOf(s) != changesBefore) return null;
+                            pendingSnapshots.remove(s);
                         }
                         store(Collections.singletonList(s), taker.take());
                         return null;
@@ -487,6 +884,12 @@ final class Recorder implements AWTEventListener {
                 say("snapshot failed: " + e);
             }
         }
+    }
+
+    /** Must hold the lock of {@code pendingSnapshots}. */
+    private int changeCountOf(Step s) {
+        Integer n = changeCount.get(s.id);
+        return n == null ? 0 : n;
     }
 
     private static final BooleanSupplier NO_HANG = new BooleanSupplier() {

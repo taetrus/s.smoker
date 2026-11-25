@@ -123,4 +123,27 @@ public class HtmlReportWriterTest {
         assertTrue(html, html.contains("<p class='note'>failed &lt;in&gt; a shared JVM</p>"));
         assertTrue(html, html.indexOf("<p class='note'>") < html.indexOf("<table><tr><th style='width:160px'>"));
     }
+
+    @Test
+    public void groupGivesAHeaderRow() throws Exception {
+        RunResult r = new RunResult();
+        r.scenarioName = "orders";
+        String[] groups = {null, "Create <order>", null};
+        for (int i = 0; i < 3; i++) {
+            RunResult.StepResult s = new RunResult.StepResult();
+            s.stepId = "s00" + (i + 1);
+            s.stepName = "step";
+            s.group = groups[i];
+            r.steps.add(s);
+        }
+        Path f = tmp.getRoot().toPath().resolve("report.html");
+        HtmlReportWriter.write(f, Collections.singletonList(r));
+        String html = new String(Files.readAllBytes(f), StandardCharsets.UTF_8);
+        int header = html.indexOf("<tr class='group'>");
+        assertTrue(html, header > 0);
+        assertTrue(html, html.indexOf("<tr class='group'>", header + 1) < 0);
+        assertTrue(html, html.indexOf("<td>s001<") < header);
+        assertTrue(html, header < html.indexOf("<td>s002<"));
+        assertTrue(html, html.contains("Create &lt;order&gt;"));
+    }
 }

@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 2,
+  "name": "bad-cell",
+  "description": "A value that the cell editor refuses: s001 gives ERROR. Needs -Ddemo.recorderPanel=true.",
+  "startupTimeoutMs": 30000,
+  "quietMs": 300,
+  "stepTimeoutMs": 10000,
+  "ignore": {"paths": [], "attributes": [], "valuePatterns": []},
+  "steps": [
+    {"id": "s001", "name": "quantity abc", "action": {"type": "SET_CELL", "locator": {"name": "demo.items"}, "row": 0, "column": "Qty", "value": "abc"}}
+  ]
+}
