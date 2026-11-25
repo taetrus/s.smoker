@@ -36,6 +36,11 @@ two popup menus and a spinner (`demo.count`) for the recorder scenarios (WP-06).
 `smoker-demo/scenarios-recorder/recorder.json` (9 steps in three groups) and `smoker-demo/scenarios-failing-recorder/bad-cell.json`
 need this option. The integration test checks R-20a with them: NO_GOLDEN, then PASS, a changed value gives FAIL,
 and a value that the cell editor refuses gives ERROR.
+`-Ddemo.localePanel=true` shows a label `demo.localeText` on the west side (WP-07, R-34). It shows a fixed instant and
+the number 1234567 in the default locale and time zone. For `en-US` and `UTC` the text is `1 January 1970 14:00  1,234,567`.
+The panel is off by default. `smoker-demo/scenarios-locale/locale.json` and its golden need this option and the run options
+`--locale en-US --timeZone UTC`. The integration test checks that the run passes on a PC with the locale `tr_TR` and
+the time zone `Europe/Istanbul`, and that the same run without the two options fails.
 The integration test checks these results:
 a JUL error with a 40-line stack trace gives one hit in s001 (`log.json`);
 `Error count 0 of 3` and `Exception handler ready` give no hit;

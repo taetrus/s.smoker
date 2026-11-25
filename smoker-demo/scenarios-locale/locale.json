@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 2,
+  "name": "locale",
+  "description": "Locale and time zone (WP-07, R-34). Needs -Ddemo.localePanel=true and the options --locale en-US --timeZone UTC. The golden has the label demo.localeText.",
+  "startupTimeoutMs": 30000,
+  "quietMs": 300,
+  "stepTimeoutMs": 10000,
+  "ignore": { "paths": [], "attributes": [], "valuePatterns": [] },
+  "steps": [
+    { "id": "s001", "name": "enter name", "action": { "type": "SET_TEXT", "locator": { "name": "demo.name" }, "value": "Kerem" } }
+  ]
+}

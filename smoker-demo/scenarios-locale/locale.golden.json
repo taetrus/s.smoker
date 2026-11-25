@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 2,
+  "scenario": "locale",
+  "steps": [
+    {
+      "id": "s001",
+      "full": [
+        {"path": "[#demo.frame]", "type": "JFrame", "name": "demo.frame", "title": "Smoker Demo"},
+        {
+          "path": "[#demo.frame]/#@NotesPanel.noteField",
+          "type": "JTextField",
+          "name": "@NotesPanel.noteField",
+          "text": ""
+        },
+        {
+          "path": "[#demo.frame]/#@NotesPanel.saveButton",
+          "type": "JButton",
+          "name": "@NotesPanel.saveButton",
+          "text": "Save"
+        },
+        {"path": "[#demo.frame]/#demo.answer", "type": "JLabel", "name": "demo.answer", "text": "-"},
+        {"path": "[#demo.frame]/#demo.boom", "type": "JButton", "name": "demo.boom", "text": "Throw on EDT"},
+        {"path": "[#demo.frame]/#demo.greet", "type": "JButton", "name": "demo.greet", "text": "Greet"},
+        {"path": "[#demo.frame]/#demo.hang", "type": "JButton", "name": "demo.hang", "text": "Hang EDT 8s"},
+        {
+          "path": "[#demo.frame]/#demo.lang",
+          "type": "JComboBox",
+          "name": "demo.lang",
+          "text": "en",
+          "itemCount": 3,
+          "selectedIndex": 0
+        },
+        {
+          "path": "[#demo.frame]/#demo.localeText",
+          "type": "JLabel",
+          "name": "demo.localeText",
+          "text": "1 January 1970 14:00  1,234,567"
+        },
+        {"path": "[#demo.frame]/#demo.menu.help", "type": "JMenu", "name": "demo.menu.help", "text": "Help"},
+        {"path": "[#demo.frame]/#demo.name", "type": "JTextField", "name": "demo.name", "text": "Kerem"},
+        {"path": "[#demo.frame]/#demo.query", "type": "JButton", "name": "demo.query", "text": "Query"},
+        {"path": "[#demo.frame]/#demo.result", "type": "JLabel", "name": "demo.result", "text": "…"},
+        {
+          "path": "[#demo.frame]/#demo.table",
+          "type": "JTable",
+          "name": "demo.table",
+          "rowCount": 0,
+          "selectedIndex": -1,
+          "cells": []
+        },
+        {"path": "[#demo.frame]/#notes.saved", "type": "JLabel", "name": "notes.saved", "text": "-"},
+        {"path": "[#demo.frame]/JButton[3]", "type": "JButton", "text": "I have no name"},
+        {"path": "[#demo.frame]/JLabel[0]", "type": "JLabel", "text": "Name:"},
+        {"path": "[#demo.frame]/JMenuBar[0]", "type": "JMenuBar"},
+        {"path": "[#demo.frame]/JTableHeader[0]", "type": "JTableHeader"}
+      ]
+    }
+  ]
+}

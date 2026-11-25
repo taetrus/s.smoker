@@ -33,6 +33,8 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.Locale;
 import java.util.logging.FileHandler;
 import java.util.logging.Level;
@@ -52,6 +54,8 @@ public class DemoApp {
     private static final boolean LOG_PANEL = Boolean.getBoolean("demo.logPanel");
     // -Ddemo.recorderPanel=true: a tree, an editable table and a spinner for the recorder scenarios (WP-06, R-20a).
     private static final boolean RECORDER_PANEL = Boolean.getBoolean("demo.recorderPanel");
+    // -Ddemo.localePanel=true: a label with a fixed instant and a fixed number in the default locale and time zone (WP-07, R-34).
+    private static final boolean LOCALE_PANEL = Boolean.getBoolean("demo.localePanel");
     // -Ddemo.equinoxError=true: the application prints an Equinox start error to System.out before the UI (F-22).
     private static final boolean EQUINOX_ERROR = Boolean.getBoolean("demo.equinoxError");
 
@@ -88,6 +92,15 @@ public class DemoApp {
             r.close();
         }
         System.out.flush();
+    }
+
+    /** The label of -Ddemo.localePanel=true: the text depends on the default locale and the default time zone. */
+    private static JLabel localeLabel() {
+        String text = new SimpleDateFormat("d MMMM yyyy HH:mm").format(new Date(14L * 3600 * 1000))
+                + "  " + String.format("%,d", 1234567);
+        JLabel l = new JLabel(text);
+        l.setName("demo.localeText");
+        return l;
     }
 
     /** The panel of -Ddemo.recorderPanel=true: tree with popup, table with popup, spinner (spec 9). */
@@ -420,6 +433,7 @@ public class DemoApp {
         }
         f.getContentPane().add(southAll, BorderLayout.SOUTH);
         if (RECORDER_PANEL) f.getContentPane().add(recorderPanel(), BorderLayout.EAST);
+        if (LOCALE_PANEL) f.getContentPane().add(localeLabel(), BorderLayout.WEST);
         f.setSize(640, 400);
         f.setLocation(100, 100);
         f.setVisible(true);

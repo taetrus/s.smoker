@@ -417,6 +417,55 @@ public class SelfTestIT {
         assertTrue(runBad.output + b.error, b.error.contains("the cell editor refused the value \"abc\""));
     }
 
+    @Test
+    public void localeAndTimeZoneFromTheConfiguration() throws Exception {
+        Path dir = Files.createDirectories(work.resolve("locale"));
+        Path scenario = dir.resolve("locale.json");
+        Files.copy(demoDir.resolve("scenarios-locale/locale.json"), scenario);
+        Files.copy(ScenarioFiles.goldenPath(demoDir.resolve("scenarios-locale/locale.json")), ScenarioFiles.goldenPath(scenario));
+        assertEquals("1 January 1970 14:00  1,234,567", nodeText(ScenarioFiles.readGolden(scenario).get("s001"), "demo.localeText"));
+        Path log = dir.resolve("demo.log");
+        String panel = "-Ddemo.localePanel=true";
+        // The OS locale of the PC: the demo JVM gets tr_TR and Istanbul. The options of the test JVM come first; these come last.
+        String[] turkishPc = {panel, "-Duser.language=tr", "-Duser.country=TR", "-Duser.timezone=Europe/Istanbul"};
+        String[] enUtc = {"--locale", "en-US", "--timeZone", "UTC"};
+
+        // The keys give the same text on the default PC and on a Turkish PC.
+        Cli run1 = runWithOptions(null, enUtc, scenario, dir.resolve("run1"), log, panel);
+        assertEquals(run1.output, 0, run1.exit);
+        RunResult r1 = result(dir.resolve("run1/locale"));
+        assertEquals(run1.output, RunResult.Status.PASS, r1.status);
+        assertEquals("en-US", r1.locale);
+        assertEquals("UTC", r1.timeZone);
+        assertTrue(String.valueOf(r1.warnings), r1.warnings.isEmpty());
+        Cli run2 = runWithOptions(null, enUtc, scenario, dir.resolve("run2"), log, turkishPc);
+        assertEquals(run2.output, 0, run2.exit);
+        assertEquals(run2.output, RunResult.Status.PASS, result(dir.resolve("run2/locale")).status);
+
+        // Without the keys a Turkish PC gives another text: the keys are what makes the run independent of the PC.
+        Cli run3 = runWithOptions(null, new String[0], scenario, dir.resolve("run3"), log, turkishPc);
+        assertEquals(run3.output, 1, run3.exit);
+        RunResult.StepResult s001 = assertStepStatus(result(dir.resolve("run3/locale")), "s001", RunResult.Status.FAIL);
+        assertTrue(s001.differences.toString(), s001.differences.toString().contains("demo.localeText"));
+        // The keys reach the application: tr-TR and Istanbul give a difference on a PC with en-US.
+        Cli run4 = runWithOptions(null, new String[] {"--locale", "tr-TR", "--timeZone", "Europe/Istanbul"}, scenario,
+                dir.resolve("run4"), log, panel);
+        assertEquals(run4.output, 1, run4.exit);
+        RunResult.StepResult s4 = assertStepStatus(result(dir.resolve("run4/locale")), "s001", RunResult.Status.FAIL);
+        assertTrue(s4.differences.toString(), s4.differences.toString().contains("demo.localeText"));
+
+        // A wrong time zone reaches the agent: the scenario gives ERROR. A wrong window size stops the CLI.
+        Cli badZone = runWithOptions(null, new String[] {"--locale", "en-US", "--timeZone", "Mars/Phobos"}, scenario,
+                dir.resolve("run-zone"), log, panel);
+        assertEquals(badZone.output, 1, badZone.exit);
+        // The agent stops the application with exit code 2, so the scenario has no run-result.json.
+        String zoneJob = read(dir.resolve("run-zone/job-result.json"));
+        assertTrue(zoneJob, zoneJob.contains("\"status\": \"ERROR\"") && zoneJob.contains("app exit code 2"));
+        assertTrue(read(dir.resolve("run-zone/locale/app-output.log")), read(dir.resolve("run-zone/locale/app-output.log")).contains("[smoker] fatal:"));
+        Cli badSize = runWithOptions(null, new String[] {"--windowSize", "big"}, scenario, dir.resolve("run-size"), log, panel);
+        assertEquals(badSize.output, 2, badSize.exit);
+    }
+
     private static String nodeText(Snapshot s, String name) {
         assertNotNull("no golden snapshot", s);
         for (NodeSnapshot n : s.nodes) if (name.equals(n.name)) return n.text;
@@ -880,12 +929,19 @@ public class SelfTestIT {
     /** As {@link #run}; a non-null {@code stopTimeoutMs} goes to the CLI as {@code --stopTimeoutMs}. */
     private static Cli runWithStopTimeout(String stopTimeoutMs, Path scenarios, Path out, Path log, String... demoOptions)
             throws Exception {
+        return runWithOptions(stopTimeoutMs, new String[0], scenarios, out, log, demoOptions);
+    }
+
+    /** As {@link #runWithStopTimeout}; {@code cliOptions} go to the CLI after the standard options. */
+    private static Cli runWithOptions(String stopTimeoutMs, String[] cliOptions, Path scenarios, Path out, Path log,
+            String... demoOptions) throws Exception {
         StringBuilder extra = new StringBuilder();
         for (String o : demoOptions) extra.append(o).append(' ');
         String app = quote(java) + " " + localeArgs() + " " + extra + "-Ddemo.log=" + quote(log.toString()) + " -jar " + quote(demoJar.toString());
         List<String> args = new ArrayList<String>(Arrays.asList("run", "--agent", agentJar.toString(), "--app", app,
                 "--scenarios", scenarios.toString(), "--out", out.toString(), "--log", log.toString()));
         if (stopTimeoutMs != null) args.addAll(Arrays.asList("--stopTimeoutMs", stopTimeoutMs));
+        args.addAll(Arrays.asList(cliOptions));
         return cli(args.toArray(new String[0]));
     }
 
