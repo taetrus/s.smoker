@@ -625,6 +625,27 @@ java -jar smoker-cli.jar run --agent smoker-agent.jar --app "java -jar myapp.jar
   The `key` of a scenario is its file name without the extension (in suite mode: the name in the suite).
   The matrix report reads this file.
 
+`report --merge` joins the `job-result.json` files of several jobs into one page:
+
+```
+java -jar smoker-cli.jar report --merge out-jre8 out-jre21 --out merged
+```
+
+- `--merge` takes one or more job folders: the `--out` folders of the jobs. `--out` is the folder of the page.
+  The command writes `<out>/report.html`. `--out` must not be a job folder.
+- The column name of a job is its label. A job without a label gets the name of its folder.
+- The page has the Java version, the operating system, the locale and the number of passed scenarios of each job.
+  Below, it has one row for each scenario and one row for each step. The scenarios have the order of the first job.
+  Scenarios and steps that only later jobs have come after them. A cell is `-` when the job did not run it.
+- A status cell links to the scenario or the step in the `report.html` of the job. The link is relative to `--out`.
+  When no relative path exists (another drive on Windows), the link is a `file:` URI.
+  The page therefore works when the job folders stay beside the page.
+- A note, an error or a warning of a scenario shows below its row, with the column name before it.
+- Exit code 0: the page is written. The jobs give the verdict of the pipeline, not the merge.
+  Exit code 2: a wrong argument, two jobs with one column name, a folder without a readable `job-result.json`,
+  or a page that cannot be written. The error text names the folder.
+- `--history`, `--run-id` and `--ref` are not available yet. They give exit code 2.
+
 ### Statuses
 
 `PASS` · `FAIL` (snapshot diff or log hit) · `HANG` (EDT blocked / action timed out, thread dump attached) ·

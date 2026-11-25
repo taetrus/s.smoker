@@ -41,6 +41,7 @@ import java.util.concurrent.TimeUnit;
  *     [--logPattern p] [--failLevel L] [--logCharset c]
  * java -jar smoker-cli.jar approve --run out/greet --scenario scenarios/greet.json [--steps s001,s002]
  * java -jar smoker-cli.jar lint    --run out/ [--emit-patch names.patch]   (--run scenarios/ reads the *.lint.json files of record)
+ * java -jar smoker-cli.jar report  --merge out-jre8/ out-jre21/ --out merged/   (one page for the job-result.json files)
  * </pre>
  * {@code --app} is the full command line; the token {@code {agent}} marks where the -javaagent option goes.
  * Without the token it is inserted right after the first argument (the java executable).
@@ -50,6 +51,7 @@ public final class Main {
 
     public static void main(String[] argv) throws Exception {
         if (argv.length == 0) usage(1);
+        if ("report".equals(argv[0])) System.exit(Report.run(Arrays.copyOfRange(argv, 1, argv.length)));
         Map<String, String> o = parse(Arrays.copyOfRange(argv, 1, argv.length));
         String cmd = argv[0];
         int code;
@@ -516,6 +518,7 @@ public final class Main {
                 + "          [--logPattern <p>] [--failLevel <L>] [--logCharset <c>]\n"
                 + "  approve --run <out/scenario-dir> --scenario <file> [--steps s001,s002]\n"
                 + "  lint    --run <out dir or scenario folder> [--emit-patch <file>]\n"
+                + "  report  --merge <dir> [<dir> ...] --out <dir> [--history <file>] [--run-id <text>] [--ref <text>]\n"
                 + "  <cmd> may contain the token {agent} where -javaagent:... must be placed (default: after the first word).");
         System.exit(code);
     }

@@ -146,4 +146,24 @@ public class HtmlReportWriterTest {
         assertTrue(html, header < html.indexOf("<td>s002<"));
         assertTrue(html, html.contains("Create &lt;order&gt;"));
     }
+
+    @Test
+    public void stepRowsHaveAnId() throws Exception {
+        RunResult r = new RunResult();
+        r.scenarioName = "Orders x";
+        RunResult.StepResult st = new RunResult.StepResult();
+        st.stepId = "s001";
+        st.stepName = "open";
+        st.status = RunResult.Status.PASS;
+        st.group = "Open";
+        r.steps.add(st);
+        Path f = tmp.getRoot().toPath().resolve("report.html");
+        HtmlReportWriter.write(f, Collections.singletonList(r));
+        String html = new String(Files.readAllBytes(f), StandardCharsets.UTF_8);
+        assertTrue(html, html.contains("<tr id='Orders_x-s001' class='PASS'>"));
+        assertTrue(html, HtmlReportWriter.stepAnchor("Orders x", "s001").equals("Orders_x-s001"));
+        assertTrue(html, html.contains("<h2 id='Orders_x'>"));
+        int groups = html.split("<tr class='group'>", -1).length - 1;
+        assertTrue(html, groups == 1);
+    }
 }
