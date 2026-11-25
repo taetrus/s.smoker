@@ -466,6 +466,22 @@ public class SelfTestIT {
         assertEquals(badSize.output, 2, badSize.exit);
     }
 
+    /** WP-07, R-40a: the release guard finds the agent option of the smoke tester in an .ini file. */
+    @Test
+    public void checkReleaseFindsTheAgentOption() throws Exception {
+        Path dir = Files.createTempDirectory(work, "release");
+        Path product = Files.createDirectories(dir.resolve("product"));
+        Path ini = product.resolve("eclipse.ini");
+        Files.write(ini, Arrays.asList("-vmargs", "-Xmx1g", "-javaagent:" + agentJar + "=config=x.cfg"), StandardCharsets.ISO_8859_1);
+        Cli hit = cli("check-release", product.toString());
+        assertEquals(hit.output, 1, hit.exit);
+        assertTrue(hit.output, hit.output.contains("eclipse.ini:3: -javaagent:"));
+        Files.write(ini, Arrays.asList("-vmargs", "-Xmx1g"), StandardCharsets.ISO_8859_1);
+        Cli clean = cli("check-release", product.toString());
+        assertEquals(clean.output, 0, clean.exit);
+        assertTrue(clean.output, clean.output.contains("1 file(s) checked, no agent option"));
+    }
+
     private static String nodeText(Snapshot s, String name) {
         assertNotNull("no golden snapshot", s);
         for (NodeSnapshot n : s.nodes) if (name.equals(n.name)) return n.text;

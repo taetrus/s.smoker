@@ -747,6 +747,55 @@ report:      report --merge out-jre8 out-jre21 --out merged --history history.js
 
 The merge job needs the artifacts of both jobs. It must keep `history.json` between pipelines (a cache or an artifact of the last run).
 
+### Release guard
+
+A product that ships must not start with the agent of the smoke tester. `check-release` finds the `-javaagent`
+option in the `.ini` files of a product:
+
+```
+java -jar smoker-cli.jar check-release target/products [<path> ...]
+```
+
+- A path is a folder, an `.ini` file or a `.zip` file. The command reads each `.ini` file below a folder and each
+  `.ini` entry of each `.zip` file below a folder. It does not read an archive in an archive.
+- A hit is a line that starts with `-javaagent:` (leading blanks are allowed) and has the text `smoker` after it, in
+  any case. The command prints `<file>:<line number>: <line>` for each hit (`<zip>!<entry>:<line number>: <line>` for an archive).
+- Exit code 1: there is a hit. Exit code 0: no hit; the command prints `check-release: <n> file(s) checked, no agent option`.
+  Exit code 2: a path does not exist, a file cannot be read, or a path has no `.ini` file. A guard that checked
+  nothing for a path must not pass. Exit code 2 wins over exit code 1.
+- The command reads the `.ini` files as ISO-8859-1.
+
+Example for a Maven or Tycho build, after the product is assembled (`exec-maven-plugin`, phase `verify`):
+
+```xml
+<plugin>
+  <groupId>org.codehaus.mojo</groupId>
+  <artifactId>exec-maven-plugin</artifactId>
+  <executions>
+    <execution>
+      <phase>verify</phase>
+      <goals><goal>exec</goal></goals>
+      <configuration>
+        <executable>java</executable>
+        <arguments>
+          <argument>-jar</argument><argument>tools/smoker-cli.jar</argument>
+          <argument>check-release</argument><argument>${project.build.directory}/products</argument>
+        </arguments>
+      </configuration>
+    </execution>
+  </executions>
+</plugin>
+```
+
+Example for a pipeline job (in `.gitlab-ci.yml` style):
+
+```
+release-guard:
+  script: java -jar smoker-cli.jar check-release target/products
+```
+
+The Maven example and the pipeline example are not tested.
+
 ### Statuses
 
 `PASS` · `FAIL` (snapshot diff or log hit) · `HANG` (EDT blocked / action timed out, thread dump attached) ·
