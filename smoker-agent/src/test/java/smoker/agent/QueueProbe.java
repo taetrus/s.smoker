@@ -43,6 +43,50 @@ final class QueueProbe {
         return sb.toString();
     }
 
+    /**
+     * Runs the loop of {@link Quiescence#await} for {@code ms} and reports why it is not quiet: the samples with an
+     * event at the head of the queue, the ping times of the EDT, and the longest quiet streak.
+     */
+    static String quietTrace(long ms) {
+        EventQueue q = Toolkit.getDefaultToolkit().getSystemEventQueue();
+        Map<String, Integer> busy = new TreeMap<String, Integer>();
+        int samples = 0, slowPings = 0, failedPings = 0;
+        long maxPing = 0, streak = 0, maxStreak = 0, quietSince = -1, maxGap = 0, last = System.currentTimeMillis();
+        long end = last + ms;
+        while (System.currentTimeMillis() < end) {
+            long t0 = System.currentTimeMillis();
+            maxGap = Math.max(maxGap, t0 - last);
+            AWTEvent e = q.peekEvent();
+            boolean ok = Quiescence.edtResponds(1000);
+            long t1 = System.currentTimeMillis();
+            last = t1;
+            samples++;
+            maxPing = Math.max(maxPing, t1 - t0);
+            if (t1 - t0 > 100) slowPings++;
+            if (!ok) failedPings++;
+            if (e != null) {
+                String k = key(e);
+                Integer n = busy.get(k);
+                busy.put(k, n == null ? 1 : n + 1);
+            }
+            if (e == null && ok) {
+                if (quietSince < 0) quietSince = t1;
+                streak = t1 - quietSince;
+                maxStreak = Math.max(maxStreak, streak);
+            } else {
+                quietSince = -1;
+            }
+            try {
+                Thread.sleep(40);
+            } catch (InterruptedException ex) {
+                break;
+            }
+        }
+        return " [quiet trace: " + samples + " samples, max ping " + maxPing + " ms, pings over 100 ms " + slowPings
+                + ", failed pings " + failedPings + ", max gap " + maxGap + " ms, longest quiet " + maxStreak
+                + " ms, busy " + busy + "]";
+    }
+
     private static String key(AWTEvent e) {
         String k = e.getClass().getSimpleName() + "#" + e.getID() + "@" + e.getSource().getClass().getSimpleName();
         if (e instanceof InvocationEvent) k += "/" + runnableOf((InvocationEvent) e);

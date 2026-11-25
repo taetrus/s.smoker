@@ -423,7 +423,7 @@ public class RecorderPlaceTest {
         while (!recorder.hasSnapshot(s)) {
             if (probeAt > 0 && System.currentTimeMillis() > probeAt) {
                 probeAt = 0;
-                System.out.println("[probe] slow snapshot " + s.id + QueueProbe.describe(1000));
+                System.out.println("[probe] slow snapshot " + s.id + QueueProbe.describe(500) + QueueProbe.quietTrace(1500));
             }
             if (System.currentTimeMillis() > deadline) fail("no snapshot for " + s.id + " within " + ms + " ms" + QueueProbe.describe(1000));
             Thread.sleep(50);
