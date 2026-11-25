@@ -21,6 +21,16 @@ public class ConditionValuesTest {
         assertEquals("US", b.getCountry());
         assertEquals("tr", ConditionValues.locale("tr").getLanguage());
         assertEquals("en", ConditionValues.locale(" en-US ").getLanguage());
+        assertEquals("tr-TR", ConditionValues.locale("tr-TR").toLanguageTag());
+        assertEquals("en-US", ConditionValues.locale("EN_us").toLanguageTag());
+    }
+
+    /** A value that Java parses only in part, or a word that is not a language (final review I-1). */
+    @Test
+    public void mistypedLocaleThrows() {
+        for (String v : new String[] {"en-USA", "en--US", "en-U", "english", "true", "en-US-", "tr TR"}) {
+            assertEquals("locale: '" + v + "' is not a language tag (example: en-US)", localeMessage(v));
+        }
     }
 
     @Test

@@ -34,8 +34,8 @@ final class Conditions {
             Locale l = cfg.locale;
             Locale.setDefault(l);
             System.setProperty("user.language", l.getLanguage());
-            if (!l.getCountry().isEmpty()) System.setProperty("user.country", l.getCountry());
-            if (!l.getVariant().isEmpty()) System.setProperty("user.variant", l.getVariant());
+            setOrClear("user.country", l.getCountry());
+            setOrClear("user.variant", l.getVariant());
             SmokerAgent.log("locale=" + l.toLanguageTag());
         }
         if (cfg.timeZone != null) {
@@ -47,6 +47,12 @@ final class Conditions {
             System.setProperty("swing.defaultlaf", cfg.lookAndFeel);
             SmokerAgent.log("lookAndFeel=" + cfg.lookAndFeel);
         }
+    }
+
+    /** An empty value removes the property: the old country of the command line must not stay with a new language. */
+    private static void setOrClear(String key, String value) {
+        if (value.isEmpty()) System.clearProperty(key);
+        else System.setProperty(key, value);
     }
 
     /**
@@ -63,15 +69,18 @@ final class Conditions {
 
     /** Writes the actual conditions to the result and a warning for each configured value that differs. Call off the EDT. */
     static void describe(AgentConfig cfg, RunResult r) {
+        describe(cfg, r, Ui.read());
+    }
+
+    /** @param ui the value of {@link Ui#read}; null when the EDT gave no answer: then no look and feel or window size warning */
+    static void describe(AgentConfig cfg, RunResult r, String[] ui) {
         r.locale = Locale.getDefault().toLanguageTag();
         r.timeZone = TimeZone.getDefault().getID();
-        String[] ui = Ui.read();
-        if (ui != null) {
-            r.lookAndFeel = ui[0];
-            r.windowSize = ui[1];
-        }
         if (cfg.locale != null) warn(r, "locale", r.locale, cfg.locale.toLanguageTag());
         if (cfg.timeZone != null) warn(r, "time zone", r.timeZone, cfg.timeZone.getID());
+        if (ui == null) return;
+        r.lookAndFeel = ui[0];
+        r.windowSize = ui[1];
         if (cfg.lookAndFeel != null) warn(r, "look and feel", r.lookAndFeel, cfg.lookAndFeel);
         if (cfg.windowWidth > 0) warn(r, "window size", r.windowSize, cfg.windowWidth + "x" + cfg.windowHeight);
     }

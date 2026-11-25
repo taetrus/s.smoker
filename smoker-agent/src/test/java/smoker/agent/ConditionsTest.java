@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.TimeZone;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 /** The conditions of premain and the warnings at the start of a scenario (WP-07, R-34). */
@@ -22,19 +23,25 @@ public class ConditionsTest {
             "swing.defaultlaf"};
 
     private Locale locale;
+    private Locale formatLocale;
+    private Locale displayLocale;
     private TimeZone timeZone;
     private final Map<String, String> properties = new HashMap<String, String>();
 
     @Before
     public void save() {
         locale = Locale.getDefault();
+        formatLocale = Locale.getDefault(Locale.Category.FORMAT);
+        displayLocale = Locale.getDefault(Locale.Category.DISPLAY);
         timeZone = TimeZone.getDefault();
         for (String p : PROPERTIES) properties.put(p, System.getProperty(p));
     }
 
     @After
     public void restore() {
-        Locale.setDefault(locale);
+        Locale.setDefault(locale); // also sets FORMAT and DISPLAY: set them after it
+        Locale.setDefault(Locale.Category.FORMAT, formatLocale);
+        Locale.setDefault(Locale.Category.DISPLAY, displayLocale);
         TimeZone.setDefault(timeZone);
         for (String p : PROPERTIES) {
             if (properties.get(p) == null) System.clearProperty(p);
@@ -58,6 +65,18 @@ public class ConditionsTest {
         assertEquals("UTC", TimeZone.getDefault().getID());
         assertEquals("UTC", System.getProperty("user.timezone"));
         assertEquals("x.Y", System.getProperty("swing.defaultlaf"));
+    }
+
+    /** A locale without a country or variant removes the old values (final review I-3). */
+    @Test
+    public void localeWithoutCountryClearsCountryAndVariant() {
+        System.setProperty("user.country", "TR");
+        System.setProperty("user.variant", "X");
+        Conditions.applyEarly(cfg("locale", "en"));
+        assertEquals("en", Locale.getDefault().toLanguageTag());
+        assertEquals("en", System.getProperty("user.language"));
+        assertNull(System.getProperty("user.country"));
+        assertNull(System.getProperty("user.variant"));
     }
 
     @Test
@@ -102,6 +121,18 @@ public class ConditionsTest {
         assertEquals(Locale.getDefault().toLanguageTag(), r.locale);
         assertEquals(TimeZone.getDefault().getID(), r.timeZone);
         assertTrue(r.warnings.isEmpty());
+    }
+
+    /** No answer of the EDT: no value, and no warning for the look and feel and the window size (final review m-7). */
+    @Test
+    public void describeWithoutAnswerOfTheEdtGivesNoUiWarning() {
+        AgentConfig c = cfg("lookAndFeel", "x.Y", "windowSize", "1280x800", "timeZone", "UTC");
+        TimeZone.setDefault(TimeZone.getTimeZone("Europe/Istanbul"));
+        RunResult r = new RunResult();
+        Conditions.describe(c, r, null);
+        assertNull(r.lookAndFeel);
+        assertNull(r.windowSize);
+        assertEquals(Arrays.asList("time zone is Europe/Istanbul, not the configured UTC"), r.warnings);
     }
 
     @Test

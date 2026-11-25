@@ -15,10 +15,16 @@ public final class ConditionValues {
 
     private ConditionValues() {}
 
-    /** @param value a language tag such as {@code en-US} or {@code en_US} */
+    /**
+     * @param value a language tag such as {@code en-US} or {@code en_US}
+     * @throws IllegalArgumentException when Java parses only a part of the value ({@code en-USA}, {@code en--US}),
+     *         or the language is not 2 or 3 letters ({@code english}, {@code true})
+     */
     public static Locale locale(String value) {
-        Locale l = Locale.forLanguageTag(value.trim().replace('_', '-'));
-        if (l.getLanguage().isEmpty()) {
+        String tag = value.trim().replace('_', '-');
+        Locale l = Locale.forLanguageTag(tag);
+        int n = l.getLanguage().length();
+        if (n < 2 || n > 3 || !l.toLanguageTag().toLowerCase(Locale.ROOT).equals(tag.toLowerCase(Locale.ROOT))) {
             throw new IllegalArgumentException("locale: '" + value + "' is not a language tag (example: en-US)");
         }
         return l;
