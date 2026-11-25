@@ -41,6 +41,7 @@ public final class HtmlReportWriter {
                 w.write("<h2 id='" + scenarioAnchor(r.scenarioName) + "'>" + e(r.scenarioName) + " — " + r.status
                         + " <small>(compare: " + e(r.compare == null ? "all" : r.compare) + ")</small></h2>");
                 if (r.note != null) w.write("<p class='note'>" + e(r.note) + "</p>");
+                if (r.warnings != null) for (String warning : r.warnings) w.write("<p class='note'>" + e(warning) + "</p>");
                 if (r.error != null) w.write("<pre class='ERROR'>" + e(r.error) + "</pre>");
                 if (!r.unnamedComponents.isEmpty()) {
                     w.write("<details><summary>Locator lint: " + r.unnamedComponents.size()

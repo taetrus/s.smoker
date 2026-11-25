@@ -166,6 +166,49 @@ public class MainTest {
         assertTrue(err(), err().contains("--label must have 1 to 40"));
     }
 
+    // ---- stable conditions (WP-07, R-34) ---------------------------------------------------------
+
+    @Test
+    public void agentConfigPassesTheConditions() {
+        Map<String, String> c = Main.agentConfig(options("locale", "en-US", "timeZone", "UTC", "lookAndFeel", "system",
+                "windowSize", "1280x800"), Arrays.asList(tmp.getRoot().toPath()), null);
+        assertEquals("en-US", c.get("locale"));
+        assertEquals("UTC", c.get("timeZone"));
+        assertEquals("system", c.get("lookAndFeel"));
+        assertEquals("1280x800", c.get("windowSize"));
+        Map<String, String> none = Main.agentConfig(options(), Arrays.asList(tmp.getRoot().toPath()), null);
+        for (String k : new String[] {"locale", "timeZone", "lookAndFeel", "windowSize"}) assertFalse(k, none.containsKey(k));
+    }
+
+    @Test
+    public void wrongLocaleGives2() throws Exception {
+        String agent = tmp.getRoot().toPath().resolve("none.jar").toString();
+        assertEquals(2, Main.run(options("agent", agent, "app", "x", "scenarios", "s", "locale", "_US")));
+        assertTrue(err(), err().contains("run: locale: '_US' is not a language tag (example: en-US)"));
+        assertEquals(2, Main.record(options("agent", agent, "app", "x", "scenario",
+                tmp.getRoot().toPath().resolve("r.json").toString(), "locale", "_US")));
+        assertTrue(err(), err().contains("record: locale: '_US' is not a language tag (example: en-US)"));
+    }
+
+    @Test
+    public void wrongWindowSizeGives2() throws Exception {
+        String agent = tmp.getRoot().toPath().resolve("none.jar").toString();
+        assertEquals(2, Main.run(options("agent", agent, "app", "x", "scenarios", "s", "windowSize", "big")));
+        assertTrue(err(), err().contains("run: windowSize: 'big' is not <width>x<height> (example: 1280x800)"));
+        assertEquals(2, Main.record(options("agent", agent, "app", "x", "scenario",
+                tmp.getRoot().toPath().resolve("r.json").toString(), "windowSize", "0x5")));
+        assertTrue(err(), err().contains("record: windowSize: '0x5' is not <width>x<height> (example: 1280x800)"));
+    }
+
+    @Test
+    public void printResultPrintsTheWarnings() {
+        RunResult r = new RunResult();
+        r.status = RunResult.Status.PASS;
+        r.warnings.add("locale is tr-TR, not the configured en-US");
+        Main.printResult(r);
+        assertTrue(out(), out().contains("   warning: locale is tr-TR, not the configured en-US"));
+    }
+
     // ---- validated -----------------------------------------------------------------------------
 
     @Test

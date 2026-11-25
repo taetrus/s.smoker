@@ -6,6 +6,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 import smoker.core.io.Json;
 import smoker.core.io.ScenarioFiles;
+import smoker.core.model.ConditionValues;
 import smoker.core.model.Scenario;
 import smoker.core.proc.Processes;
 
@@ -30,7 +31,7 @@ final class SuiteFile {
             "app", "workDir", "agentConfig", "before", "reset", "resetScenario", "after", "scenarios"));
     private static final Set<String> AGENT_KEYS = new HashSet<String>(Arrays.asList(
             "log", "logPattern", "failLevel", "failRegex", "allowRegex", "logCharset", "screenshots", "edtHangMs",
-            "stopTimeoutMs"));
+            "stopTimeoutMs", "locale", "timeZone", "lookAndFeel", "windowSize"));
     private static final Set<String> COMMAND_FIELDS = new HashSet<String>(Arrays.asList(
             "command", "timeoutS", "background", "readyPort", "readyTimeoutS"));
 
@@ -125,6 +126,12 @@ final class SuiteFile {
             if (!v.matches("[0-9]{1,15}")) {
                 throw new IllegalArgumentException("suite: '" + name + "' must be a whole number, 0 or more");
             }
+        }
+        try {
+            if ("locale".equals(key)) ConditionValues.locale(v);
+            if ("windowSize".equals(key)) ConditionValues.windowSize(v);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("suite: " + e.getMessage(), e);
         }
         return v;
     }

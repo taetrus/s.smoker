@@ -5,6 +5,7 @@ import smoker.core.io.ConfigFile;
 import smoker.core.io.Json;
 import smoker.core.io.ScenarioFiles;
 import smoker.core.model.Action;
+import smoker.core.model.ConditionValues;
 import smoker.core.model.JobResult;
 import smoker.core.model.LintFile;
 import smoker.core.model.NodeSnapshot;
@@ -36,9 +37,10 @@ import java.util.concurrent.TimeUnit;
  * <pre>
  * java -jar smoker-cli.jar run     --agent smoker-agent.jar --app "java -jar app.jar" --scenarios scenarios/ --out out/ [--log app.log] [--screenshots off] [--strict] [--label l]
  *     [--failRegex r] [--allowRegex r] [--logPattern p] [--failLevel L] [--logCharset c]
+ *     [--locale en-US] [--timeZone UTC] [--lookAndFeel system] [--windowSize 1280x800]
  * java -jar smoker-cli.jar run     --agent smoker-agent.jar --suite suite.json [--out out/] [--strict] [--timeout s] [--label l]
  * java -jar smoker-cli.jar record  --agent smoker-agent.jar --app "java -jar app.jar" --scenario scenarios/new.json [--log app.log]
- *     [--logPattern p] [--failLevel L] [--logCharset c]
+ *     [--logPattern p] [--failLevel L] [--logCharset c] [--locale en-US] [--timeZone UTC] [--lookAndFeel system] [--windowSize 1280x800]
  * java -jar smoker-cli.jar approve --run out/greet --scenario scenarios/greet.json [--steps s001,s002]
  * java -jar smoker-cli.jar lint    --run out/ [--emit-patch names.patch]   (--run scenarios/ reads the *.lint.json files of record)
  * java -jar smoker-cli.jar report  --merge out-jre8/ out-jre21/ --out merged/   (one page for the job-result.json files)
@@ -114,6 +116,11 @@ public final class Main {
             System.err.println(checkLabel(label));
             return 2;
         }
+        String conditions = checkConditions(o, "run");
+        if (conditions != null) {
+            System.err.println(conditions);
+            return 2;
+        }
         Path agent = Paths.get(req(o, "agent")).toAbsolutePath();
         Path out = Paths.get(o.containsKey("out") ? o.get("out") : "smoker-out").toAbsolutePath();
         List<Path> scenarios = scenarios(req(o, "scenarios"));
@@ -173,9 +180,24 @@ public final class Main {
         return "run: --label must have 1 to 40 characters of letters, digits, '.', '_' and '-'";
     }
 
-    /** Prints the verdict of one scenario: status, error and each step that did not pass. */
+    /**
+     * The error text for a wrong {@code --locale} or {@code --windowSize}, else null (WP-07, R-34). The CLI does not
+     * check {@code timeZone} and {@code lookAndFeel}: the JRE of the application can know other IDs and classes.
+     */
+    static String checkConditions(Map<String, String> o, String command) {
+        try {
+            if (o.containsKey("locale")) ConditionValues.locale(o.get("locale"));
+            if (o.containsKey("windowSize")) ConditionValues.windowSize(o.get("windowSize"));
+            return null;
+        } catch (IllegalArgumentException e) {
+            return command + ": " + e.getMessage();
+        }
+    }
+
+    /** Prints the verdict of one scenario: status, error, the warnings and each step that did not pass. */
     static void printResult(RunResult r) {
         System.out.println("   " + r.status + (r.error != null ? " \u2014 " + r.error : ""));
+        if (r.warnings != null) for (String w : r.warnings) System.out.println("   warning: " + w);
         for (RunResult.StepResult s : r.steps) {
             if (s.status != RunResult.Status.PASS) {
                 System.out.println("   " + s.stepId + " " + s.status + (s.error != null ? ": " + s.error : ""));
@@ -198,7 +220,7 @@ public final class Main {
             for (int i = 0; i < files.length; i++) c.put("log." + (i + 1), files[i].trim());
         }
         for (String k : new String[] {"screenshots", "failRegex", "allowRegex", "logPattern", "failLevel", "logCharset",
-                "stopTimeoutMs", "label"}) {
+                "stopTimeoutMs", "label", "locale", "timeZone", "lookAndFeel", "windowSize"}) {
             if (o.containsKey(k)) c.put(k, o.get(k));
         }
         return c;
@@ -241,6 +263,11 @@ public final class Main {
     // ---- record --------------------------------------------------------------------------------
 
     static int record(Map<String, String> o) throws Exception {
+        String conditions = checkConditions(o, "record");
+        if (conditions != null) {
+            System.err.println(conditions);
+            return 2;
+        }
         Path agent = Paths.get(req(o, "agent")).toAbsolutePath();
         Path scenario = Paths.get(req(o, "scenario")).toAbsolutePath();
         // The agent continues an existing scenario. Check it here: the agent can only log a wrong file.
@@ -512,10 +539,12 @@ public final class Main {
         System.err.println("usage:\n"
                 + "  run     --agent smoker-agent.jar --app \"<cmd>\" --scenarios <dir|file> --out <dir> [--log <file>] [--screenshots off] [--strict] [--timeout <s>] [--label <text>]\n"
                 + "          [--failRegex <r>] [--allowRegex <r>] [--logPattern <p>] [--failLevel <L>] [--logCharset <c>] [--stopTimeoutMs <ms>]\n"
+                + "          [--locale <tag>] [--timeZone <id>] [--lookAndFeel <class|system|crossplatform>] [--windowSize <w>x<h>]\n"
                 + "  run     --agent smoker-agent.jar --suite <suite.json> [--out <dir>] [--strict] [--timeout <s>] [--label <text>]\n"
                 + "          (the suite file holds the application, the commands, the log files and the scenarios)\n"
                 + "  record  --agent smoker-agent.jar --app \"<cmd>\" --scenario <file> [--log <file>]\n"
                 + "          [--logPattern <p>] [--failLevel <L>] [--logCharset <c>]\n"
+                + "          [--locale <tag>] [--timeZone <id>] [--lookAndFeel <class|system|crossplatform>] [--windowSize <w>x<h>]\n"
                 + "  approve --run <out/scenario-dir> --scenario <file> [--steps s001,s002]\n"
                 + "  lint    --run <out dir or scenario folder> [--emit-patch <file>]\n"
                 + "  report  --merge <dir> [<dir> ...] --out <dir> [--history <file>] [--run-id <text>] [--ref <text>]\n"

@@ -10,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 public class HtmlReportWriterTest {
@@ -165,5 +166,41 @@ public class HtmlReportWriterTest {
         assertTrue(html, html.contains("<h2 id='Orders_x'>"));
         int groups = html.split("<tr class='group'>", -1).length - 1;
         assertTrue(html, groups == 1);
+    }
+
+    @Test
+    public void warningsShowBelowTheHeading() throws Exception {
+        RunResult r = new RunResult();
+        r.scenarioName = "orders";
+        r.note = "the note";
+        r.warnings.add("locale is tr-TR, not the configured en-US");
+        r.warnings.add("window <size>");
+        String html = page(r);
+        int h2 = html.indexOf("<h2 id=");
+        int note = html.indexOf("<p class='note'>the note</p>", h2);
+        int first = html.indexOf("<p class='note'>locale is tr-TR, not the configured en-US</p>", h2);
+        int second = html.indexOf("<p class='note'>window &lt;size&gt;</p>");
+        assertTrue(html, h2 >= 0 && h2 < note && note < first && first < second);
+        assertTrue(html, second < html.indexOf("<table><tr><th style='width:160px'>"));
+        assertEquals(html, 4, html.split("class='note'", -1).length - 1); // the summary table does not change
+    }
+
+    @Test
+    public void noWarningsNoChange() throws Exception {
+        RunResult r = new RunResult();
+        r.scenarioName = "orders";
+        String html = page(r);
+        assertTrue(html, !html.contains("class='note'"));
+        RunResult n = new RunResult();
+        n.scenarioName = "orders";
+        n.warnings = null; // an old result file
+        assertEquals(html.replaceAll("[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9:]+", ""),
+                page(n).replaceAll("[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9:]+", ""));
+    }
+
+    private String page(RunResult r) throws Exception {
+        Path f = tmp.getRoot().toPath().resolve("report.html");
+        HtmlReportWriter.write(f, Collections.singletonList(r));
+        return new String(Files.readAllBytes(f), StandardCharsets.UTF_8);
     }
 }

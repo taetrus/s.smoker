@@ -104,6 +104,7 @@ final class Player {
         Throwable failure = null;
         try {
             boolean go = first == First.STARTUP ? startup() : reset();
+            if (go) describeConditions();
             for (int i = 0; go && i < scenario.steps.size(); i++) {
                 RunResult.StepResult sr = runStep(scenario.steps.get(i), !skipsSnapshot(scenario, i), scenario.steps.get(i).id, scenario);
                 addStep(sr);
@@ -283,7 +284,9 @@ final class Player {
         RunResult.StepResult sr = new RunResult.StepResult();
         sr.stepId = "startup";
         sr.stepName = "main window visible";
-        if (!mainWindowShowing()) {
+        boolean shown = mainWindowShowing();
+        if (shown) Conditions.applyWindowSize(cfg); // one time for each application start (R-34)
+        if (!shown) {
             sr.status = watchdog.hangDetected() ? RunResult.Status.HANG : RunResult.Status.FAIL;
             sr.threadDump = watchdog.threadDump();
             sr.error = "no frame became visible within " + scenario.startupTimeoutMs + " ms";
@@ -302,6 +305,24 @@ final class Player {
             throw new IllegalStateException("startup failed: " + (sr.error != null ? sr.error : "log hits during startup"));
         }
         return true;
+    }
+
+    /** The actual conditions at the start of the scenario and the warnings (WP-07, R-34). Ignored after the hook took the result. */
+    private void describeConditions() {
+        RunResult c = new RunResult();
+        Conditions.describe(cfg, c); // reads on the EDT: not under the lock, which the hook waits for
+        resultLock.lock();
+        try {
+            if (exiting) return;
+            result.locale = c.locale;
+            result.timeZone = c.timeZone;
+            result.lookAndFeel = c.lookAndFeel;
+            result.windowSize = c.windowSize;
+            result.warnings.addAll(c.warnings);
+        } finally {
+            resultLock.unlock();
+        }
+        for (String w : c.warnings) SmokerAgent.log("warning: " + w);
     }
 
     /** The scenario that the reset step replays between two scenarios (WP-05, F-04); null for none. */

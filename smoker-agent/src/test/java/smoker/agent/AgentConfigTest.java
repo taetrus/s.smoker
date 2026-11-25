@@ -196,4 +196,36 @@ public class AgentConfigTest {
         assertEquals("[smoker] fatal: smoker: logPattern: conversion word %xyz is not supported"
                 + System.getProperty("line.separator"), new String(bytes.toByteArray(), StandardCharsets.UTF_8));
     }
+
+    @Test
+    public void conditionKeys() {
+        AgentConfig c = cfg("locale", "en_US", "timeZone", "UTC", "lookAndFeel", "x.Y", "windowSize", "1280x800");
+        assertEquals("en-US", c.locale.toLanguageTag());
+        assertEquals("UTC", c.timeZone.getID());
+        assertEquals("x.Y", c.lookAndFeel);
+        assertEquals(1280, c.windowWidth);
+        assertEquals(800, c.windowHeight);
+        assertEquals("timeZone: 'Mars/Phobos' is not a time zone ID of this JRE (example: Europe/Istanbul)",
+                message("timeZone", "Mars/Phobos"));
+        assertEquals("javax.swing.plaf.metal.MetalLookAndFeel", cfg("lookAndFeel", "crossplatform").lookAndFeel);
+        String system = cfg("lookAndFeel", "system").lookAndFeel;
+        assertTrue(system, system != null && !system.isEmpty() && !"system".equals(system));
+        assertEquals("lookAndFeel: the value is empty", message("lookAndFeel", ""));
+        assertEquals("locale: '_US' is not a language tag (example: en-US)", message("locale", "_US"));
+        assertEquals("windowSize: 'big' is not <width>x<height> (example: 1280x800)", message("windowSize", "big"));
+        AgentConfig none = cfg();
+        assertNull(none.locale);
+        assertNull(none.timeZone);
+        assertNull(none.lookAndFeel);
+        assertEquals(0, none.windowWidth);
+        assertEquals(0, none.windowHeight);
+    }
+
+    @Test
+    public void systemLookAndFeelByOsName() {
+        assertEquals("com.sun.java.swing.plaf.windows.WindowsLookAndFeel", AgentConfig.systemLookAndFeel("Windows 10"));
+        assertEquals("com.apple.laf.AquaLookAndFeel", AgentConfig.systemLookAndFeel("Mac OS X"));
+        assertEquals("javax.swing.plaf.metal.MetalLookAndFeel", AgentConfig.systemLookAndFeel("Linux"));
+        assertEquals("com.sun.java.swing.plaf.windows.WindowsLookAndFeel", AgentConfig.systemLookAndFeel("WINDOWS"));
+    }
 }

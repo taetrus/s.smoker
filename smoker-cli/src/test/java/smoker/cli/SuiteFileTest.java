@@ -114,6 +114,21 @@ public class SuiteFileTest {
     }
 
     @Test
+    public void conditionKeysInAgentConfig() throws Exception {
+        scenario("a.json");
+        SuiteFile f = SuiteFile.read(suite("{'app': 'x', 'scenarios': ['a.json'], 'agentConfig': {'locale': 'en_US',"
+                + " 'timeZone': 'UTC', 'lookAndFeel': 'crossplatform', 'windowSize': '1280x800'}}"));
+        assertEquals("en_US", f.agentConfig.get("locale"));
+        assertEquals("UTC", f.agentConfig.get("timeZone"));
+        assertEquals("crossplatform", f.agentConfig.get("lookAndFeel"));
+        assertEquals("1280x800", f.agentConfig.get("windowSize"));
+        refused(suite("{'app': 'x', 'scenarios': ['a.json'], 'agentConfig': {'locale': ''}}"),
+                "suite: locale: '' is not a language tag (example: en-US)");
+        refused(suite("{'app': 'x', 'scenarios': ['a.json'], 'agentConfig': {'windowSize': 'big'}}"),
+                "suite: windowSize: 'big' is not <width>x<height> (example: 1280x800)");
+    }
+
+    @Test
     public void unknownCommandFieldIsRefused() throws Exception {
         scenario("a.json");
         refused(suite("{'app': 'x', 'scenarios': ['a.json'], 'after': [{'command': 'c', 'timeout': 5}]}"),

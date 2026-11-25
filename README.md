@@ -64,6 +64,9 @@ java -jar smoker-cli.jar approve --run out/orders-create --scenario scenarios/or
 
 # 5. many scenarios in one application start, with a simulator and a reset (see "Suite file")
 java -jar smoker-cli.jar run --agent smoker-agent.jar --suite suite.json --out out/
+
+# 6. the same conditions on each PC: locale, time zone, look and feel, window size (see "Stable conditions")
+java -jar smoker-cli.jar run --agent smoker-agent.jar --app "java -jar myapp.jar" --scenarios scenarios/ --out out/ --locale en-US --timeZone UTC --windowSize 1280x800
 ```
 
 `--app` is the full command line. The agent option is inserted after the first word, or where you put the
@@ -105,8 +108,10 @@ The CLI deletes an old `run-result.json` before it starts the application. After
 - The file comes from the exit hook: the CLI adds `; exit code <n>` to the error.
 - There is no file: ERROR `no run-result.json produced; app exit code <n>`, or HANG after a kill.
 
-`run` passes `--log`, `--screenshots`, `--failRegex`, `--allowRegex`, `--logPattern`, `--failLevel`, `--logCharset`
-and `--stopTimeoutMs` to the agent. `record` passes `--log`, `--logPattern`, `--failLevel` and `--logCharset`. `--log a.log,b.log` becomes `log.1` and `log.2`.
+`run` passes `--log`, `--screenshots`, `--failRegex`, `--allowRegex`, `--logPattern`, `--failLevel`, `--logCharset`,
+`--stopTimeoutMs`, `--label`, `--locale`, `--timeZone`, `--lookAndFeel` and `--windowSize` to the agent. `record` passes
+`--log`, `--logPattern`, `--failLevel`, `--logCharset`, `--locale`, `--timeZone`, `--lookAndFeel` and `--windowSize`.
+`--log a.log,b.log` becomes `log.1` and `log.2`.
 `run` writes the agent configuration file `<out>/agent-<k>.cfg` for scenario *k*. `record` writes a temporary file.
 
 `approve` without a `run-result.json` in the `--run` folder prints `approve: no run-result.json in <dir>` and exits with 2.
@@ -149,9 +154,54 @@ Format rules:
 | `stopTimeoutMs` | time to wait after each stage of the stop of the application, in ms (see "Stop of the application") | 10000 |
 | `aliveFile` | file that the CLI touches each second; the agent stops the application when the file is older than 10 s (see "Suite file") | — |
 | `label` | label of the job; the agent writes it to the field `label` of `run-result.json` (see "Matrix report") | — |
+| `locale` | default locale of the application: a language tag, `en-US` or `en_US` (see "Stable conditions") | the locale of the PC |
+| `timeZone` | default time zone of the application: a time zone ID, `UTC` or `Europe/Istanbul` | the time zone of the PC |
+| `lookAndFeel` | look and feel: a class name, `system` or `crossplatform` | the default of the JRE |
+| `windowSize` | size of the main window in pixels: `<width>x<height>`, `1280x800` | the size that the application sets |
 
-An unknown `failLevel`, an unknown `logCharset`, an unsupported part of `logPattern` or a wrong key stops the
-application at start with exit code 2. System.err then has one line `[smoker] fatal: <message>`.
+An unknown `failLevel`, an unknown `logCharset`, an unsupported part of `logPattern`, a wrong value of `locale`,
+`timeZone`, `lookAndFeel` or `windowSize`, or a wrong key stops the application at start with exit code 2.
+System.err then has one line `[smoker] fatal: <message>`. `run` then gives ERROR for the scenario.
+
+### Stable conditions
+
+The keys `locale`, `timeZone`, `lookAndFeel` and `windowSize` make a run independent of the settings of the PC.
+They apply in play mode and in record mode: a recording and its replays have the same conditions.
+`run` and `record` have the options `--locale`, `--timeZone`, `--lookAndFeel` and `--windowSize`. The suite file
+has the same keys in `agentConfig`.
+
+```
+java -jar smoker-cli.jar run --agent smoker-agent.jar --app "java -jar myapp.jar" --scenarios scenarios/ --out out/ --locale en-US --timeZone UTC --lookAndFeel crossplatform --windowSize 1280x800
+```
+
+| key | example | the agent does |
+|---|---|---|
+| `locale` | `en-US`, `en_US`, `tr-TR` | `Locale.setDefault`, and the system properties `user.language`, `user.country` (and `user.variant` when given) |
+| `timeZone` | `UTC`, `Europe/Istanbul` | `TimeZone.setDefault`, and the system property `user.timezone` |
+| `lookAndFeel` | `system`, `crossplatform`, `javax.swing.plaf.nimbus.NimbusLookAndFeel` | sets the system property `swing.defaultlaf` |
+| `windowSize` | `1280x800` | sets the size of the main window |
+
+- The agent sets `locale`, `timeZone` and `lookAndFeel` before the `main` method of the application starts.
+  The agent log has one line for each key, for example `[smoker] locale=en-US`.
+- `system` becomes the system look and feel of the operating system (Windows, Aqua on macOS, else Metal).
+  `crossplatform` becomes `javax.swing.plaf.metal.MetalLookAndFeel`.
+- `windowSize`: when the main window shows, the agent sets the first main window to the normal state if it is
+  maximized, and sets its size. The location does not change. The agent does this one time for each application
+  start, before the first step (play) or before the recorder starts (record).
+- The application can replace a value: Equinox sets the locale from `-nl`, an application sets its own look and
+  feel, a window has a minimum size. The agent does not force a value. At the start of each scenario the agent
+  writes the actual values to the fields `locale`, `timeZone`, `lookAndFeel` and `windowSize` of `run-result.json`.
+  For each configured key with a different actual value, the result gets a warning in the field `warnings`, for
+  example `locale is tr-TR, not the configured en-US`. The status does not change. `run` prints each warning as
+  `warning: <text>` below the status. `report.html` shows each warning below the heading of the scenario.
+- The CLI checks `locale` and `windowSize` before the application starts: a wrong value gives
+  `run: <message>` or `record: <message>` and exit code 2. The CLI does not check `timeZone` and `lookAndFeel`: the
+  JRE of the application can know other time zones and classes than the JRE of the CLI. The agent checks them.
+- Limit: JRE 8 and JRE 21 format some dates and numbers differently for the same locale. From Java 9 the JRE uses
+  the CLDR locale data by default. The `locale` key does not remove this difference. There are two remedies:
+  1. Add an ignore rule for the component that shows the date or the number (see "Scenario file").
+  2. Add `-Djava.locale.providers=COMPAT` to the test start of the product (JRE 21 then uses the older locale data; not tested).
+  The agent does not set this property: the JRE can read it before the agent starts.
 
 ### Stop of the application
 
@@ -195,7 +245,7 @@ before the scenarios, a reset between them, a clean-up after them. The demo has 
 |---|---|---|
 | `app` | command line of the application, as `--app`, with the token `{agent}` | required |
 | `workDir` | working directory of the application and of all commands | the current directory of the CLI |
-| `agentConfig` | agent keys: `log` (a string or an array of strings), `logPattern`, `failLevel`, `failRegex`, `allowRegex`, `logCharset`, `screenshots`, `edtHangMs`, `stopTimeoutMs` | none |
+| `agentConfig` | agent keys: `log` (a string or an array of strings), `logPattern`, `failLevel`, `failRegex`, `allowRegex`, `logCharset`, `screenshots`, `edtHangMs`, `stopTimeoutMs`, `locale`, `timeZone`, `lookAndFeel`, `windowSize` | none |
 | `before` | commands that run before the first application start, in sequence | none |
 | `reset` | commands that run between two scenarios and before each later application start | none |
 | `resetScenario` | scenario that the agent replays between two scenarios, without a snapshot | none |
@@ -219,7 +269,8 @@ Rules:
   The CLI resolves the first word of a command against `workDir` only when it is a regular file. Write the file
   extension: `sim\stop-sim.bat`, not `sim\stop-sim`.
 - `app` and each `command` must not be empty and must not contain a line break. `stopTimeoutMs` and `edtHangMs` are
-  whole numbers, 0 or more. `screenshots` is `"evidence"` or `"off"`.
+  whole numbers, 0 or more. `screenshots` is `"evidence"` or `"off"`. `locale` is a language tag and
+  `windowSize` is `<width>x<height>` (see "Stable conditions"); a wrong value gives `suite: <message>`.
 - The names of the scenarios are compared without regard to case: `Login.json` and `login.json` are the same name.
 - The file names of the scenarios, without the extension, must be different. Each name is the name of a result folder.
 - The CLI checks the suite file, each scenario file and each golden file before it runs the first command.
