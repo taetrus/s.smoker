@@ -85,8 +85,9 @@ after every change to `smoker-agent` or `smoker-core`.
   `check-release`; `lint --baseline` and `lint --write-baseline`. The README sections "Stable conditions", "Matrix report",
   "Release guard" and "Lint baseline" describe them. `docs/architecture.md` section 3b has the class map.
 - WP-07 is not complete. Task 4 (the GitLab jobs) and R-02a come in the field phase (decision 8). F-18 stays open.
-- Not tested: the Windows CI run of this branch (it comes with the pull request); the Maven/Tycho example and the pipeline
-  examples in the README; `-Djava.locale.providers=COMPAT` on JRE 21.
+- Windows CI on PR #27 (commit dcc9076): `default`, `locale-tr` and `locale-tr-jre8` pass.
+- Not tested: the Maven/Tycho example and the pipeline examples in the README; `-Djava.locale.providers=COMPAT` on JRE 21;
+  `Report.link` with another drive or a UNC path on Windows.
 - Tests (`mvn -B verify` on macOS, default locale): 124 in `smoker-core`, 401 in `smoker-agent`, 152 in `smoker-cli`, 21 IT (after the fix wave of the final review). The same counts pass with `-Plocale-tr`.
 
 ## State on 2026-11-25 (before WP-07)
