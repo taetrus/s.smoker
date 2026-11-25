@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -80,6 +81,8 @@ final class ReleaseCheck {
             List<Path> files;
             try (Stream<Path> walk = Files.walk(path)) {
                 files = walk.filter(Files::isRegularFile).collect(Collectors.toList());
+            } catch (UncheckedIOException e) {
+                throw e.getCause();
             }
             Collections.sort(files);
             for (Path f : files) scanFile(f, scan, out);

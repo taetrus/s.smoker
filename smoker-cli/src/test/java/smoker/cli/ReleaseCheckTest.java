@@ -1,5 +1,6 @@
 package smoker.cli;
 
+import org.junit.Assume;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -182,5 +183,65 @@ public class ReleaseCheckTest {
         ini(a.resolve("eclipse.ini"), AGENT);
         assertEquals(2, check(a.toString(), b.toString()));
         assertTrue(out(), out().contains(":1: " + AGENT));
+    }
+
+    @Test
+    public void unreadableSubfolderGives2() throws Exception {
+        Path dir = tmp.newFolder().toPath();
+        ini(dir.resolve("eclipse.ini"), "-Xmx1g");
+        File sub = dir.resolve("locked").toFile();
+        assertTrue(sub.mkdir());
+        ini(sub.toPath().resolve("a.ini"), AGENT);
+        Assume.assumeTrue(sub.setReadable(false) && sub.setExecutable(false));
+        try {
+            Assume.assumeFalse(Files.isReadable(sub.toPath()) && sub.list() != null);
+            assertEquals(2, check(dir.toString()));
+            assertTrue(err(), err().contains("check-release: cannot read"));
+        } finally {
+            sub.setReadable(true);
+            sub.setExecutable(true);
+        }
+    }
+
+    @Test
+    public void unreadableFileGives2() throws Exception {
+        Path f = ini(tmp.newFolder().toPath().resolve("eclipse.ini"), AGENT);
+        Assume.assumeTrue(f.toFile().setReadable(false));
+        try {
+            Assume.assumeFalse(Files.isReadable(f));
+            assertEquals(2, check(f.toString()));
+            assertTrue(err(), err().contains("check-release: cannot read"));
+        } finally {
+            f.toFile().setReadable(true);
+        }
+    }
+
+    @Test
+    public void damagedZipGives2() throws Exception {
+        Path z = tmp.newFolder().toPath().resolve("product.zip");
+        Files.write(z, "this is not a zip".getBytes(StandardCharsets.ISO_8859_1));
+        assertEquals(2, check(z.toString()));
+        assertTrue(err(), err().contains("check-release: cannot read"));
+    }
+
+    @Test
+    public void crlfLineEndsGiveTheLineText() throws Exception {
+        Path f = tmp.newFolder().toPath().resolve("eclipse.ini");
+        Files.write(f, ("-vmargs\r\n" + AGENT + "\r\n").getBytes(StandardCharsets.ISO_8859_1));
+        assertEquals(1, check(f.toString()));
+        assertTrue(out(), out().contains(f + ":2: " + AGENT + "\n") || out().contains(f + ":2: " + AGENT + "\r\n"));
+    }
+
+    @Test
+    public void leadingTabIsAHit() throws Exception {
+        Path f = ini(tmp.newFolder().toPath().resolve("eclipse.ini"), "\t" + AGENT);
+        assertEquals(1, check(f.toString()));
+    }
+
+    @Test
+    public void upperCaseIniExtensionIsRead() throws Exception {
+        Path dir = tmp.newFolder().toPath();
+        ini(dir.resolve("ECLIPSE.INI"), AGENT);
+        assertEquals(1, check(dir.toString()));
     }
 }
