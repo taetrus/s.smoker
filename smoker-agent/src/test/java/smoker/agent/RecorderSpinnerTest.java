@@ -99,6 +99,7 @@ public class RecorderSpinnerTest {
 
     @After
     public void disposeFrame() throws Exception {
+        if (recorder != null) recorder.close();
         if (recorder != null) recorder.pause();
         if (previousFocusManager != null) KeyboardFocusManager.setCurrentKeyboardFocusManager(previousFocusManager);
         if (frame == null) return;

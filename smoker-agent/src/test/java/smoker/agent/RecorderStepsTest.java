@@ -64,6 +64,7 @@ public class RecorderStepsTest {
 
     @After
     public void disposeFrame() throws Exception {
+        if (recorder != null) recorder.close();
         if (frame == null) return;
         SwingUtilities.invokeAndWait(new Runnable() {
             public void run() {
@@ -85,6 +86,29 @@ public class RecorderStepsTest {
         assertTrue(recorder.goldenRemoved(a));
         assertTrue(recorder.goldenRemoved(b));
         assertFalse(recorder.goldenRemoved(c));
+    }
+
+    /** A test that makes many recorders closes each one: a snapshot thread that waits pings the EDT (CI, JRE 8). */
+    @Test
+    public void closeEndsTheSnapshotThreadOfAPendingStep() throws Exception {
+        final Scenario sc = new Scenario();
+        sc.quietMs = 60_000;   // the step stays pending: the quiet wait cannot end before close()
+        Recorder r = new Recorder(recordConfig(), sc, new HashMap<String, Snapshot>());
+        java.lang.reflect.Field f = Recorder.class.getDeclaredField("snapshotThread");
+        f.setAccessible(true);
+        Thread t = (Thread) f.get(r);
+        final Recorder fr = r;
+        final Step s = onEdt(new Callable<Step>() {
+            public Step call() {
+                return fr.addForTest(Action.click(textLocator("pending")));
+            }
+        });
+        Thread.sleep(200);
+        assertTrue(t.isAlive());
+        r.close();
+        t.join(2000);
+        assertFalse("the snapshot thread ends", t.isAlive());
+        assertFalse(r.hasSnapshot(s));
     }
 
     @Test
@@ -320,13 +344,8 @@ public class RecorderStepsTest {
 
     private void awaitSnapshot(Step s, long ms) throws Exception {
         long deadline = System.currentTimeMillis() + ms;
-        long probeAt = System.currentTimeMillis() + 2000;
         while (!recorder.hasSnapshot(s)) {
-            if (probeAt > 0 && System.currentTimeMillis() > probeAt) {
-                probeAt = 0;
-                System.out.println("[probe] slow snapshot " + s.id + QueueProbe.describe(500) + QueueProbe.quietTrace(1500) + QueueProbe.snapshotThreads());
-            }
-            if (System.currentTimeMillis() > deadline) fail("no snapshot for " + s.id + " within " + ms + " ms" + QueueProbe.describe(1000));
+            if (System.currentTimeMillis() > deadline) fail("no snapshot for " + s.id + " within " + ms + " ms");
             Thread.sleep(50);
         }
     }

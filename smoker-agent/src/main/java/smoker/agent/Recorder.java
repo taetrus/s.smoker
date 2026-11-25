@@ -76,6 +76,9 @@ final class Recorder implements AWTEventListener {
     /** Ids of the steps whose golden a move removed. Guarded by {@code snapshots}. */
     private final Set<String> goldenRemoved = new HashSet<String>();
     private volatile boolean recording;
+    /** Set by {@link #close}: the snapshot thread ends. */
+    private volatile boolean closed;
+    private final Thread snapshotThread;
     private Listener listener;
     private int counter;
 
@@ -96,14 +99,24 @@ final class Recorder implements AWTEventListener {
         this.snapshots.putAll(golden);
         this.taker = new SnapshotTaker(scenario.maxRows, "named".equals(scenario.compare));
         for (Step s : scenario.steps) counter = Math.max(counter, numberOf(s.id));
-        Thread t = new Thread(new Runnable() {
+        snapshotThread = new Thread(new Runnable() {
             @Override
             public void run() {
                 snapshotLoop();
             }
         }, "smoker-recorder-snapshots");
-        t.setDaemon(true);
-        t.start();
+        snapshotThread.setDaemon(true);
+        snapshotThread.start();
+    }
+
+    /**
+     * Stops the snapshot thread. A pending step gets no snapshot after this call. A record session has one recorder
+     * for the life of the JVM; a test that makes many recorders must close each one, because each snapshot thread
+     * pings the EDT while it waits, and the pings of other threads delay the quiet wait.
+     */
+    void close() {
+        closed = true;
+        snapshotThread.interrupt();
     }
 
     void setListener(Listener l) {
@@ -843,14 +856,17 @@ final class Recorder implements AWTEventListener {
             final int changesBefore;
             synchronized (pendingSnapshots) {
                 while (pendingSnapshots.isEmpty()) {
+                    if (closed) return;
                     try { pendingSnapshots.wait(); } catch (InterruptedException e) { return; }
                 }
+                if (closed) return;
                 s = pendingSnapshots.get(0);
                 changesBefore = changeCountOf(s);
             }
             try {
                 if (s.action != null && s.action.type == Action.Type.WAIT_FOR) awaitCondition(s);
                 Quiescence.await(scenario.quietMs, scenario.stepTimeoutMs);
+                if (closed) return;
                 Quiescence.onEdt(new Callable<Void>() {
                     @Override
                     public Void call() {

@@ -72,7 +72,7 @@ after every change to `smoker-agent` or `smoker-core`.
   move and group) are code complete on branch `wp-06-recorder` (not merged yet). WP-06 is not complete: the usability test
   and the corrections (tasks 1 and 8) come in the field phase (decision 8). F-13 and F-21 stay open until then.
   R-20a passes on the demo (SelfTestIT, `recorder.json`).
-- Tests: 92 in `smoker-core`, 385 in `smoker-agent`, 87 in `smoker-cli`, 17 IT. They pass on macOS (default locale and
+- Tests: 92 in `smoker-core`, 386 in `smoker-agent`, 87 in `smoker-cli`, 17 IT. They pass on macOS (default locale and
   `-Plocale-tr`). Earlier results: Linux with Xvfb and the Windows CI (PR #18) passed with the earlier counts.
 
 ## State on 2026-11-23
@@ -122,6 +122,8 @@ after every change to `smoker-agent` or `smoker-core`.
   If a failure recurs, keep `smoker-it/target/failsafe-reports` and `smoker-it/target/it-work`.
 - Do not type into the demo windows while SelfTestIT runs on a desktop: they take the focus, and a key press changes a text field.
 - Test isolation: a test must not leave a window that reports "showing". `Window.getWindows()` keeps it for later test classes.
+  A test that makes a `Recorder` calls `recorder.close()` in `@After`. An open recorder keeps a snapshot thread that
+  pings the EDT, and these pings delay the quiet wait of later tests (JRE 8 job on Windows, PR #25).
 - Next in plan order (decision 8): the code tasks of WP-07 (1 to 3, 5 to 7).
   Then the field phase: Milestone 1, WP-06 tasks 1 and 8, WP-07 task 4.
 - Not verified: JRE 21 at run time on a target application, a product with the hardware simulator.

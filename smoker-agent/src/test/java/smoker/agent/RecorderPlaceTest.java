@@ -126,6 +126,7 @@ public class RecorderPlaceTest {
 
     @After
     public void disposeFrame() throws Exception {
+        if (recorder != null) recorder.close();
         if (recorder != null) recorder.pause();
         if (frame == null) return;
         SwingUtilities.invokeAndWait(new Runnable() {
@@ -419,13 +420,8 @@ public class RecorderPlaceTest {
 
     private void awaitSnapshot(Step s, long ms) throws Exception {
         long deadline = System.currentTimeMillis() + ms;
-        long probeAt = System.currentTimeMillis() + 2000;
         while (!recorder.hasSnapshot(s)) {
-            if (probeAt > 0 && System.currentTimeMillis() > probeAt) {
-                probeAt = 0;
-                System.out.println("[probe] slow snapshot " + s.id + QueueProbe.describe(500) + QueueProbe.quietTrace(1500) + QueueProbe.snapshotThreads());
-            }
-            if (System.currentTimeMillis() > deadline) fail("no snapshot for " + s.id + " within " + ms + " ms" + QueueProbe.describe(1000));
+            if (System.currentTimeMillis() > deadline) fail("no snapshot for " + s.id + " within " + ms + " ms");
             Thread.sleep(50);
         }
     }

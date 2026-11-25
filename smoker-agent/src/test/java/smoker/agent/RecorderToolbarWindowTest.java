@@ -76,6 +76,7 @@ public class RecorderToolbarWindowTest {
 
     @After
     public void tearDown() throws Exception {
+        if (recorder != null) recorder.close();
         SwingUtilities.invokeAndWait(new Runnable() {
             public void run() {
                 if (toolbar != null) toolbar.dispose();
