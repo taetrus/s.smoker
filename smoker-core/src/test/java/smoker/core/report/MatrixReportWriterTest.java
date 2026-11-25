@@ -4,6 +4,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import smoker.core.model.JobResult;
+import smoker.core.model.RunHistory;
 import smoker.core.model.RunResult.Status;
 
 import java.nio.charset.StandardCharsets;
@@ -140,5 +141,72 @@ public class MatrixReportWriterTest {
         String html = page(h, job("a", scenario("o", "o", Status.PASS)));
         assertTrue(html, html.contains("run 4711, master, 2025-11-25"));
         assertTrue(html, html.contains("history: new file"));
+    }
+
+    private static RunHistory history(Status... statuses) {
+        RunHistory h = new RunHistory();
+        int n = 1;
+        for (Status st : statuses) {
+            java.util.Map<String, JobResult> by = new java.util.LinkedHashMap<String, JobResult>();
+            JobResult r = new JobResult();
+            r.scenarios.add(scenario("orders", "Orders", st, step("s001", null, st)));
+            by.put("jre8", r);
+            h.add(RunHistory.runOf(1764050090000L + n * 60000L, "id" + n, "master", by));
+            n++;
+        }
+        return h;
+    }
+
+    private String pageWithHistory(RunHistory h, MatrixReportWriter.Header header) throws Exception {
+        Path f = tmp.getRoot().toPath().resolve("report.html");
+        List<MatrixReportWriter.Job> l = new ArrayList<MatrixReportWriter.Job>();
+        l.add(job("jre8", scenario("orders", "Orders", Status.PASS, step("s001", null, Status.PASS))));
+        MatrixReportWriter.write(f, l, h, header);
+        return new String(Files.readAllBytes(f), StandardCharsets.UTF_8);
+    }
+
+    @Test
+    public void historyColumns() throws Exception {
+        String html = pageWithHistory(history(Status.PASS, Status.FAIL, Status.PASS), new MatrixReportWriter.Header());
+        assertTrue(html, html.contains("<th>Last 20 runs: jre8</th>"));
+        // three letters in the scenario row and three in the step row
+        assertEquals(html, 6, count(html, "<span class='h PASS' title=") + count(html, "<span class='h FAIL' title="));
+        assertTrue(html, html.contains("<span class='h FAIL' title='"));
+        assertTrue(html, html.matches("(?s).*<span class='h PASS' title='[^']*id1[^']*master[^']*'>P</span>.*"));
+    }
+
+    @Test
+    public void unstableMark() throws Exception {
+        String unstable = pageWithHistory(history(Status.PASS, Status.FAIL, Status.PASS), new MatrixReportWriter.Header());
+        assertTrue(unstable, unstable.contains(">unstable</b>"));
+        String stable = pageWithHistory(history(Status.PASS, Status.PASS), new MatrixReportWriter.Header());
+        assertFalse(stable, stable.contains(">unstable</b>"));
+    }
+
+    @Test
+    public void historyMessageShows() throws Exception {
+        MatrixReportWriter.Header header = new MatrixReportWriter.Header();
+        header.historyMessage = "history: new file";
+        assertTrue(pageWithHistory(history(Status.PASS), header).contains("history: new file"));
+    }
+
+    @Test
+    public void withoutHistoryNoHistoryColumn() throws Exception {
+        assertFalse(page(job("a", scenario("one", "one", Status.PASS))).contains("Last 20 runs"));
+    }
+
+    @Test
+    public void hrefWithAQuoteIsEscaped() throws Exception {
+        MatrixReportWriter.Job j = job("a", scenario("one", "one", Status.PASS, step("s001", null, Status.PASS)));
+        MatrixReportWriter.Job q = new MatrixReportWriter.Job("a", "file:///x/it's/", j.result);
+        String html = page(q);
+        assertTrue(html, html.contains("href='file:///x/it%27s/report.html#"));
+        assertFalse(html, html.contains("it's"));
+    }
+
+    private static int count(String text, String part) {
+        int n = 0;
+        for (int i = text.indexOf(part); i >= 0; i = text.indexOf(part, i + 1)) n++;
+        return n;
     }
 }

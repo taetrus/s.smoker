@@ -644,7 +644,52 @@ java -jar smoker-cli.jar report --merge out-jre8 out-jre21 --out merged
 - Exit code 0: the page is written. The jobs give the verdict of the pipeline, not the merge.
   Exit code 2: a wrong argument, two jobs with one column name, a folder without a readable `job-result.json`,
   or a page that cannot be written. The error text names the folder.
-- `--history`, `--run-id` and `--ref` are not available yet. They give exit code 2.
+- A `job-result.json` that has no `scenarios` list, or a scenario without `key`, gives exit code 2 and the text
+  `report: <folder>/job-result.json is not a job result`.
+
+#### History
+
+`report --merge` has three more options:
+
+```
+java -jar smoker-cli.jar report --merge out-jre8 out-jre21 --out merged --history history.json --run-id $CI_PIPELINE_ID --ref $CI_COMMIT_REF_NAME
+```
+
+- `--history <file>`: the command reads the file, adds the current run and writes the file back. The page then
+  shows the last 20 runs. Without this option the command reads and writes no history file.
+- `--run-id` and `--ref` are free texts. The command stores them in the history and shows them in the header of the page.
+  A run with a `--run-id` that the file already has replaces that run (a pipeline job that runs again).
+  A run without `--run-id` is always added.
+- The file keeps the last 20 runs. The page has the column `Last 20 runs: <job>` for each job, with one letter
+  for each stored run, the oldest first and the current run last:
+  `P` PASS, `F` FAIL, `H` HANG, `E` ERROR, `N` NO_GOLDEN, `-` not run.
+  The title of a letter has the time, the id and the ref of the run.
+- A step gets the text `unstable` when the stored runs of one job have a PASS and also a FAIL, HANG or ERROR.
+- A history file that does not exist starts a new history (the page says `history: new file`).
+  A file that is not a version 1 history file is moved to `<file>.damaged`. An existing `.damaged` file is replaced.
+  A new history starts, and the command prints `history: the file was damaged, a new history starts` on `System.err`.
+  The exit code stays 0.
+- The file format:
+
+```json
+{
+  "version": 1,
+  "runs": [
+    { "time": 1764050090000, "id": "4711", "ref": "master",
+      "jobs": { "jre8": { "orders": { "status": "PASS", "steps": { "s001": "PASS", "s002": "PASS" } } } } }
+  ]
+}
+```
+
+Example with two pipeline jobs and a merge job (in `.gitlab-ci.yml` style):
+
+```
+test-jre8:   run ... --out out-jre8  --label jre8      # artifact: out-jre8
+test-jre21:  run ... --out out-jre21 --label jre21     # artifact: out-jre21
+report:      report --merge out-jre8 out-jre21 --out merged --history history.json --run-id $CI_PIPELINE_ID --ref $CI_COMMIT_REF_NAME
+```
+
+The merge job needs the artifacts of both jobs. It must keep `history.json` between pipelines (a cache or an artifact of the last run).
 
 ### Statuses
 

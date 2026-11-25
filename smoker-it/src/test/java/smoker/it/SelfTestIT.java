@@ -699,6 +699,45 @@ public class SelfTestIT {
         assertTrue(run.output, suiteResult(out).getAsJsonArray("commandErrors").toString().contains("before[1]"));
     }
 
+    /** WP-07 (R-41, R-42): two labeled jobs, merged three times into one page with a history of 3 runs. */
+    @Test
+    public void matrixReportJoinsTwoJobs() throws Exception {
+        Path dir = Files.createDirectories(work.resolve("matrix"));
+        Path scenario = dir.resolve("greet.json");
+        Files.copy(demoDir.resolve("scenarios/greet.json"), scenario);
+        Path log = dir.resolve("demo.log");
+        Cli first = run(scenario, dir.resolve("first"), log);
+        assertEquals(first.output, 0, first.exit);
+        Cli approve = cli("approve", "--run", dir.resolve("first/greet").toString(), "--scenario", scenario.toString());
+        assertEquals(approve.output, 0, approve.exit);
+
+        for (String label : Arrays.asList("a", "b")) {
+            Cli job = runLabeled(label, scenario, dir.resolve(label), log);
+            assertEquals(job.output, 0, job.exit);
+            JsonObject jobResult = Json.readTree(dir.resolve(label).resolve("job-result.json")).getAsJsonObject();
+            assertEquals(label, jobResult.get("label").getAsString());
+        }
+
+        Path merged = dir.resolve("merged");
+        Path history = dir.resolve("h.json");
+        for (String id : Arrays.asList("1", "2", "3")) {
+            Cli merge = cli("report", "--merge", dir.resolve("a").toString(), dir.resolve("b").toString(),
+                    "--out", merged.toString(), "--history", history.toString(), "--run-id", id, "--ref", "master");
+            assertEquals(merge.output, 0, merge.exit);
+        }
+        String html = read(merged.resolve("report.html"));
+        assertTrue(html, html.contains("<th>a</th>"));
+        assertTrue(html, html.contains("<th>b</th>"));
+        assertTrue(html, html.contains("href='../a/report.html#"));
+        assertTrue(html, html.contains("href='../b/report.html#"));
+        assertTrue(html, html.contains("Last 20 runs: a"));
+        assertEquals(3, Json.readTree(history).getAsJsonObject().getAsJsonArray("runs").size());
+        // Column a, first step s001: one letter for each of the 3 runs, all P.
+        java.util.regex.Matcher row = Pattern.compile("<td class='step'>s001[^<]*</td><td class='PASS'>.*?</td><td>((?:<span[^>]*>P</span>){3})</td>")
+                .matcher(html);
+        assertTrue(html, row.find());
+    }
+
     // ---- helpers for the suite checks ---------------------------------------------------------
 
     /** The application command line of a suite: the CLI puts the agent option after the first word. */
@@ -848,6 +887,13 @@ public class SelfTestIT {
                 "--scenarios", scenarios.toString(), "--out", out.toString(), "--log", log.toString()));
         if (stopTimeoutMs != null) args.addAll(Arrays.asList("--stopTimeoutMs", stopTimeoutMs));
         return cli(args.toArray(new String[0]));
+    }
+
+    /** As {@link #run}, with {@code --label}. */
+    private static Cli runLabeled(String label, Path scenarios, Path out, Path log) throws Exception {
+        String app = quote(java) + " " + localeArgs() + " -Ddemo.log=" + quote(log.toString()) + " -jar " + quote(demoJar.toString());
+        return cli("run", "--agent", agentJar.toString(), "--app", app, "--scenarios", scenarios.toString(),
+                "--out", out.toString(), "--log", log.toString(), "--label", label);
     }
 
     private static Cli cli(String... args) throws Exception {
