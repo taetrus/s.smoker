@@ -38,6 +38,7 @@ import java.util.regex.Pattern;
  *   resetScenario=path.json    (optional)
  *   stopTimeoutMs=10000        (optional)
  *   aliveFile=path             (optional)
+ *   label=jre8                 (optional: label of the job, written to run-result.json)
  * </pre>
  */
 public final class AgentConfig {
@@ -46,7 +47,7 @@ public final class AgentConfig {
 
     private static final Set<String> KEYS = new HashSet<String>(Arrays.asList("mode", "out", "logPattern", "failLevel",
             "failRegex", "allowRegex", "logCharset", "screenshots", "edtHangMs", "exitWhenDone", "resetScenario",
-            "stopTimeoutMs", "aliveFile"));
+            "stopTimeoutMs", "aliveFile", "label"));
     private static final Pattern NUMBERED = Pattern.compile("(scenario|log|resetCommand|resetTimeoutS)\\.([0-9]{1,6})");
     private static final long DEFAULT_RESET_TIMEOUT_S = 60;
 
@@ -68,6 +69,8 @@ public final class AgentConfig {
     public Path resetScenario;
     public long stopTimeoutMs = 10_000;
     public Path aliveFile;
+    /** Label of the job; goes to the field {@code label} of the result (WP-07). Null when absent. */
+    public String label;
 
     /** @param args the agent argument: {@code config=<path>}; everything after {@code config=} is the path */
     public static AgentConfig fromArgs(String args) {
@@ -131,6 +134,7 @@ public final class AgentConfig {
         if (kv.get("resetScenario") != null) c.resetScenario = Paths.get(kv.get("resetScenario"));
         if (kv.get("stopTimeoutMs") != null) c.stopTimeoutMs = Long.parseLong(kv.get("stopTimeoutMs"));
         if (kv.get("aliveFile") != null) c.aliveFile = Paths.get(kv.get("aliveFile"));
+        if (kv.get("label") != null) c.label = kv.get("label");
         return c;
     }
 

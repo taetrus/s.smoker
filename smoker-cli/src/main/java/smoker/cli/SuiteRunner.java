@@ -2,6 +2,7 @@ package smoker.cli;
 
 import smoker.core.io.ConfigFile;
 import smoker.core.io.Json;
+import smoker.core.model.JobResult;
 import smoker.core.model.RunResult;
 import smoker.core.model.Scenario;
 import smoker.core.proc.Processes;
@@ -46,6 +47,7 @@ final class SuiteRunner {
     private final Path out;
     private final boolean strict;
     private final Long timeoutS;
+    private final String label;
     private final long stopTimeoutMs;
     private final List<String> names = new ArrayList<String>();
     private final Map<String, Path> files = new LinkedHashMap<String, Path>();
@@ -73,12 +75,13 @@ final class SuiteRunner {
         }
     };
 
-    SuiteRunner(SuiteFile suite, Path agentJar, Path out, boolean strict, Long timeoutS) {
+    SuiteRunner(SuiteFile suite, Path agentJar, Path out, boolean strict, Long timeoutS, String label) {
         this.suite = suite;
         this.agentJar = agentJar;
         this.out = out;
         this.strict = strict;
         this.timeoutS = timeoutS;
+        this.label = label;
         String st = suite.agentConfig.get("stopTimeoutMs");
         this.stopTimeoutMs = st == null ? DEFAULT_STOP_TIMEOUT_MS : Long.parseLong(st);
         for (Path p : suite.scenarios) {
@@ -306,6 +309,7 @@ final class SuiteRunner {
             c.put("log." + (i + 1), suite.workDir.resolve(suite.logFiles.get(i)).normalize().toString());
         }
         c.putAll(suite.agentConfig);
+        if (label != null) c.put("label", label);
         for (int i = 0; i < suite.reset.size(); i++) {
             c.put("resetCommand." + (i + 1), suite.reset.get(i).command);
             c.put("resetTimeoutS." + (i + 1), Long.toString(suite.reset.get(i).timeoutS));
@@ -436,24 +440,30 @@ final class SuiteRunner {
 
     private int report() throws IOException {
         List<RunResult> verdicts = new ArrayList<RunResult>();
+        List<String> keys = new ArrayList<String>();
         SuiteResult sr = new SuiteResult();
         sr.applicationStarts = plan.applicationStarts();
         for (String n : names) {
             RunResult r = plan.verdict(n);
             String dir = shared.containsKey(r) ? n + ".shared/" : n + "/";
             for (RunResult.StepResult s : r.steps) if (s.screenshot != null) s.screenshot = dir + s.screenshot;
+            r.label = label;
             verdicts.add(r);
+            keys.add(n);
             sr.scenarios.add(entry(n, r, plan.attempts(n)));
         }
         if (plan.startupFailuresInSequence() >= 3 && plan.applicationStartEntry() != null) {
             RunResult e = plan.applicationStartEntry();
+            e.label = label;
             verdicts.add(e);
+            keys.add(e.scenarioName);
             sr.scenarios.add(entry(e.scenarioName, e, plan.startupFailuresInSequence()));
         }
         sr.commandErrors.addAll(commandErrors);
         JUnitXmlWriter.write(out.resolve("junit.xml"), verdicts);
         HtmlReportWriter.write(out.resolve("report.html"), verdicts);
         Json.write(out.resolve("suite-result.json"), sr);
+        Json.write(out.resolve(JobResult.FILE), JobResult.of(label, keys, verdicts));
         int failures = 0;
         for (RunResult r : verdicts) {
             System.out.println("== " + r.scenarioName);

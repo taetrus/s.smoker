@@ -18,6 +18,7 @@ import org.junit.rules.TemporaryFolder;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -47,6 +48,12 @@ public class AgentConfigTest {
         } catch (IllegalArgumentException e) {
             return e.getMessage();
         }
+    }
+
+    @Test
+    public void labelKey() {
+        assertEquals("jre8", cfg("label", "jre8").label);
+        assertNull(cfg().label);
     }
 
     @Test

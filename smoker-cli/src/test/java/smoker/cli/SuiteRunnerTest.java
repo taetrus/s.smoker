@@ -160,7 +160,7 @@ public class SuiteRunnerTest {
                 + " \"scenarios\": [\"a.json\"]}");
         Path out = tmp.getRoot().toPath().resolve("out");
         SuiteRunner runner = new SuiteRunner(SuiteFile.read(suiteFile), tmp.getRoot().toPath().resolve("agent.jar"),
-                out, false, null);
+                out, false, null, null);
         assertEquals(2, runner.run());
         assertFalse(Files.exists(out.resolve("agent-1.cfg")));
         assertTrue(Files.exists(marker));
@@ -181,10 +181,24 @@ public class SuiteRunnerTest {
                 + " \"after\": [" + after.get(0) + "," + after.get(1) + "],"
                 + " \"scenarios\": [\"a.json\"]}");
         SuiteRunner runner = new SuiteRunner(SuiteFile.read(suiteFile), tmp.getRoot().toPath().resolve("agent.jar"),
-                tmp.getRoot().toPath().resolve("out"), false, null);
+                tmp.getRoot().toPath().resolve("out"), false, null, null);
         assertEquals(2, runner.run());
         assertTrue(Files.exists(marker));
         assertEquals(1, runner.cleanupCount());
+    }
+
+    @Test
+    public void labelGoesToTheConfigurationAndTheJobResult() throws Exception {
+        Path suiteFile = suiteWithApp(FakeCommand.line("exit", "0"), "");
+        Path out = tmp.getRoot().toPath().resolve("out");
+        SuiteRunner runner = new SuiteRunner(SuiteFile.read(suiteFile), tmp.getRoot().toPath().resolve("agent.jar"),
+                out, false, null, "a");
+        assertEquals("a", runner.agentConfig(Arrays.asList("a")).get("label"));
+        runner.run();
+        smoker.core.model.JobResult j = smoker.core.io.Json.read(out.resolve("job-result.json"),
+                smoker.core.model.JobResult.class);
+        assertEquals("a", j.label);
+        assertEquals("a", j.scenarios.get(0).key);
     }
 
     private Path suiteWithApp(String appArgs, String extra) throws Exception {
@@ -198,7 +212,7 @@ public class SuiteRunnerTest {
         Path suiteFile = suiteWithApp(FakeCommand.line("exit", "0"),
                 "\"reset\": [{\"command\": " + q(FakeCommand.line("touch", marker.toString())) + "}],");
         Path out = tmp.getRoot().toPath().resolve("out");
-        int code = new SuiteRunner(SuiteFile.read(suiteFile), tmp.getRoot().toPath().resolve("agent.jar"), out, false, null).run();
+        int code = new SuiteRunner(SuiteFile.read(suiteFile), tmp.getRoot().toPath().resolve("agent.jar"), out, false, null, null).run();
         assertEquals(1, code);
         String json = new String(Files.readAllBytes(out.resolve("suite-result.json")), StandardCharsets.UTF_8);
         assertTrue(json, json.contains("\"applicationStarts\": 3"));
@@ -221,7 +235,7 @@ public class SuiteRunnerTest {
                 "\"agentConfig\": {\"stopTimeoutMs\": 0},");
         Path out = tmp.getRoot().toPath().resolve("out");
         long t0 = System.currentTimeMillis();
-        int code = new SuiteRunner(SuiteFile.read(suiteFile), tmp.getRoot().toPath().resolve("agent.jar"), out, false, 1L).run();
+        int code = new SuiteRunner(SuiteFile.read(suiteFile), tmp.getRoot().toPath().resolve("agent.jar"), out, false, 1L, null).run();
         assertEquals(1, code);
         assertTrue(System.currentTimeMillis() - t0 < 30_000);
         String json = new String(Files.readAllBytes(out.resolve("suite-result.json")), StandardCharsets.UTF_8);
@@ -233,7 +247,7 @@ public class SuiteRunnerTest {
         Path suiteFile = suiteWithApp(FakeCommand.line("exit", "0"), "");
         Path out = tmp.getRoot().toPath().resolve("out");
         final SuiteRunner runner = new SuiteRunner(SuiteFile.read(suiteFile),
-                tmp.getRoot().toPath().resolve("agent.jar"), out, false, null);
+                tmp.getRoot().toPath().resolve("agent.jar"), out, false, null, null);
         runner.betweenLaunches = new Runnable() {
             @Override
             public void run() {
@@ -257,7 +271,7 @@ public class SuiteRunnerTest {
                 + " \"after\": [{\"command\": " + q(FakeCommand.line("sleeptouch", "1000", marker.toString())) + "}],"
                 + " \"scenarios\": [\"a.json\"]}");
         final SuiteRunner runner = new SuiteRunner(SuiteFile.read(suiteFile),
-                tmp.getRoot().toPath().resolve("agent.jar"), tmp.getRoot().toPath().resolve("out"), false, null);
+                tmp.getRoot().toPath().resolve("agent.jar"), tmp.getRoot().toPath().resolve("out"), false, null, null);
         Files.createDirectories(tmp.getRoot().toPath().resolve("out"));
         Thread first = new Thread(new Runnable() {
             @Override
@@ -283,7 +297,7 @@ public class SuiteRunnerTest {
         Path missing = tmp.getRoot().toPath().resolve("no-such-dir").resolve("no-such-program");
         Path suiteFile = suiteWithApp(missing.toString(), "");
         Path out = tmp.getRoot().toPath().resolve("out");
-        SuiteRunner runner = new SuiteRunner(SuiteFile.read(suiteFile), tmp.getRoot().toPath().resolve("agent.jar"), out, false, null);
+        SuiteRunner runner = new SuiteRunner(SuiteFile.read(suiteFile), tmp.getRoot().toPath().resolve("agent.jar"), out, false, null, null);
         assertEquals(2, runner.run());
         SuiteResult sr = resultOf(out);
         assertEquals(1, sr.scenarios.size());
@@ -300,7 +314,7 @@ public class SuiteRunnerTest {
         Path suiteFile = suiteWithApp(FakeCommand.line("exit", "0"), "");
         Path out = tmp.getRoot().toPath().resolve("out");
         Files.createDirectories(out.resolve("report.html")); // the HTML write fails
-        SuiteRunner runner = new SuiteRunner(SuiteFile.read(suiteFile), tmp.getRoot().toPath().resolve("agent.jar"), out, false, null);
+        SuiteRunner runner = new SuiteRunner(SuiteFile.read(suiteFile), tmp.getRoot().toPath().resolve("agent.jar"), out, false, null, null);
         assertEquals(2, runner.run());
         assertEquals(1, runner.cleanupCount());
     }
@@ -309,7 +323,7 @@ public class SuiteRunnerTest {
     public void outputFolderThatCannotBeMadeGivesExitCode2() throws Exception {
         Path suiteFile = suiteWithApp(FakeCommand.line("exit", "0"), "");
         Path out = file("blocker", "x"); // a file, not a folder
-        SuiteRunner runner = new SuiteRunner(SuiteFile.read(suiteFile), tmp.getRoot().toPath().resolve("agent.jar"), out, false, null);
+        SuiteRunner runner = new SuiteRunner(SuiteFile.read(suiteFile), tmp.getRoot().toPath().resolve("agent.jar"), out, false, null, null);
         assertEquals(2, runner.run());
         assertEquals(1, runner.cleanupCount());
     }
@@ -324,7 +338,7 @@ public class SuiteRunnerTest {
                 + " \"after\": [{\"command\": " + q(FakeCommand.line("exit", "0")) + "}],"
                 + " \"scenarios\": [\"a.json\"]}");
         Path out = tmp.getRoot().toPath().resolve("out");
-        SuiteRunner runner = new SuiteRunner(SuiteFile.read(suiteFile), tmp.getRoot().toPath().resolve("agent.jar"), out, false, null);
+        SuiteRunner runner = new SuiteRunner(SuiteFile.read(suiteFile), tmp.getRoot().toPath().resolve("agent.jar"), out, false, null, null);
         final AtomicInteger stops = new AtomicInteger();
         runner.stopper = new SuiteRunner.Stopper() {
             @Override

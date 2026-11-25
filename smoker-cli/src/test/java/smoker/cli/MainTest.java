@@ -28,6 +28,7 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -128,6 +129,41 @@ public class MainTest {
         Map<String, String> m = new LinkedHashMap<String, String>();
         for (int i = 0; i < kv.length; i += 2) m.put(kv[i], kv[i + 1]);
         return m;
+    }
+
+    // ---- label ---------------------------------------------------------------------------------
+
+    @Test
+    public void checkLabel() {
+        assertNull(Main.checkLabel("jre8"));
+        assertNull(Main.checkLabel("a.b_c-1"));
+        String error = "run: --label must have 1 to 40 characters of letters, digits, '.', '_' and '-'";
+        assertEquals(error, Main.checkLabel(""));
+        assertEquals(error, Main.checkLabel("a b"));
+        assertEquals(error, Main.checkLabel("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+        assertEquals(error, Main.checkLabel("\u00e4"));
+    }
+
+    @Test
+    public void agentConfigHasTheLabel() {
+        Map<String, String> c = Main.agentConfig(options("label", "jre8"), Arrays.asList(tmp.getRoot().toPath()), null);
+        assertEquals("jre8", c.get("label"));
+        assertFalse(Main.agentConfig(options(), Arrays.asList(tmp.getRoot().toPath()), null).containsKey("label"));
+    }
+
+    @Test
+    public void labelIsPermittedWithSuite() throws Exception {
+        Map<String, String> o = options("suite", tmp.getRoot().toPath().resolve("none.json").toString(),
+                "agent", "agent.jar", "label", "jre8");
+        assertEquals(2, Main.run(o));
+        assertFalse(err(), err().contains("--label"));
+        assertTrue(err(), err().contains("none.json"));
+    }
+
+    @Test
+    public void wrongLabelGivesExitCode2() throws Exception {
+        assertEquals(2, Main.run(options("agent", "a.jar", "app", "x", "scenarios", "s", "label", "a b")));
+        assertTrue(err(), err().contains("--label must have 1 to 40"));
     }
 
     // ---- validated -----------------------------------------------------------------------------

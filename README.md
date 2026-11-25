@@ -148,6 +148,7 @@ Format rules:
 | `resetScenario` | scenario that the agent replays between two scenarios, without a snapshot (see "Suite file") | — |
 | `stopTimeoutMs` | time to wait after each stage of the stop of the application, in ms (see "Stop of the application") | 10000 |
 | `aliveFile` | file that the CLI touches each second; the agent stops the application when the file is older than 10 s (see "Suite file") | — |
+| `label` | label of the job; the agent writes it to the field `label` of `run-result.json` (see "Matrix report") | — |
 
 An unknown `failLevel`, an unknown `logCharset`, an unsupported part of `logPattern` or a wrong key stops the
 application at start with exit code 2. System.err then has one line `[smoker] fatal: <message>`.
@@ -223,7 +224,7 @@ Rules:
 - The file names of the scenarios, without the extension, must be different. Each name is the name of a result folder.
 - The CLI checks the suite file, each scenario file and each golden file before it runs the first command.
   An unknown field, an unknown `agentConfig` key or a wrong file gives a message and exit code 2.
-- `run --suite` permits only `--agent`, `--out`, `--strict` and `--timeout`. Each other option gives
+- `run --suite` permits only `--agent`, `--out`, `--strict`, `--timeout` and `--label`. Each other option gives
   `run: --<option> is not permitted with --suite; put it in the suite file` and exit code 2.
 - The CLI puts the agent option at the token `{agent}` in `app`, or after the first word. A fixed `-javaagent` line
   in `eclipse.ini` does not operate with `run`: each application start has its own configuration file.
@@ -606,6 +607,23 @@ To find the components that need a name, without a scenario:
 
 The lint only sees the components that showed. A tab that you did not open is not in the lint.
 Each save replaces the lint file: it holds the last record session only.
+
+### Matrix report
+
+`run` has the option `--label <text>`. The label names the job, for example `jre8` or `jre21`. It has 1 to 40
+characters: letters, digits, `.`, `_` and `-`. A wrong label gives exit code 2 before the application starts.
+`--label` is permitted with `--suite` too.
+
+```
+java -jar smoker-cli.jar run --agent smoker-agent.jar --app "java -jar myapp.jar" --scenarios scenarios/ --out out/ --label jre8
+```
+
+- The CLI writes the label to the agent configuration file (key `label`). The agent writes it to the field `label`
+  of `run-result.json`. A result that the CLI makes itself has the label too. Without `--label` the field is absent.
+- `run` writes `<out>/job-result.json` when it writes `report.html`. The file has the label, the times, the Java
+  version, the operating system and, for each scenario, the key, the name, the status and the steps.
+  The `key` of a scenario is its file name without the extension (in suite mode: the name in the suite).
+  The matrix report reads this file.
 
 ### Statuses
 

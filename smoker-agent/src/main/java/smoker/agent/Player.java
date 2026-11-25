@@ -88,6 +88,7 @@ final class Player {
         result.javaVersion = System.getProperty("java.version");
         result.os = System.getProperty("os.name") + " " + System.getProperty("os.version");
         result.sharedJvm = sharedJvm;
+        result.label = cfg.label;
         writeProgress(first == First.STARTUP ? "startup" : "reset");
     }
 
