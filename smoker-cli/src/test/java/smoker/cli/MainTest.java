@@ -21,6 +21,7 @@ import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -564,5 +565,33 @@ public class MainTest {
         assertEquals(1, lint("--run", run.toString(), "--baseline", b.toString(), "--emit-patch", patch.toString()));
         String p = new String(Files.readAllBytes(patch), StandardCharsets.UTF_8);
         assertTrue(p, p.contains("aButton.setName") && p.contains("bButton.setName"));
+    }
+
+    @Test
+    public void baselineWithoutEntriesGives2() throws Exception {
+        Path run = lintRun("r", "aButton");
+        Path b = file("noentries.json", "{'version': 1}");
+        assertEquals(2, lint("--run", run.toString(), "--baseline", b.toString()));
+        assertTrue(err(), err().contains("lint: cannot read the baseline " + b));
+    }
+
+    @Test
+    public void baselineEntryWithoutKeyGives2() throws Exception {
+        Path run = lintRun("r", "aButton");
+        Path b = file("nokey.json", "{'version': 1, 'entries': [{'window': 'w'}]}");
+        assertEquals(2, lint("--run", run.toString(), "--baseline", b.toString()));
+        assertTrue(err(), err().contains("lint: cannot read the baseline " + b));
+        Path n = file("nullentry.json", "{'version': 1, 'entries': [null]}");
+        assertEquals(2, lint("--run", run.toString(), "--baseline", n.toString()));
+    }
+
+    @Test
+    public void baselineOptionWithoutAFileGives2() throws Exception {
+        Path run = lintRun("r", "aButton");
+        assertEquals(2, lint("--run", run.toString(), "--baseline"));
+        assertTrue(err(), err().contains("--baseline needs a file"));
+        assertEquals(2, lint("--run", run.toString(), "--write-baseline"));
+        assertTrue(err(), err().contains("--write-baseline needs a file"));
+        assertFalse(Files.exists(Paths.get("true")));
     }
 }

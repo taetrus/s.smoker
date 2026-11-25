@@ -18,7 +18,7 @@ import java.util.Set;
 final class LintBaseline {
 
     int version = 1;
-    List<Entry> entries = new ArrayList<Entry>();
+    List<Entry> entries;
 
     static final class Entry {
         String key;
@@ -34,6 +34,7 @@ final class LintBaseline {
     /** One entry for each baseline key (the first entry wins), sorted by key. */
     static LintBaseline of(List<LintEntry> lint) {
         LintBaseline b = new LintBaseline();
+        b.entries = new ArrayList<Entry>();
         Set<String> seen = new HashSet<String>();
         for (LintEntry e : lint) {
             String key = Lint.baselineKey(e);

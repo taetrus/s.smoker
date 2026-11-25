@@ -431,12 +431,21 @@ public final class Main {
             System.err.println("lint: use --baseline or --write-baseline, not both");
             return 2;
         }
+        for (String opt : new String[] {"baseline", "write-baseline"}) {
+            if (o.containsKey(opt) && "true".equals(o.get(opt))) {   // parse() gives "true" for an option without a value
+                System.err.println("lint: --" + opt + " needs a file. Use lint --run <dir> [--baseline <file> | --write-baseline <file>]");
+                return 2;
+            }
+        }
         Set<String> baselineKeys = null;
         if (compare) {
             Path b = Paths.get(o.get("baseline"));
             try {
                 LintBaseline base = Json.read(b, LintBaseline.class);
-                if (base == null) throw new IOException("empty file");
+                if (base == null || base.entries == null) throw new IOException("no entries list");
+                for (LintBaseline.Entry be : base.entries) {
+                    if (be == null || be.key == null) throw new IOException("an entry has no key");
+                }
                 baselineKeys = base.keys();
             } catch (Exception e) {
                 System.err.println("lint: cannot read the baseline " + b + ": " + e.getMessage());
@@ -472,7 +481,7 @@ public final class Main {
             Path b = Paths.get(o.get("write-baseline"));
             try {
                 if (b.toAbsolutePath().getParent() != null) Files.createDirectories(b.toAbsolutePath().getParent());
-                Json.write(b, LintBaseline.of(entries));
+                Json.writeAtomic(b, LintBaseline.of(entries));
             } catch (IOException e) {
                 System.err.println("lint: cannot write " + b + ": " + e.getMessage());
                 return 2;
