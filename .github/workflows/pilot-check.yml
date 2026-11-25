@@ -41,7 +41,7 @@ jobs:
           $s.Add(("cliJava=" + ((& java -version 2>&1 | Select-Object -First 1) -join '')))
           $s.Add("culture=$((Get-Culture).Name) uiCulture=$((Get-UICulture).Name) timeZone=$((Get-TimeZone).Id)")
 
-          function Cli([string]$name, [string[]]$cliArgs) {
+          function Invoke-Smoker([string]$name, [string[]]$cliArgs) {
               $txt = Join-Path $out ($name + '.txt')
               & java -jar $cli @cliArgs *>&1 | ForEach-Object { "$_" } | Set-Content -Path $txt
               $code = $LASTEXITCODE
@@ -55,7 +55,7 @@ jobs:
               Push-Location $env:P2
               $a = @('run', '--label', $label, '--agent', $agent, '--scenarios', $env:PILOT,
                      '--out', (Join-Path $out $label), '--app', $app) + $extra
-              $null = Cli $label $a
+              $null = Invoke-Smoker $label $a
               Pop-Location
               $rr = Get-ChildItem -Path (Join-Path $out $label) -Recurse -Filter 'run-result.json' | Select-Object -First 1
               if ($rr) {
@@ -85,16 +85,16 @@ jobs:
           # 3. report --merge: the merged page on the same drive, on another drive, and through a UNC path.
           $dirs = $jobs | ForEach-Object { Join-Path $out $_ }
           $hist = Join-Path $out 'history.json'
-          $null = Cli 'merge-same' (@('report', '--merge') + $dirs + @('--out', (Join-Path $out 'merged'), '--history', $hist, '--run-id', 'r1', '--ref', 'pilot-check'))
-          $null = Cli 'merge-again' (@('report', '--merge') + $dirs + @('--out', (Join-Path $out 'merged'), '--history', $hist, '--run-id', 'r2', '--ref', 'pilot-check'))
+          $null = Invoke-Smoker 'merge-same' (@('report', '--merge') + $dirs + @('--out', (Join-Path $out 'merged'), '--history', $hist, '--run-id', 'r1', '--ref', 'pilot-check'))
+          $null = Invoke-Smoker 'merge-again' (@('report', '--merge') + $dirs + @('--out', (Join-Path $out 'merged'), '--history', $hist, '--run-id', 'r2', '--ref', 'pilot-check'))
           $drive = $out.Substring(0, 2)
           $other = if ($drive -ieq 'C:') { 'D:\smoke\out\wp07-merge-other' } else { 'C:\smoke\out\wp07-merge-other' }
           if (Test-Path $other) { Remove-Item -Recurse -Force $other }
-          $null = Cli 'merge-other-drive' (@('report', '--merge') + $dirs + @('--out', $other))
+          $null = Invoke-Smoker 'merge-other-drive' (@('report', '--merge') + $dirs + @('--out', $other))
           $s.Add("otherDrive=$other")
           $unc = '\\localhost\' + $drive.Substring(0, 1) + '$' + $out.Substring(2)
           $s.Add("unc=$unc exists=$(Test-Path $unc)")
-          $null = Cli 'merge-unc' (@('report', '--merge') + ($jobs | ForEach-Object { Join-Path $unc $_ }) + @('--out', (Join-Path $out 'merged-unc')))
+          $null = Invoke-Smoker 'merge-unc' (@('report', '--merge') + ($jobs | ForEach-Object { Join-Path $unc $_ }) + @('--out', (Join-Path $out 'merged-unc')))
           foreach ($page in @((Join-Path $out 'merged\report.html'), (Join-Path $other 'report.html'), (Join-Path $out 'merged-unc\report.html'))) {
               if (Test-Path $page) {
                   $hrefs = Select-String -Path $page -Pattern "href='([^']*)'" -AllMatches | ForEach-Object { $_.Matches } | ForEach-Object { $_.Groups[1].Value } |
@@ -112,17 +112,17 @@ jobs:
           Set-Content -Path (Join-Path $rel 'hit\eclipse.ini') -Value @('-startup', '-vmargs', ('-javaagent:' + $agent + '=config=C:\smoke\x.cfg'))
           Set-Content -Path (Join-Path $rel 'zipsrc\app\eclipse.ini') -Value @('-vmargs', '-javaagent:D:\tools\SMOKER-agent.jar')
           Compress-Archive -Path (Join-Path $rel 'zipsrc\app') -DestinationPath (Join-Path $rel 'product.zip') -Force
-          $null = Cli 'release-product' @('check-release', $env:P2)
-          $null = Cli 'release-clean' @('check-release', (Join-Path $rel 'clean'))
-          $null = Cli 'release-hit' @('check-release', (Join-Path $rel 'hit'))
-          $null = Cli 'release-zip' @('check-release', (Join-Path $rel 'product.zip'))
-          $null = Cli 'release-glob' @('check-release', (Join-Path $rel '*.zip'))
-          $null = Cli 'release-quote' @('check-release', ($rel + '\a"b'))
+          $null = Invoke-Smoker 'release-product' @('check-release', $env:P2)
+          $null = Invoke-Smoker 'release-clean' @('check-release', (Join-Path $rel 'clean'))
+          $null = Invoke-Smoker 'release-hit' @('check-release', (Join-Path $rel 'hit'))
+          $null = Invoke-Smoker 'release-zip' @('check-release', (Join-Path $rel 'product.zip'))
+          $null = Invoke-Smoker 'release-glob' @('check-release', (Join-Path $rel '*.zip'))
+          $null = Invoke-Smoker 'release-quote' @('check-release', ($rel + '\a"b'))
 
           # 5. Lint baseline on the base run.
           $bl = Join-Path $out 'lint-baseline.json'
-          $null = Cli 'lint-write' @('lint', '--run', (Join-Path $out 'base'), '--write-baseline', $bl)
-          $null = Cli 'lint-compare' @('lint', '--run', (Join-Path $out 'base'), '--baseline', $bl)
+          $null = Invoke-Smoker 'lint-write' @('lint', '--run', (Join-Path $out 'base'), '--write-baseline', $bl)
+          $null = Invoke-Smoker 'lint-compare' @('lint', '--run', (Join-Path $out 'base'), '--baseline', $bl)
 
           $s | Set-Content -Path (Join-Path $out 'summary.txt')
           Write-Host '===== summary ====='
