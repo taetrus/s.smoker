@@ -224,7 +224,7 @@ Completion criterion: R-20a passes. A developer who did not see the tool before 
 
 State (2026-11-25): tasks 1 to 3 and 5 to 7 are code complete on branch `wp-07-ci-report`. `SelfTestIT` checks R-41, R-42, R-34 and R-40a on the demo
 (`matrixReportJoinsTwoJobs`, `localeAndTimeZoneFromTheConfiguration`, `checkReleaseFindsTheAgentOption`, `lintBaselineFailsOnlyForANewResult`).
-Task 4 (the GitLab jobs) and R-02a stay in the field phase (decision 8). The Windows CI passes on PR #27 (`default`, `locale-tr`, `locale-tr-jre8`).
+Task 4 (the GitLab jobs) and R-02a stay in the field phase (decision 8). The Windows CI passes on PR #27 (`default`, `locale-tr`, `locale-tr-jre8`). The Windows check on `p2.product` passes (`docs/wp-07-windows-report.md`).
 F-18 stays open until the field phase (R-02a) and WP-08.
 WP-07 is "code complete", not complete.
 

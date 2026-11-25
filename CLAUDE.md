@@ -12,6 +12,7 @@ compares semantic component snapshots with golden snapshots, and reads the appli
    `docs/wp-04-windows-report.md` — WP-04 test report (Windows, pilot applications).
    `docs/wp-05-windows-report.md` — WP-05 test report (Windows, pilot application).
    `docs/wp-09-windows-report.md` — WP-09 follow-up test report (Windows, pilot application).
+   `docs/wp-07-windows-report.md` — WP-07 test report (Windows, pilot application, code tasks).
 4. `docs/architecture.md` — design decisions and class map of the current skeleton.
 5. `docs/requirements.md` — original requirements. The development plan wins where they differ.
 6. `README.md` — build and CLI usage.
@@ -85,9 +86,14 @@ after every change to `smoker-agent` or `smoker-core`.
   `check-release`; `lint --baseline` and `lint --write-baseline`. The README sections "Stable conditions", "Matrix report",
   "Release guard" and "Lint baseline" describe them. `docs/architecture.md` section 3b has the class map.
 - WP-07 is not complete. Task 4 (the GitLab jobs) and R-02a come in the field phase (decision 8). F-18 stays open.
-- Windows CI on PR #27 (commit dcc9076): `default`, `locale-tr` and `locale-tr-jre8` pass.
+- Windows CI on PR #27 (commit dcc9076): `default`, `locale-tr` and `locale-tr-jre8` pass. Merged as 5a72a44.
+- Windows check on `p2.product` (2026-11-25, pilot-check run 45648197103, JRE 8): all checks pass. See `docs/wp-07-windows-report.md`.
+  The four keys reach the application; with Equinox `-nl tr_TR` the locale becomes `tr-TR` and the result has a warning.
+  `windowSize` changes the first main window, which is the clock frame of `p2.product`, not the chatbot window.
+  `report --merge` gives relative links, `file:///D:/` links for another drive and `file://localhost/D$/` links for UNC paths.
+  The PC has no JRE 21 in the usual folders.
 - Not tested: the Maven/Tycho example and the pipeline examples in the README; `-Djava.locale.providers=COMPAT` on JRE 21;
-  `Report.link` with another drive or a UNC path on Windows.
+  the links of the merged page in a browser.
 - Tests (`mvn -B verify` on macOS, default locale): 124 in `smoker-core`, 401 in `smoker-agent`, 152 in `smoker-cli`, 21 IT (after the fix wave of the final review). The same counts pass with `-Plocale-tr`.
 
 ## State on 2026-11-25 (before WP-07)

@@ -193,8 +193,12 @@ java -jar smoker-cli.jar run --agent smoker-agent.jar --app "java -jar myapp.jar
 - `windowSize`: when the main window shows, the agent sets the first main window to the normal state if it is
   maximized, and sets its size. The location does not change. The agent does this one time for each application
   start, before the first step (play) or before the recorder starts (record).
+  The first main window is the first frame that shows. On `p2.product` it is a small clock frame, not the chatbot
+  window, so `windowSize` changes the clock frame (`docs/wp-07-windows-report.md`).
 - The application can replace a value: Equinox sets the locale from `-nl`, an application sets its own look and
-  feel, a window has a minimum size. The agent does not force a value. At the start of each scenario the agent
+  feel, a window has a minimum size. The agent does not force a value. On `p2.product` with `-nl tr_TR` and the key
+  `locale` `en-US`, the result has the locale `tr-TR` and a warning (`docs/wp-07-windows-report.md`). Remove `-nl`
+  from the application command, or give it the same value as `locale`. At the start of each scenario the agent
   writes the actual values to the fields `locale`, `timeZone`, `lookAndFeel` and `windowSize` of `run-result.json`.
   For each configured key with a different actual value, the result gets a warning in the field `warnings`, for
   example `locale is tr-TR, not the configured en-US`. The status does not change. `run` prints each warning as
