@@ -207,7 +207,7 @@ State on 2026-11-22: WP-05 is on branch `wp-05-suite-mode` (PR #15). On the demo
 7. DONE: Add the functions to move a step and to add a step group.
 8. Correct the problems from task 1.
 
-State (2026-11-25): tasks 2 to 7 are code complete on branch `wp-06-recorder` (not merged). `SelfTestIT` checks R-20a on the demo (`recorder.json`).
+State (2026-11-25): tasks 2 to 7 are code complete; merged in PR #25 (2026-11-25). `SelfTestIT` checks R-20a on the demo (`recorder.json`).
 F-13 and F-21 stay open until the field phase (tasks 1 and 8, decision 8).
 
 Completion criterion: R-20a passes. A developer who did not see the tool before records a scenario with 10 steps in less than 10 minutes.

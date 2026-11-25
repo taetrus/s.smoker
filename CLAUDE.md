@@ -69,7 +69,7 @@ after every change to `smoker-agent` or `smoker-core`.
 ## State on 2026-11-25
 
 - WP-06 tasks 2 to 7 (recorder: tree `SELECT`, double-click and right-click, `SET_CELL`, spinner `SET_TEXT`, golden preview,
-  move and group) are code complete on branch `wp-06-recorder` (not merged yet). WP-06 is not complete: the usability test
+  move and group) are code complete; merged in PR #25 (2026-11-25). WP-06 is not complete: the usability test
   and the corrections (tasks 1 and 8) come in the field phase (decision 8). F-13 and F-21 stay open until then.
   R-20a passes on the demo (SelfTestIT, `recorder.json`).
 - Tests: 92 in `smoker-core`, 386 in `smoker-agent`, 87 in `smoker-cli`, 17 IT. They pass on macOS (default locale and
