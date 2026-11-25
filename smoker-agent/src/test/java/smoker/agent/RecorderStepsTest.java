@@ -321,7 +321,7 @@ public class RecorderStepsTest {
     private void awaitSnapshot(Step s, long ms) throws Exception {
         long deadline = System.currentTimeMillis() + ms;
         while (!recorder.hasSnapshot(s)) {
-            if (System.currentTimeMillis() > deadline) fail("no snapshot for " + s.id + " within " + ms + " ms");
+            if (System.currentTimeMillis() > deadline) fail("no snapshot for " + s.id + " within " + ms + " ms" + QueueProbe.describe(1000));
             Thread.sleep(50);
         }
     }
